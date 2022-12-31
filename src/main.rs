@@ -3,7 +3,7 @@
 
 mod assign;
 
-pub struct Player {
+struct Player {
     name: String,
     sk: Option<SecretKey>,
     pk: Option<PublicKey>,

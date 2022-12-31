@@ -7,17 +7,13 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.55"
-bellman = "0.13.1"
-bls12_381 = "0.7"
-ff = "0.12"
 rand = "0.8.4"
-proof-essentials = { git = "https://github.com/geometryresearch/proof-toolbox.git" }
-starknet-curve = { git = "https://github.com/geometryresearch/proof-toolbox.git" }
+barnett-smart-card-protocol = { git = "ssh://git@github.com/geometryresearch/mental-poker.git" }
+proof-essentials = { git = "ssh://git@github.com/geometryresearch/proof-toolbox.git" }
+starknet-curve = { git = "ssh://git@github.com/geometryresearch/proof-toolbox.git" }
 ark-ff = "0.3.0"
 ark-std = { version = "0.3.0", features = ["std"] }
 thiserror = "1.0.30"
 dusk-plonk = "0.13.1"
 rand_core = {version="0.6", default-features=false}
 dusk-jubjub = {version = "0.12", default-features = false}
-barnett-smart-card-protocol = { git = "https://github.com/geometryresearch/mental-poker.git" }
-
