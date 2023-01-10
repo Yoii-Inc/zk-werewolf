@@ -17,3 +17,4 @@ thiserror = "1.0.30"
 dusk-plonk = "0.13.1"
 rand_core = {version="0.6", default-features=false}
 dusk-jubjub = {version = "0.12", default-features = false}
+itertools = "0.10.5"

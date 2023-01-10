@@ -7,10 +7,12 @@ use barnett_smart_card_protocol::BarnettSmartProtocol;
 
 use ark_ff::{to_bytes, UniformRand};
 use ark_std::{rand::Rng, One};
+use itertools::Itertools;
 use proof_essentials::utils::permutation::Permutation;
 use proof_essentials::utils::rand::sample_vector;
 use proof_essentials::zkp::proofs::{chaum_pedersen_dl_equality, schnorr_identification};
 use rand::thread_rng;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::iter::Iterator;
 use thiserror::Error;
@@ -58,6 +60,44 @@ pub enum WerewolfRole {
 pub enum WerewolfCard {
     Role(WerewolfRole),
     Player(usize),
+}
+
+impl PartialOrd for WerewolfCard {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self {
+            WerewolfCard::Player(val) => match other {
+                WerewolfCard::Player(val_other) => Some(val.cmp(val_other)),
+                WerewolfCard::Role(_) => Some(Ordering::Less),
+            },
+            WerewolfCard::Role(val) => match other {
+                WerewolfCard::Player(_) => Some(Ordering::Greater),
+                WerewolfCard::Role(val_other) => match (val, val_other) {
+                    (WerewolfRole::Villager, WerewolfRole::Villager) => Some(Ordering::Equal),
+                    (WerewolfRole::Villager, WerewolfRole::Seer) => Some(Ordering::Less),
+                    (WerewolfRole::Villager, WerewolfRole::Hunter) => Some(Ordering::Less),
+                    (WerewolfRole::Villager, WerewolfRole::Werewolf) => Some(Ordering::Less),
+                    (WerewolfRole::Seer, WerewolfRole::Villager) => Some(Ordering::Greater),
+                    (WerewolfRole::Seer, WerewolfRole::Seer) => Some(Ordering::Equal),
+                    (WerewolfRole::Seer, WerewolfRole::Hunter) => Some(Ordering::Less),
+                    (WerewolfRole::Seer, WerewolfRole::Werewolf) => Some(Ordering::Less),
+                    (WerewolfRole::Hunter, WerewolfRole::Villager) => Some(Ordering::Greater),
+                    (WerewolfRole::Hunter, WerewolfRole::Seer) => Some(Ordering::Greater),
+                    (WerewolfRole::Hunter, WerewolfRole::Hunter) => Some(Ordering::Equal),
+                    (WerewolfRole::Hunter, WerewolfRole::Werewolf) => Some(Ordering::Less),
+                    (WerewolfRole::Werewolf, WerewolfRole::Villager) => Some(Ordering::Greater),
+                    (WerewolfRole::Werewolf, WerewolfRole::Seer) => Some(Ordering::Greater),
+                    (WerewolfRole::Werewolf, WerewolfRole::Hunter) => Some(Ordering::Greater),
+                    (WerewolfRole::Werewolf, WerewolfRole::Werewolf) => Some(Ordering::Equal),
+                },
+            },
+        }
+    }
+}
+
+impl Ord for WerewolfCard {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }
 
 impl WerewolfCard {
@@ -214,29 +254,43 @@ pub fn open_werewolf_card(
     Ok(*opened_card)
 }
 
+struct Num {
+    players: usize, //参加プレイヤーの人数
+    villagers: usize,
+    seers: usize,
+    hunters: usize,
+    werewolfs: usize,
+    groups: usize, //お互いに見える集団を1と数えた時の集団数(村、村、占、狩、狼)
+    cards: usize,
+    decks: usize, //必要なデッキ数。今は人狼の人数と同じになる。
+}
+
+impl Num {
+    fn new(casting: [usize; 4]) -> Self {
+        Self {
+            players: casting.iter().sum(),
+            villagers: casting[0],
+            seers: casting[1],
+            hunters: casting[2],
+            werewolfs: casting[3],
+            groups: casting[..3].iter().sum::<usize>() + 1,
+            cards: casting.iter().sum::<usize>() + casting[..3].iter().sum::<usize>() + 1,
+            decks: casting[3],
+        }
+    }
+}
+
 #[test]
 fn test() -> anyhow::Result<()> {
     // セットアップ
     println!("セットアップ開始");
-    let num_of_players = 6; //参加プレイヤーの人数
-    let m = [3, 1, 1, 1]; //配役の種類(村人，占い師，狩人，人狼)
-    let num_of_cards = 12; // usize = m.iter().sum();
-    let num_of_villagers = m[0];
-    let num_of_seers = m[1];
-    let num_of_hunters = m[2];
-    //let num_of_werewolf = m[3];
-    let num_of_groups = 6; //m[..3].iter().sum(); //お互いに見える集団を1と数えた時の集団数(村、村、占、狩、狼)
+
+    let num = Num::new([3, 1, 1, 3]);
 
     let rng = &mut thread_rng();
 
-    let parameters = CardProtocol::setup(rng, 2, 6)?; //ここは変更が必要かもしれない．
-    let card_mapping = encode_cards(
-        rng,
-        num_of_players,
-        num_of_villagers,
-        num_of_seers,
-        num_of_hunters,
-    );
+    let parameters = CardProtocol::setup(rng, 2, 7)?; //ここは1を入れてもいいように変更が必要かもしれない．
+    let card_mapping = encode_cards(rng, num.players, num.villagers, num.seers, num.hunters);
 
     // プレイヤー構築
     let player1 = WerewolfPlayer::new(rng, &parameters, &to_bytes![b"Alice"].unwrap())?;
@@ -245,8 +299,12 @@ fn test() -> anyhow::Result<()> {
     let player4 = WerewolfPlayer::new(rng, &parameters, &to_bytes![b"Dave"].unwrap())?;
     let player5 = WerewolfPlayer::new(rng, &parameters, &to_bytes![b"Ellen"].unwrap())?;
     let player6 = WerewolfPlayer::new(rng, &parameters, &to_bytes![b"Frank"].unwrap())?;
+    let player7 = WerewolfPlayer::new(rng, &parameters, &to_bytes![b"George"].unwrap())?;
+    let player8 = WerewolfPlayer::new(rng, &parameters, &to_bytes![b"Hall"].unwrap())?;
 
-    let mut players = vec![player1, player2, player3, player4, player5, player6];
+    let mut players = vec![
+        player1, player2, player3, player4, player5, player6, player7, player8,
+    ];
 
     let key_proof_info = players
         .iter()
@@ -258,9 +316,21 @@ fn test() -> anyhow::Result<()> {
 
     // プレイヤーカード、役カードの生成
     println!("プレイヤーカード、役カードの生成");
+    //let card_mapping_keys_sorted = sort_card_mapping_keys(&card_mapping); //.collect();
+    // card_mapping_vec.sort_by(|a, b| a.1.cmp(&b.1));
+    // let deck_and_proofs: Vec<(MaskedCard, RemaskingProof)> = card_mapping
+    //     .keys()
+    //     .map(|card| CardProtocol::mask(rng, &parameters, &joint_pk, card, &Scalar::one()))
+    //     .collect::<Result<Vec<_>, _>>()?;
+
+    let vec: _ = card_mapping
+        .iter()
+        .sorted_by(|a, b| a.1.cmp(b.1))
+        .collect_vec();
     let deck_and_proofs: Vec<(MaskedCard, RemaskingProof)> = card_mapping
-        .keys()
-        .map(|card| CardProtocol::mask(rng, &parameters, &joint_pk, card, &Scalar::one()))
+        .iter()
+        .sorted_by(|a, b| a.1.cmp(b.1))
+        .map(|card| CardProtocol::mask(rng, &parameters, &joint_pk, card.0, &Scalar::one()))
         .collect::<Result<Vec<_>, _>>()?;
 
     let deck = deck_and_proofs
@@ -272,8 +342,27 @@ fn test() -> anyhow::Result<()> {
     println!("各プレイヤーによるシャッフル");
     //ここのPermutationのサイズをnにするか、もしくはサイズをm+nにして前半n個だけを置換するかどちらか。
     // TODO: partial shuffle
-    let permutation = Permutation::new(rng, num_of_cards);
-    let masking_factors: Vec<Scalar> = sample_vector(rng, num_of_cards);
+    //let permutation = Permutation::new(rng, num_of_cards);
+    // let mut player_permutation = Permutation::new(rng, num_of_players);
+    // player_permutation
+    //     .mapping
+    //     .extend([8, 9, 10, 11, 12, 13].iter());
+    // let permutation = Permutation {
+    //     mapping: player_permutation.mapping,
+    //     size: num_of_cards,
+    // };
+
+    let permutation = Permutation {
+        mapping: vec![3, 5, 0, 6, 1, 7, 4, 2, 8, 9, 10, 11, 12, 13],
+        size: num.cards,
+    };
+
+    let inverse_permutation = Permutation {
+        mapping: vec![2, 4, 7, 0, 6, 1, 3, 5, 8, 9, 10, 11, 12, 13],
+        size: num.cards,
+    };
+
+    let masking_factors: Vec<Scalar> = sample_vector(rng, num.cards);
 
     // let permutation = Permutation::new(rng, num_of_players);
     // let masking_factors: Vec<Scalar> = sample_vector(rng, num_of_players);
@@ -304,85 +393,95 @@ fn test() -> anyhow::Result<()> {
     .unwrap_or_else(|_| panic!("vvv"));
 
     // グルーピングの為の全体における置換
+    let whole_permutation = Permutation::from(&vec![8, 9, 10, 11, 12, 13, 5, 6, 0, 1, 2, 3, 4, 7]);
+    //ここでは、 (0,8)(1,9)(2,10)(3,11)(4,12)(5,6,7,13)=[8,9,10,11,12,13,5,6,0,1,2,3,4,7]という置換を取っている。
+
+    let mut decks = Vec::new();
+    let mut deck_tmp = a_shuffled_deck_partial;
+
+    for i in 0..num.decks {
+        deck_tmp = Permutation::permute_array(&whole_permutation, &deck_tmp);
+        decks.push(deck_tmp.clone());
+    }
+
     // 各プレイヤーによるシャッフル
+    decks = decks
+        .iter()
+        .map(|deck| Permutation::permute_array(&inverse_permutation, deck))
+        .collect_vec();
+
     // シャッフルの検証
     // 配役の決定
 
     // 配役のデータの配布
-    for i in 0..num_of_players {
-        players[i].recieve_card(deck[i]);
+    for i in 0..num.players {
+        players[i].recieve_card(decks[0][i]);
     }
 
     //自分に配られた役職の確認
 
-    // let mut reveal_token: vec![vec![(RevealToken, RevealProof, PublicKey); 11]; 6];
     let mut reveal_token: Vec<Vec<_>> = Vec::new();
 
     for p in players.iter() {
         let mut vec = Vec::new();
-        for d in deck.iter() {
+        for d in decks[0].iter() {
             vec.push(p.compute_reveal_token(rng, &parameters, d)?);
         }
         reveal_token.push(vec);
     }
 
-    // let rts_player1 = vec![
-    //     &reveal_token[1][0],
-    //     &reveal_token[2][0],
-    //     &reveal_token[3][0],
-    //     &reveal_token[4][0],
-    //     &reveal_token[5][0],
-    // ];
-    // let rts_player2 = vec![
-    //     &reveal_token[0][1],
-    //     &reveal_token[2][1],
-    //     &reveal_token[3][1],
-    //     &reveal_token[4][1],
-    //     &reveal_token[5][1],
-    // ];
-    // let rts_player3 = vec![
-    //     &reveal_token[0][2],
-    //     &reveal_token[1][2],
-    //     &reveal_token[3][2],
-    //     &reveal_token[4][2],
-    //     &reveal_token[5][2],
-    // ];
-    // let rts_player4 = vec![
-    //     &reveal_token[0][3],
-    //     &reveal_token[1][3],
-    //     &reveal_token[2][3],
-    //     &reveal_token[4][3],
-    //     &reveal_token[5][3],
-    // ];
-    // let rts_player5 = vec![
-    //     &reveal_token[0][4],
-    //     &reveal_token[1][4],
-    //     &reveal_token[2][4],
-    //     &reveal_token[3][4],
-    //     &reveal_token[5][4],
-    // ];
-    // let rts_player6 = vec![
-    //     &reveal_token[0][5],
-    //     &reveal_token[1][5],
-    //     &reveal_token[2][5],
-    //     &reveal_token[3][5],
-    //     &reveal_token[4][5],
-    // ];
-
     //(後で消す)カードの公開
-    let rt_0 = vec![
-        players[0].compute_reveal_token(rng, &parameters, &deck[0])?,
-        players[1].compute_reveal_token(rng, &parameters, &deck[0])?,
-        players[2].compute_reveal_token(rng, &parameters, &deck[0])?,
-        players[3].compute_reveal_token(rng, &parameters, &deck[0])?,
-        players[4].compute_reveal_token(rng, &parameters, &deck[0])?,
-        players[5].compute_reveal_token(rng, &parameters, &deck[0])?,
-    ];
 
-    let player1_card = open_werewolf_card(&parameters, &rt_0, &card_mapping, &deck[0])?;
+    let mut rt = Vec::new();
+    for i in 0..num.players {
+        let mut vec = Vec::new();
+        for j in 0..num.decks {
+            let rt_part = players
+                .iter()
+                .map(|x| {
+                    x.compute_reveal_token(rng, &parameters, &decks[j][i])
+                        .unwrap()
+                })
+                .collect_vec();
+            vec.push(rt_part);
+        }
+        rt.push(vec);
+    }
+
+    let mut players_card = Vec::new();
+
+    for i in 0..num.players {
+        let mut vec = Vec::new();
+        for j in 0..num.decks {
+            let x = open_werewolf_card(&parameters, &rt[i][j], &card_mapping, &decks[j][i])?;
+            vec.push(x);
+        }
+        players_card.push(vec);
+    }
 
     //役の表示
-    println!("Alice: {:?}", player1_card);
+    for i in 0..num.players {
+        for j in 0..num.decks {
+            // println!(
+            //     "{}: {:?}",
+            //     std::str::from_utf8(&players[i].name).unwrap(),
+            //     players_card[i][j]
+            // );
+            match players_card[i][j] {
+                WerewolfCard::Player(_) => {}
+                WerewolfCard::Role(role) => players[i].role = Some(role),
+            }
+        }
+        println!(
+            "{}: {:?}",
+            std::str::from_utf8(&players[i].name).unwrap(),
+            WerewolfCard::Role(players[i].role.unwrap())
+        );
+    }
+
+    //TODO:以下のような表示にする
+    //Alice: 役:占い, 同チーム:無し
+    //Bob: 役:人狼, 同チーム:Dave
 
     // 次のステップへ移行
     Ok(())
