@@ -352,13 +352,23 @@ fn test() -> anyhow::Result<()> {
     //     size: num_of_cards,
     // };
 
+    let mut partial_permutation = Permutation::new(rng, num.players);
+
+    partial_permutation.mapping.extend(num.players..num.cards);
+
     let permutation = Permutation {
-        mapping: vec![3, 5, 0, 6, 1, 7, 4, 2, 8, 9, 10, 11, 12, 13],
+        mapping: partial_permutation.mapping,
         size: num.cards,
     };
 
+    let mut inverse_map = vec![0; permutation.size];
+    for i in 0..permutation.size {
+        let j = permutation.mapping[i];
+        inverse_map[j] = i;
+    }
+
     let inverse_permutation = Permutation {
-        mapping: vec![2, 4, 7, 0, 6, 1, 3, 5, 8, 9, 10, 11, 12, 13],
+        mapping: inverse_map,
         size: num.cards,
     };
 
