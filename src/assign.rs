@@ -289,7 +289,7 @@ fn test() -> anyhow::Result<()> {
 
     let rng = &mut thread_rng();
 
-    let parameters = CardProtocol::setup(rng, 2, 7)?; //ここは1を入れてもいいように変更が必要かもしれない．
+    let parameters = CardProtocol::setup(rng, 1, 14)?; //ここは1を入れてもいいように変更が必要かもしれない．
     let card_mapping = encode_cards(rng, num.players, num.villagers, num.seers, num.hunters);
 
     // プレイヤー構築

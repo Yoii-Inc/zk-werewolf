@@ -3,10 +3,7 @@ use super::{proof::Proof, Parameters, Statement, Witness};
 use crate::error::CryptoError;
 use crate::utils::vector_arithmetic::hadamard_product as compute_hadamard_product;
 use crate::vector_commitment::HomomorphicCommitmentScheme;
-use crate::zkp::{
-    arguments::{hadamard_product, single_value_product},
-    ArgumentOfKnowledge,
-};
+use crate::zkp::{arguments::single_value_product, ArgumentOfKnowledge};
 
 use ark_ff::{to_bytes, Field};
 use ark_marlin::rng::FiatShamirRng;
@@ -47,7 +44,7 @@ where
     ) -> Result<Proof<Scalar, Comm>, CryptoError> {
         fs_rng.absorb(&to_bytes![b"matrix_elements_product"]?);
 
-        let s = Scalar::rand(rng);
+        let s = self.witness.randoms_for_a_commit[0];
 
         let mut product_along_rows = vec![Scalar::one(); self.parameters.n];
         for x in self.witness.matrix_a {
@@ -55,32 +52,6 @@ where
         }
 
         let b_commit = Comm::commit(self.parameters.commit_key, &product_along_rows, s)?;
-
-        // Engage in Hadamard Product Argument for b_commit and the `product_along_rows` as its witness:
-        // This will show that each entry in `product_along_rows` is computed correctly
-        let hadamard_product_parameters = hadamard_product::Parameters::new(
-            self.parameters.m,
-            self.parameters.n,
-            self.parameters.commit_key,
-        );
-
-        let hadamard_product_statement =
-            hadamard_product::Statement::new(&self.statement.commitments_to_a, b_commit);
-
-        let hadamard_product_witness = hadamard_product::Witness::new(
-            self.witness.matrix_a,
-            self.witness.randoms_for_a_commit,
-            &product_along_rows,
-            s,
-        );
-
-        let hadamard_product_proof = hadamard_product::HadamardProductArgument::prove(
-            rng,
-            &hadamard_product_parameters,
-            &hadamard_product_statement,
-            &hadamard_product_witness,
-            fs_rng,
-        )?;
 
         // Engage in single value product argument for b_commit and b as a statement:
         // This will show that our claimed product b is indeed the product of the values in
@@ -104,7 +75,6 @@ where
 
         let proof = Proof {
             b_commit,
-            hadamard_product_proof,
             single_value_proof,
         };
 
