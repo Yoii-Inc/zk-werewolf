@@ -28,7 +28,8 @@ impl<'a> Prover<'a> {
     pub fn prove(&self) -> Result<Proof, CryptoError> {
         let num_of_fixed = self.statement.num_of_fixed;
 
-        let partial_permutation = self.witness.permutation.mapping[num_of_fixed..].to_vec();
+        let partial_permutation =
+            self.witness.permutation.mapping[self.statement.num_of_total - num_of_fixed..].to_vec();
 
         let proof = Proof {
             partial_permutation,

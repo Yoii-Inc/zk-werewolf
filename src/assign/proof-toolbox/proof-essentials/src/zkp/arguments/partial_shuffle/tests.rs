@@ -38,14 +38,23 @@ mod test {
         // construct parameters
         let parameters = partial_shuffle::Parameters::new();
 
+        let num_of_fixed = 6;
+
+        let mut partial_permutation = Permutation::new(rng, number_of_ciphers - num_of_fixed);
+
+        let mut residue_permutation =
+            ((number_of_ciphers - num_of_fixed)..number_of_ciphers).collect();
+
+        partial_permutation.mapping.append(&mut residue_permutation);
+
         let permutation = Permutation {
-            mapping: (0..number_of_ciphers).collect(),
+            mapping: partial_permutation.mapping,
             size: number_of_ciphers,
         };
 
         let witness = Witness::new(&permutation);
 
-        let statement = Statement::new(3, number_of_ciphers);
+        let statement = Statement::new(num_of_fixed, number_of_ciphers);
 
         let mut fs_rng = FS::from_seed(b"Initialised with some input");
         let proof =

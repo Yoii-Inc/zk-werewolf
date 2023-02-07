@@ -56,7 +56,7 @@ where
         proof: &Self::Proof,
         fs_rng: &mut FiatShamirRng<D>,
     ) -> Result<(), CryptoError> {
-        proof.verify(&statement)
+        proof.verify(statement)
     }
 }
 
@@ -83,7 +83,7 @@ impl<'a> Witness<'a> {
 }
 
 pub struct Statement {
-    pub num_of_fixed: usize, //&'aでいいのか、何もつけなくていいのかわからない。
+    pub num_of_fixed: usize,
     pub num_of_total: usize,
 }
 

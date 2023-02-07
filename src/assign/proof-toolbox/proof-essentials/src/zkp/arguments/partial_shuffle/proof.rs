@@ -13,7 +13,8 @@ pub struct Proof {
 impl Proof {
     pub fn verify(&self, statement: &Statement) -> Result<(), CryptoError> {
         let left = &self.partial_permutation;
-        let right: &Vec<usize> = &(statement.num_of_fixed..statement.num_of_total).collect();
+        let right: &Vec<usize> =
+            &(statement.num_of_total - statement.num_of_fixed..statement.num_of_total).collect();
         if left != right {
             return Err(CryptoError::ProofVerificationError(String::from(
                 "Partial Shuffle",

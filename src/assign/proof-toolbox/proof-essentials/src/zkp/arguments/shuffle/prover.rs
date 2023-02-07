@@ -6,7 +6,9 @@ use crate::utils::rand::sample_vector;
 use crate::utils::vector_arithmetic::{dot_product, reshape};
 use crate::vector_commitment::HomomorphicCommitmentScheme;
 use crate::zkp::arguments::scalar_powers;
-use crate::zkp::arguments::{matrix_elements_product as product_argument, multi_exponentiation};
+use crate::zkp::arguments::{
+    matrix_elements_product as product_argument, multi_exponentiation, partial_shuffle,
+};
 use crate::zkp::ArgumentOfKnowledge;
 
 use ark_ff::{to_bytes, Field, Zero};
@@ -196,12 +198,32 @@ where
             fs_rng,
         )?;
 
+        // Engage in partial-shuffle argument ---------------------------------------------------------------------
+
+        let partial_shuffle_parameters = partial_shuffle::Parameters::new();
+
+        let partial_shuffle_statement = partial_shuffle::Statement::new(
+            self.statement.num_of_fixed,
+            self.statement.m * self.statement.n,
+        );
+
+        let partial_shuffle_witness = partial_shuffle::Witness::new(self.witness.permutation);
+
+        let partial_shuffle_proof = partial_shuffle::PartialShuffle::<Scalar, Enc, Comm>::prove(
+            rng,
+            &partial_shuffle_parameters,
+            &partial_shuffle_statement,
+            &partial_shuffle_witness,
+            fs_rng,
+        )?;
+
         // Produce proof
         let proof = Proof {
             a_commits,
             b_commits,
             product_argument_proof,
             multi_exp_proof,
+            partial_shuffle_proof,
         };
 
         Ok(proof)

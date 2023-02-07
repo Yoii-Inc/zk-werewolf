@@ -5,7 +5,9 @@ use crate::homomorphic_encryption::HomomorphicEncryptionScheme;
 use crate::utils::vector_arithmetic::dot_product;
 use crate::vector_commitment::HomomorphicCommitmentScheme;
 use crate::zkp::arguments::scalar_powers;
-use crate::zkp::arguments::{matrix_elements_product as product_argument, multi_exponentiation};
+use crate::zkp::arguments::{
+    matrix_elements_product as product_argument, multi_exponentiation, partial_shuffle,
+};
 
 use ark_ff::{to_bytes, Field};
 use ark_marlin::rng::FiatShamirRng;
@@ -24,6 +26,7 @@ where
     pub b_commits: Vec<Comm::Commitment>,
     pub product_argument_proof: product_argument::proof::Proof<Scalar, Comm>,
     pub multi_exp_proof: multi_exponentiation::proof::Proof<Scalar, Enc, Comm>,
+    pub partial_shuffle_proof: partial_shuffle::proof::Proof,
 }
 
 impl<Scalar, Enc, Comm> Proof<Scalar, Enc, Comm>
@@ -129,6 +132,16 @@ where
 
         self.multi_exp_proof
             .verify(&multi_exp_parameters, &multi_exp_statement, fs_rng)?;
+
+        // PARTIAL-SHUFFLE ARGUMENT -------------------------------------------------------
+
+        // let partial_shuffle_parameters = partial_shuffle::Parameters::new();
+
+        let partial_shuffle_statement =
+            partial_shuffle::Statement::new(statement.num_of_fixed, statement.m * statement.n);
+
+        self.partial_shuffle_proof
+            .verify(&partial_shuffle_statement)?;
 
         Ok(())
     }

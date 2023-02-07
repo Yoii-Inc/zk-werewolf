@@ -103,6 +103,7 @@ where
     pub shuffled_ciphers: &'a Vec<Enc::Ciphertext>,
     pub m: usize,
     pub n: usize,
+    pub num_of_fixed: usize,
 }
 
 impl<'a, Scalar, Enc> Statement<'a, Scalar, Enc>
@@ -115,12 +116,14 @@ where
         shuffled_ciphers: &'a Vec<Enc::Ciphertext>,
         m: usize,
         n: usize,
+        num_of_fixed: usize,
     ) -> Self {
         Self {
             input_ciphers,
             shuffled_ciphers,
             m,
             n,
+            num_of_fixed,
         }
     }
 

@@ -33,8 +33,8 @@ mod test {
 
     #[test]
     fn test_shuffle_argument() {
-        let m = 4;
-        let n = 13;
+        let m = 1;
+        let n = 14;
         let number_of_ciphers = n * m;
 
         let rng = &mut thread_rng();
@@ -49,7 +49,21 @@ mod test {
         let ciphers: Vec<Ciphertext> = sample_vector(rng, number_of_ciphers);
         let masking_factors: Vec<Scalar> = sample_vector(rng, number_of_ciphers);
 
-        let permutation = Permutation::new(rng, number_of_ciphers);
+        //let permutation = Permutation::new(rng, number_of_ciphers);
+
+        let num_of_fixed = 6;
+
+        let mut partial_permutation = Permutation::new(rng, number_of_ciphers - num_of_fixed);
+
+        let mut residue_permutation =
+            ((number_of_ciphers - num_of_fixed)..number_of_ciphers).collect();
+
+        partial_permutation.mapping.append(&mut residue_permutation);
+
+        let permutation = Permutation {
+            mapping: partial_permutation.mapping,
+            size: number_of_ciphers,
+        };
 
         let permuted_ciphers = permutation.permute_array(&ciphers);
 
@@ -66,7 +80,7 @@ mod test {
             .collect::<Vec<_>>();
 
         let parameters = Parameters::new(&encrypt_parameters, &pk, &commit_key, &generator);
-        let statement = Statement::new(&ciphers, &shuffled_deck, m, n);
+        let statement = Statement::new(&ciphers, &shuffled_deck, m, n, num_of_fixed);
         let witness = Witness::new(&permutation, &masking_factors);
 
         let mut fs_rng = FS::from_seed(b"Initialised with some input");
