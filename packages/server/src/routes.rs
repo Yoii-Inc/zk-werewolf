@@ -6,5 +6,5 @@ mod room;
 
 pub fn create_routes(state: AppState) -> Router {
     Router::new().nest("/api/room", room::routes(state.clone()))
-    // .nest("/game", game::routes(state))
+    .nest("/api/game", game::routes(state.clone()))
 }

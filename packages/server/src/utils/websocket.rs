@@ -8,6 +8,7 @@ use axum::{
 use futures::{sink::SinkExt, stream::StreamExt};
 use tokio::sync::broadcast;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::state::AppState;
 
@@ -22,13 +23,19 @@ pub async fn handle_socket(ws: WebSocket, tx: broadcast::Sender<Message>) {
 
     let mut rx = tx.subscribe(); // メッセージブロードキャストチャネルの受信側
 
+    let player_id = Uuid::new_v4().to_string();
+
     let receive_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            // メッセージをブロードキャスト
-            info!("Received message: {:?}", msg);
-            if let Err(e) = tx.send(msg) {
-                eprintln!("Error sending message: {}", e);
-                break;
+
+            if let Message::Text(text) = msg {
+                // メッセージをブロードキャスト
+                let response = format!("Player {}: {}", player_id, text);
+                info!("Received message: {:?}", response);
+                if let Err(e) = tx.send(Message::Text(response)) {
+                    eprintln!("Error sending message: {}", e);
+                    break;
+                }
             }
         }
     });

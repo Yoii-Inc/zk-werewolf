@@ -15,6 +15,12 @@ API try in console (create room)
 curl -X POST http://localhost:8080/api/room/create
 ```
 
+start game at room 1
+```
+curl -X POST http://localhost:8080/api/game/1/start
+```
+
+
 ```
 src/
 ├── main.rs                  # エントリポイント
@@ -63,11 +69,11 @@ API
   - GET /api/room/rooms
     - 出力: [{ lobbyId: string, name: string, players: number, maxPlayers: number, status: string }]
 - ロビー作成
-  - POST /api/lobbies
+  - POST /api/room/create
     - 入力: { name: string, maxPlayers: number, rules: object }
     - 出力: { lobbyId: string, name: string, maxPlayers: number }
 - ロビー情報取得
-  - GET /api/lobbies/{lobbyId}
+  - GET /api/room/{lobbyId}
     - 出力: { lobbyId: string, name: string, players: [{ userId: string, username: string }], rules: object }
 - ロビーへの参加
   - POST /api/lobbies/{lobbyId}/join
