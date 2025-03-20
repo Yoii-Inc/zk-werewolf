@@ -38,10 +38,73 @@ pub fn routes(state: AppState) -> Router {
         // curl -X DELETE http://localhost:8080/api/room/{roomid}/delete
         .route("/:roomid/delete", delete(delete_room))
         
+        // 投票開始
+        // curl -X POST http://localhost:8080/api/room/{roomid}/vote/start
+        .route("/:roomid/vote/start", post(start_voting))
+
+        // 投票実行
+        // curl -X POST http://localhost:8080/api/room/{roomid}/vote/cast/{voterid}/{targetid}
+        .route("/:roomid/vote/cast/:voterid/:targetid", post(cast_vote))
+
+        // 投票終了
+        // curl -X POST http://localhost:8080/api/room/{roomid}/vote/end
+        .route("/:roomid/vote/end", post(end_voting))
+
+        // 投票リセット
+        // curl -X POST http://localhost:8080/api/room/{roomid}/vote/reset
+        .route("/:roomid/vote/reset", post(reset_voting))
+
         // WebSocket接続
         // websocat ws://localhost:8080/api/room/ws
         .route("/ws", get(websocket::handler))
         .with_state(state)
+}
+
+async fn start_voting(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> Json<String> {
+    let success = room_service::start_voting(state, &room_id).await;
+    if success {
+        Json("投票を開始しました".to_string())
+    } else {
+        Json("投票の開始に失敗しました".to_string())
+    }
+}
+
+async fn cast_vote(
+    State(state): State<AppState>,
+    Path((room_id, voter_id, target_id)): Path<(String, u32, u32)>,
+) -> Json<String> {
+    let success = room_service::cast_vote(state, &room_id, voter_id, target_id).await;
+    if success {
+        Json("投票を受け付けました".to_string())
+    } else {
+        Json("投票に失敗しました".to_string())
+    }
+}
+
+async fn end_voting(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> Json<String> {
+    if let Some(target_id) = room_service::end_voting(state, &room_id).await {
+        Json(format!("投票が終了しました。Player {}が最多得票でした", target_id))
+    } else {
+        Json("投票の終了に失敗しました".to_string())
+    }
+}
+
+async fn reset_voting(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> Json<String> {
+    let success = room_service::reset_voting(state, &room_id).await;
+    if success {
+        Json("投票をリセットしました".to_string())
+    } else {
+        Json("投票のリセットに失敗しました".to_string())
+    }
 }
 
 async fn create_room(State(state): State<AppState>) -> Json<String> {
