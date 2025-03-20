@@ -26,9 +26,13 @@ pub fn routes(state: AppState) -> Router {
         // curl http://localhost:8080/api/room/{roomid}
         .route("/:roomid", get(get_room_info))
         
-        // ルーム参加
-        // curl -X POST http://localhost:8080/api/room/{roomid}/join
-        .route("/:roomid/join", post(join_room))
+        // ルーム参加 (プレイヤーID必須)
+        // curl -X POST http://localhost:8080/api/room/{roomid}/join/{playerid}
+        .route("/:roomid/join/:playerid", post(join_room))
+        
+        // ルーム脱退 (プレイヤーID必須)
+        // curl -X POST http://localhost:8080/api/room/{roomid}/leave/{playerid}
+        .route("/:roomid/leave/:playerid", post(leave_room))
         
         // ルーム削除
         // curl -X DELETE http://localhost:8080/api/room/{roomid}/delete
@@ -45,12 +49,27 @@ async fn create_room(State(state): State<AppState>) -> Json<String> {
     Json(format!("Room created with ID: {}", room_id))
 }
 
-async fn join_room(State(state): State<AppState>, Path(room_id): Path<String>) -> Json<String> {
-    let success = room_service::join_room(state, &room_id).await;
+async fn join_room(
+    State(state): State<AppState>,
+    Path((room_id, player_id)): Path<(String, u32)>,
+) -> Json<String> {
+    let success = room_service::join_room(state, &room_id, player_id).await;
     if success {
         Json("Successfully joined room".to_string())
     } else {
         Json("Failed to join room".to_string())
+    }
+}
+
+async fn leave_room(
+    State(state): State<AppState>,
+    Path((room_id, player_id)): Path<(String, u32)>,
+) -> Json<String> {
+    let success = room_service::leave_room(state, &room_id, player_id).await;
+    if success {
+        Json("Successfully left room".to_string())
+    } else {
+        Json("Failed to leave room".to_string())
     }
 }
 

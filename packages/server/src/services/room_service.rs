@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    models::room::{Room, RoomStatus},
+    models::{
+        room::{Room, RoomStatus},
+        player::Player,
+    },
     state::AppState,
 };
 
@@ -13,7 +16,7 @@ pub async fn create_room(state: AppState) -> u32 {
     new_id
 }
 
-pub async fn join_room(state: AppState, room_id: &str) -> bool {
+pub async fn join_room(state: AppState, room_id: &str, player_id: u32) -> bool {
     let mut rooms = state.rooms.lock().await;
     
     if let Some(room) = rooms.get_mut(room_id) {
@@ -21,9 +24,44 @@ pub async fn join_room(state: AppState, room_id: &str) -> bool {
         if room.status != RoomStatus::Open {
             return false;
         }
-        
-        // ルームが存在し、状態がOpenであれば参加を許可
+
+        // プレイヤー数の上限チェック
+        if room.players.len() >= room.max_players {
+            return false;
+        }
+
+        // 既に参加しているプレイヤーかチェック
+        if room.players.iter().any(|p| p.id == player_id) {
+            return false;
+        }
+
+        // 新しいプレイヤーを追加
+        let player = Player {
+            id: player_id,
+            name: format!("Player {}", player_id),
+            role: String::new(),
+        };
+        room.players.push(player);
         true
+    } else {
+        false
+    }
+}
+
+pub async fn leave_room(state: AppState, room_id: &str, player_id: u32) -> bool {
+    let mut rooms = state.rooms.lock().await;
+    
+    if let Some(room) = rooms.get_mut(room_id) {
+        // プレイヤーが存在するかチェック
+        let player_index = room.players.iter().position(|p| p.id == player_id);
+        
+        if let Some(index) = player_index {
+            // プレイヤーを削除
+            room.players.remove(index);
+            true
+        } else {
+            false
+        }
     } else {
         false
     }
