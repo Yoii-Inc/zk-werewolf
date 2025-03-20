@@ -1,71 +1,196 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { NextPage } from "next";
-import { useAccount } from "wagmi";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { Address } from "~~/components/scaffold-eth";
+import { Clock, Moon, PlayCircle, Plus, Users } from "lucide-react";
 
-const Home: NextPage = () => {
-  const { address: connectedAddress } = useAccount();
+// interface Village {
+//     room_id: number;
+//     name: string;
+//     lobby_id: string;
+//     players?: {id: number}[] | null; // playersの型も必要に応じて修正
+//     max_players: number; // max_playersプロパティを追加
+//     // その他のプロパティ...
+//   }
+
+export interface Room {
+  id: string;
+  name: string;
+  players: number;
+  maxPlayers: number;
+  status: "waiting" | "playing" | "finished";
+  createdAt: string;
+}
+
+const mockRooms: Room[] = [
+  {
+    id: "1",
+    name: "初心者歓迎！",
+    players: 5,
+    maxPlayers: 8,
+    status: "waiting",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "2",
+    name: "経験者のみ",
+    players: 8,
+    maxPlayers: 8,
+    status: "playing",
+    createdAt: new Date().toISOString(),
+  },
+];
+
+interface Village {
+  room_id: string;
+  name: string;
+  lobby_id: string;
+  players?: Player[] | null;
+  max_players: number;
+  status: "Open" | "InProgress" | "Closed"; // RoomStatus の Enum
+
+  roles: string[]; // 役職一覧
+  voting_status: "not_started" | "in_progress" | "completed"; // VotingStatus の Enum
+  votes: Record<number, Vote>; // key: target_player_id, value: Vote
+}
+
+interface Player {
+  id: number;
+  name: string;
+  role?: string; // 役職が未確定の時もあるので optional
+  is_alive: boolean; // 生存状態
+}
+
+interface Vote {
+  voter_id: number;
+  target_id: number;
+}
+
+const Home = () => {
+  const [villages, setVillages] = useState<Village[]>([]);
+  const [newVillageName, setNewVillageName] = useState("");
+  const [error, setError] = useState("");
+  const [rooms] = useState<Room[]>(mockRooms);
+  const [isCreating, setIsCreating] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    const fetchVillages = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/rooms`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setVillages(data);
+      } catch (error) {
+        console.error("Error fetching villages:", error);
+        setError("Failed to fetch villages.");
+      }
+    };
+
+    fetchVillages();
+  }, []);
+
+  const joinRoom = async (roomId: string) => {
+    try {
+      const playerId = "3"; // 仮のプレイヤーID
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/${roomId}/join/${playerId}`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("ルームへの参加に失敗しました");
+      }
+
+      setNotification({
+        message: "ユーザーhogeとして参加しました",
+        type: "success",
+      });
+
+      // 成功したら/room/{roomId}に遷移
+      window.location.href = `/room/${roomId}`;
+    } catch (error) {
+      console.error("Error joining room:", error);
+      setNotification({
+        message: "ルームへの参加に失敗しました",
+        type: "error",
+      });
+    }
+  };
 
   return (
-    <>
-      <div className="flex items-center flex-col flex-grow pt-10">
-        <div className="px-5">
-          <h1 className="text-center">
-            <span className="block text-2xl mb-2">Welcome to</span>
-            <span className="block text-4xl font-bold">Scaffold-ETH 2</span>
-          </h1>
-          <div className="flex justify-center items-center space-x-2 flex-col sm:flex-row">
-            <p className="my-2 font-medium">Connected Address:</p>
-            <Address address={connectedAddress} />
-          </div>
-
-          <p className="text-center text-lg">
-            Get started by editing{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/nextjs/app/page.tsx
-            </code>
-          </p>
-          <p className="text-center text-lg">
-            Edit your smart contract{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              YourContract.sol
-            </code>{" "}
-            in{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/hardhat/contracts
-            </code>
-          </p>
+    <div className="container mx-auto p-4">
+      {notification && (
+        <div
+          className={`fixed z-50 top-4 right-4 p-4 rounded-lg shadow-lg ${
+            notification.type === "success" ? "bg-green-500" : "bg-red-500"
+          } text-white`}
+        >
+          {notification.message}
         </div>
+      )}
 
-        <div className="flex-grow bg-base-300 w-full mt-16 px-8 py-12">
-          <div className="flex justify-center items-center gap-12 flex-col sm:flex-row">
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <BugAntIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Tinker with your smart contract using the{" "}
-                <Link href="/debug" passHref className="link">
-                  Debug Contracts
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <MagnifyingGlassIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Explore your local transactions with the{" "}
-                <Link href="/blockexplorer" passHref className="link">
-                  Block Explorer
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-          </div>
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex items-center gap-4">
+          <Moon size={32} className="text-indigo-600" />
+          <h1 className="text-3xl font-bold text-indigo-900">人狼ゲーム</h1>
         </div>
+        <button
+          onClick={() => setIsCreating(true)}
+          className="bg-indigo-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <Plus size={20} />
+          ルーム作成
+        </button>
       </div>
-    </>
+
+      <div className="grid gap-4">
+        {Object.entries(villages).map(([key, room]) => (
+          <div
+            key={room.room_id}
+            className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm hover:shadow-md transition-all border border-indigo-50 p-6"
+          >
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-indigo-900">ルーム{room.room_id}</h2>
+              <span
+                className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+                  room.status === "Open" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {room.status === "Open" ? "待機中" : "ゲーム中"}
+              </span>
+            </div>
+
+            <div className="mt-4 flex items-center gap-6 text-indigo-700">
+              <div className="flex items-center gap-2">
+                <Users size={18} />
+                <span>
+                  {room.players?.length ?? 0}/{room.max_players}人
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock size={18} />
+                <span>作成: {/*room.createdAt> :*/ "不明"}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => joinRoom(room.room_id)}
+              disabled={room.status !== "Open"}
+              className={`mt-6 w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                room.status === "Open"
+                  ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              <PlayCircle size={20} />
+              {room.status === "Open" ? "参加する" : "ゲーム中"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 

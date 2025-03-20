@@ -20,10 +20,30 @@ export const menuLinks: HeaderMenuLink[] = [
     href: "/",
   },
 
+  // {
+  //   label: "Game",
+  //   href: "/game",
+  // },
+
+  {
+    label: "Record",
+    href: "/record",
+  },
+
+  {
+    label: "Help",
+    href: "/help",
+  },
+
   {
     label: "Debug Contracts",
     href: "/debug",
     icon: <BugAntIcon className="h-4 w-4" />,
+  },
+
+  {
+    label: "Scaffold sample",
+    href: "/sample",
   },
 ];
 

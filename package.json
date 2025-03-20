@@ -46,11 +46,15 @@
     "verify": "yarn foundry:verify"
   },
   "devDependencies": {
+    "@types/react": "^19.0.2",
     "husky": "~8.0.3",
     "lint-staged": "~13.2.2"
   },
   "packageManager": "yarn@3.2.3",
   "engines": {
     "node": ">=18.18.0"
+  },
+  "dependencies": {
+    "lucide-react": "^0.483.0"
   }
 }
