@@ -43,7 +43,21 @@ pub fn routes(state: AppState) -> Router {
         // roomidで指定されたゲームを終了
         // curl -X POST http://localhost:8080/api/game/{roomid}/end
         .route("/:roomid/end", post(end_game_handler))
+
+        // デバッグ用：次のフェーズに強制的に進める
+        // curl -X POST http://localhost:8080/api/game/{roomid}/debug/next-phase
+        .route("/:roomid/debug/next-phase", post(force_next_phase_handler))
         .with_state(state)
+}
+
+async fn force_next_phase_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> impl IntoResponse {
+    match game_service::force_next_phase(state, &room_id).await {
+        Ok(message) => (StatusCode::OK, message),
+        Err(message) => (StatusCode::BAD_REQUEST, message),
+    }
 }
 
 pub async fn start_game(
