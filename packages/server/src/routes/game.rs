@@ -3,7 +3,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{models::game::{Game, GameAction}, services::game_service};
+use crate::{models::game::{Game, GameAction, NightActionRequest}, services::game_service};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,6 +25,18 @@ pub struct VoteRequest {
     vote: bool,
 }
 
+// #[derive(Debug, Serialize, Deserialize)]
+// pub struct NightActionRequest {
+//     player_id: String,
+//     action: NightAction,
+// }
+
+// #[derive(Debug, Serialize, Deserialize)]
+// pub enum NightAction {
+//     Attack { target_id: String },
+//     Protect { target_id: String },
+//     Investigate { target_id: String },
+// }
 
 pub fn routes(state: AppState) -> Router {
     Router::new()
@@ -47,6 +59,13 @@ pub fn routes(state: AppState) -> Router {
         // デバッグ用：次のフェーズに強制的に進める
         // curl -X POST http://localhost:8080/api/game/{roomid}/debug/next-phase
         .route("/:roomid/debug/next-phase", post(force_next_phase_handler))
+        
+        // 夜のアクションを実行
+        // curl -X POST -H "Content-Type: application/json" \
+        // -d '{"player_id": "wolf1", "action": {"Attack": {"target_id": "villager1"}}}' \
+        // http://localhost:8080/api/game/{roomid}/night-action
+        .route("/:roomid/night-action", post(night_action_handler))
+        
         .with_state(state)
 }
 
@@ -112,6 +131,16 @@ async fn end_game_handler(
     }
 }
 
+async fn night_action_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+    Json(action_req): Json<NightActionRequest>,
+) -> impl IntoResponse {
+    match game_service::process_night_action(state, &room_id, action_req).await {
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(e)),
+    }
+}
 
 #[cfg(test)]
 mod tests {

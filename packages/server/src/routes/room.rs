@@ -159,14 +159,13 @@ async fn get_room_info(State(state): State<AppState>, Path(room_id): Path<String
 mod tests {
     use super::*;
     use axum::{
-        body::Body,
+        body::{Body, to_bytes},
         http::{Request, StatusCode},
     };
     use tower::ServiceExt;
-    // use hyper::Server;
     use hyper::server::conn::http1;
-use hyper_util::rt::TokioIo;
-use tokio::net::TcpListener;
+    use hyper_util::rt::TokioIo;
+    use tokio::net::TcpListener;
 
     #[tokio::test]
     async fn test_create_room() {
@@ -180,10 +179,9 @@ use tokio::net::TcpListener;
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
         
-        let body = axum::body::to_bytes(response.into_body(), 100).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let room_id = String::from_utf8(body.to_vec()).unwrap();
         assert!(room_id.contains("Room created with ID:"));
     }
@@ -193,7 +191,8 @@ use tokio::net::TcpListener;
         let state = AppState::new();
         let app = routes(state.clone());
 
-        room_service::create_room(state).await;
+        // テスト用のルームを作成
+        let room_id = room_service::create_room(state).await;
 
         let request = Request::builder()
             .method("GET")
@@ -202,12 +201,17 @@ use tokio::net::TcpListener;
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
         
-        let body = axum::body::to_bytes(response.into_body(), 100).await.unwrap();
-        let rooms: HashMap<String, Room> = serde_json::from_slice(&body).unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        
+        let rooms: HashMap<String, Room> = serde_json::from_slice(&body)
+            .expect("Failed to parse response body");
+            
         assert!(!rooms.is_empty());
+        assert!(rooms.contains_key(&room_id.to_string()));
     }
 
     // #[tokio::test]

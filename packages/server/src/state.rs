@@ -21,5 +21,3 @@ impl AppState {
         }
     }
 }
-
-pub struct RoomState {}

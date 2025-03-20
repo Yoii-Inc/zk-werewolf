@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     models::{
-        room::{Room, RoomStatus, Vote, VotingStatus},
-        player::Player,
+        player::Player, role::Role, room::{Room, RoomStatus, Vote, VotingStatus}
     },
     state::AppState,
 };
@@ -39,7 +38,8 @@ pub async fn join_room(state: AppState, room_id: &str, player_id: u32) -> bool {
         let player = Player {
             id: player_id,
             name: format!("Player {}", player_id),
-            role: String::new(),
+            role: Role::Villager,
+            is_dead: false,
         };
         room.players.push(player);
         true
