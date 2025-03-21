@@ -4,7 +4,9 @@ use axum::{
     routing::get,
     Json,
 };
+use dotenvy::dotenv;
 use env_logger::Builder;
+use log::LevelFilter;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -59,20 +61,37 @@ async fn greet(Query(params): Query<Info>) -> Json<Greet> {
 // ログ設定
 fn init_logger() {
     let mut builder = Builder::new();
-    builder.filter_level(log::LevelFilter::Info); // ログレベルを設定
-    builder.init();
+    builder
+        .filter_level(LevelFilter::Debug) // より詳細なログレベルに変更
+        .filter_module("tower_http", LevelFilter::Debug)
+        .filter_module("axum", LevelFilter::Debug)
+        .format_timestamp(Some(env_logger::TimestampPrecision::Millis))
+        .format_target(true)
+        .init();
 }
 
 #[tokio::main]
 async fn main() {
+    // 環境変数をロード
+    if let Err(e) = dotenv() {
+        eprintln!("Warning: .envファイルの読み込みに失敗しました: {}", e);
+    }
+
     init_logger(); // ロガーの初期化
+
+    // 環境変数の存在確認
+    for var in &["SUPABASE_URL", "SUPABASE_KEY", "JWT_SECRET"] {
+        if std::env::var(var).is_err() {
+            eprintln!("Error: 環境変数 {} が設定されていません", var);
+        }
+    }
 
     // CORSレイヤーの設定
     let origins = ["http://localhost:3000".parse::<HeaderValue>().unwrap()];
-
     let cors = CorsLayer::new()
         .allow_origin(origins)
-        .allow_methods([Method::GET]);
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
     // ルーティングの設定
     let app = app::create_app()
@@ -91,8 +110,9 @@ async fn main() {
         );
 
     // サーバーの起動
-
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     let listner = tokio::net::TcpListener::bind(&addr).await.unwrap();
+
+    println!("サーバーを起動しました: http://{}", addr);
     axum::serve(listner, app).await.unwrap();
 }

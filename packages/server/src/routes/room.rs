@@ -100,13 +100,14 @@ async fn delete_room(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::room::Room;
+    use crate::{models::room::Room, utils::test_setup::setup_test_env};
     use axum::{body::to_bytes, body::Body, http::Request};
     use std::collections::HashMap;
     use tower::ServiceExt;
 
     #[tokio::test]
     async fn test_create_room() {
+        setup_test_env();
         let state = AppState::new();
         let app = routes(state);
 
@@ -126,6 +127,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_rooms() {
+        setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
 

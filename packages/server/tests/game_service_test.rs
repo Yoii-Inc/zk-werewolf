@@ -1,3 +1,4 @@
+use server::services::user_service;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio;
@@ -13,16 +14,19 @@ use server::{
     },
     services::game_service,
     state::AppState,
+    utils::test_setup::setup_test_env,
 };
 
 fn setup_test_state() -> AppState {
     let rooms = Arc::new(Mutex::new(HashMap::new()));
     let games = Arc::new(Mutex::new(HashMap::new()));
     let (tx, _) = broadcast::channel(100);
+    let user_service = user_service::UserService::new();
     AppState {
         rooms,
         games,
         channel: tx,
+        user_service,
     }
 }
 
@@ -65,6 +69,7 @@ async fn setup_test_room_with_players(state: &AppState) -> String {
 
 #[tokio::test]
 async fn test_complete_game_flow() {
+    setup_test_env();
     let state = setup_test_state();
     let room_id = setup_test_room_with_players(&state).await;
 
@@ -83,14 +88,15 @@ async fn test_complete_game_flow() {
             target_id: "3".to_string(),
         },
     };
-    let divine_result = game_service::process_night_action(
-        state.clone(),
-        &room_id,
-        night_action
-    ).await;
+    let divine_result =
+        game_service::process_night_action(state.clone(), &room_id, night_action).await;
     assert!(divine_result.is_ok());
     let result_text = divine_result.unwrap();
-    assert!(result_text.contains("人狼"), "占い結果が正しくありません: {}", result_text);
+    assert!(
+        result_text.contains("人狼"),
+        "占い結果が正しくありません: {}",
+        result_text
+    );
 
     // 議論フェーズへ
     let to_discussion = game_service::advance_game_phase(state.clone(), &room_id).await;
@@ -127,14 +133,15 @@ async fn test_complete_game_flow() {
             target_id: "1".to_string(),
         },
     };
-    let divine_result2 = game_service::process_night_action(
-        state.clone(),
-        &room_id,
-        night_action2
-    ).await;
+    let divine_result2 =
+        game_service::process_night_action(state.clone(), &room_id, night_action2).await;
     assert!(divine_result2.is_ok());
     let result_text2 = divine_result2.unwrap();
-    assert!(result_text2.contains("村人"), "占い結果が正しくありません: {}", result_text2);
+    assert!(
+        result_text2.contains("村人"),
+        "占い結果が正しくありません: {}",
+        result_text2
+    );
 
     // 人狼がPlayer1を襲撃
     let night_action3 = NightActionRequest {

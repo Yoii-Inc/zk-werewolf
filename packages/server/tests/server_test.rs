@@ -6,8 +6,11 @@ use serde_json::json;
 use server::app;
 use tower::ServiceExt;
 
+use server::utils::test_setup::setup_test_env;
+
 #[tokio::test]
 async fn test_create_room() {
+    setup_test_env();
     let app = app::create_app();
 
     let request = Request::builder()
@@ -26,6 +29,7 @@ async fn test_create_room() {
 
 #[tokio::test]
 async fn test_join_room() {
+    setup_test_env();
     let app = app::create_app();
 
     // まずルームを作成
@@ -65,6 +69,7 @@ async fn test_join_room() {
 
 #[tokio::test]
 async fn test_voting_system() {
+    setup_test_env();
     let app = app::create_app();
 
     // ルーム作成

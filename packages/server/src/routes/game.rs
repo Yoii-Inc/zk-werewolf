@@ -128,11 +128,13 @@ async fn check_winner_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_setup::setup_test_env;
     use axum::{body::Body, http::Request};
     use tower::ServiceExt;
 
     #[tokio::test]
     async fn test_start_game() {
+        setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone()).await;
@@ -149,6 +151,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_end_game() {
+        setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone()).await;
