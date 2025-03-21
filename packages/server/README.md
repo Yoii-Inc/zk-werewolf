@@ -1,153 +1,90 @@
-起動
+# werewolf-server 
 
+## コマンド例
+起動
 ```
 cargo run
 ```
 
 websocket connect
-
 ```
 websocat ws://localhost:8080/api/room/ws
 ```
 
-API try in console (create room)
-```
-curl -X POST http://localhost:8080/api/room/create
-```
+## API仕様
 
-start game at room 1
-```
-curl -X POST http://localhost:8080/api/game/1/start
-```
+### ルーム関連API
 
+#### ルーム作成
+- POST /api/room/create
+  - 出力: "Room created with ID: {roomId}"
 
-```
-src/
-├── main.rs                  # エントリポイント
-├── app.rs                   # アプリケーション全体を構築するモジュール
-├── routes/                  # ルーティング関連
-│   ├── mod.rs               # ルーティングのエントリポイント
-│   ├── lobby.rs             # ロビー関連
-│   ├── game.rs              # ゲーム関連
-├── services/                # ビジネスロジック
-│   ├── mod.rs               # サービスエントリポイント
-│   ├── lobby_service.rs     # ロビー管理ロジック
-│   ├── game_service.rs      # ゲーム進行ロジック
-├── models/                  # データモデル
-│   ├── mod.rs               # モデルエントリポイント
-│   ├── player.rs            # プレイヤーモデル
-│   ├── game.rs              # ゲームモデル
-├── state.rs                 # グローバル状態管理
-├── utils/                   # ユーティリティ
-│   ├── mod.rs               # ユーティリティエントリポイント
-│   ├── websocket.rs         # WebSocketユーティリティ
-```
+#### ルーム一覧取得
+- GET /api/room/rooms
+  - 出力: { [roomId: string]: RoomInfo }
 
-API
+#### 特定のルーム情報取得
+- GET /api/room/{roomId}
+  - 出力: RoomInfo
+
+#### ルーム参加
+- POST /api/room/{roomId}/join/{playerId}
+  - 出力: "Successfully joined room" | エラーメッセージ
+
+#### ルーム退出
+- POST /api/room/{roomId}/leave/{playerId}
+  - 出力: "Successfully left room" | エラーメッセージ
+
+#### WebSocket接続
+- GET /api/room/ws
+  - WebSocketを通じてリアルタイムのルーム状態更新を受信
+
+### ゲーム関連API
+
+#### ゲーム開始
+- POST /api/game/{roomId}/start
+  - 出力: ゲーム開始結果
+
+#### ゲーム終了
+- POST /api/game/{roomId}/end
+  - 出力: ゲーム終了結果
+
+#### ゲーム状態取得
+- GET /api/game/{roomId}/state
+  - 出力: 現在のゲーム状態
+
+#### ゲームアクション
+- POST /api/game/{roomId}/actions/vote
+  - 入力: { voter_id: string, target_id: string }
+  - 出力: 投票結果
+
+- POST /api/game/{roomId}/actions/night-action
+  - 入力: NightActionRequest
+  - 出力: 夜行動の結果
+
+#### フェーズ管理
+- POST /api/game/{roomId}/phase/next
+  - 出力: 次のフェーズへの移行結果
+
+#### 勝利判定
+- GET /api/game/{roomId}/check-winner
+  - 出力: 勝利判定結果
+
+## 未実装のAPI
 
 1. ユーザー管理関連
+   - POST /api/users/register
+   - POST /api/users/login
+   - POST /api/users/logout
+   - GET /api/users/{userId}
 
-- ユーザー登録
-  - POST /api/users/register
-    - 入力: { username: string, password: string, email: string }
-    - 出力: { userId: string, username: string, token: string }
-- ログイン
-  - POST /api/users/login
-    - 入力: { username: string, password: string }
-    - 出力: { userId: string, username: string, token: string }
-- ログアウト
-  - POST /api/users/logout
-    - 入力: { token: string }
-    - 出力: { message: "Logged out successfully" }
-- プロフィール取得
-  - GET /api/users/{userId}
-    - 出力: { userId: string, username: string, stats: { wins: number, losses: number } }
+2. ルーム管理関連（追加機能）
+   - DELETE /api/room/{roomId}/delete
 
-2. ロビー管理関連
+3. 管理者向け機能
+   - POST /api/lobbies/{lobbyId}/rules
+   - POST /api/lobbies/{lobbyId}/kick
 
-- ロビー一覧取得
-  - GET /api/room/rooms
-    - 出力: [{ lobbyId: string, name: string, players: number, maxPlayers: number, status: string }]
-- ロビー作成
-  - POST /api/room/create
-    - 入力: { name: string, maxPlayers: number, rules: object }
-    - 出力: { lobbyId: string, name: string, maxPlayers: number }
-- ロビー情報取得
-  - GET /api/room/{lobbyId}
-    - 出力: { lobbyId: string, name: string, players: [{ userId: string, username: string }], rules: object }
-- ロビーへの参加
-  - POST /api/lobbies/{lobbyId}/join
-    - 入力: { userId: string }
-    - 出力: { message: "Joined successfully" }
-- ロビーから退出
-  - POST /api/lobbies/{lobbyId}/leave
-    - 入力: { userId: string }
-    - 出力: { message: "Left successfully" }
-
-3. ゲーム進行関連
-
-- ゲーム開始
-  - POST /api/lobbies/{lobbyId}/start
-    - 入力: { userId: string }
-    - 出力: { message: "Game started", gameId: string }
-- ゲーム状態取得
-  - GET /api/games/{gameId}
-    - 出力: { gameId: string, status: string, players: [{ userId: string, role: string, alive: boolean }], logs: [] }
-- プレイヤーの行動
-  - POST /api/games/{gameId}/action
-    - 入力: { userId: string, action: string, target: string }
-    - 出力: { message: "Action recorded" }
-  - 投票
-    - POST /api/games/{gameId}/vote
-      - 入力: { userId: string, target: string }
-      - 出力: { message: "Vote recorded" }
-  - ゲーム終了
-    - POST /api/games/{gameId}/end
-      - 入力: { userId: string }
-      - 出力: { winner: "Villagers" | "Werewolves" }
-
-4. リアルタイム通信 (WebSocket)
-   - ロビー状態通知
-     - イベント: lobby:update
-     - 内容: { lobbyId: string, players: [{ userId: string, username: string }] }
-   - ゲーム進行通知
-     - イベント: game:update
-     - 内容: { gameId: string, status: string, logs: [] }
-   - 投票進行通知
-     - イベント: game:vote
-     - 内容: { gameId: string, votes: [{ userId: string, target: string }] }
-   - 勝敗結果通知
-     - イベント: game:result
-     - 内容: { gameId: string, winner: string, logs: [] }
-5. 管理者向け API
-   - ルール設定
-     - POST /api/lobbies/{lobbyId}/rules
-       - 入力: { rules: object }
-       - 出力: { message: "Rules updated" }
-   - 不正プレイヤーのキック
-     - POST /api/lobbies/{lobbyId}/kick
-       - 入力: { adminId: string, targetUserId: string }
-       - 出力: { message: "Player kicked" }
-6. ゲームログ関連
-   - 過去のゲームログ取得
-     - GET /api/users/{userId}/logs
-       - 出力: [{ gameId: string, result: string, date: string }]
-   - 特定ゲームの詳細ログ
-     - GET /api/games/{gameId}/logs
-       - 出力: { gameId: string, logs: [{ round: number, actions: [], votes: [] }] }
-
-追加ポイント
-
-- セキュリティ
-
-  - 認証（JWT やセッション管理）を通じて API の不正使用を防ぐ。
-  - アクセス制限（ロビー参加者のみ特定 API を使用可能にするなど）。
-
-- 拡張性
-
-  - ルールカスタマイズの API を拡張可能にする。
-  - 将来的にランキングやフレンド機能を追加。
-
-- パフォーマンス
-  - WebS ocket を活用してリアルタイム性を確保。
-  - バックエンドで効率的な非同期処理を行う。
+4. ゲームログ関連
+   - GET /api/users/{userId}/logs
+   - GET /api/games/{gameId}/logs

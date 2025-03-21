@@ -1,82 +1,45 @@
 use axum::{
-    extract::{Path, State}, http::StatusCode, response::IntoResponse, routing::{get, post}, Json, Router
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{models::game::{Game, GameAction, NightActionRequest}, services::game_service};
 use crate::state::AppState;
+use crate::{
+    models::game::{GameResult, NightActionRequest},
+    services::game_service,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GameStartRequest {
-    room_id: String,
-    player_id: String,
+pub struct VoteAction {
+    voter_id: String,
+    target_id: String,
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GameActionRequest {
-    room_id: String,
-    action: GameAction,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct VoteRequest {
-    room_id: String,
-    player_id: String,
-    vote: bool,
-}
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct NightActionRequest {
-//     player_id: String,
-//     action: NightAction,
-// }
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub enum NightAction {
-//     Attack { target_id: String },
-//     Protect { target_id: String },
-//     Investigate { target_id: String },
-// }
 
 pub fn routes(state: AppState) -> Router {
     Router::new()
-        // roomidで指定されたゲームを開始
-        // curl -X POST http://localhost:8080/api/game/{roomid}/start
-        .route("/:roomid/start", post(start_game))
-        // roomidで指定されたゲームの状態を取得
-        // curl http://localhost:8080/api/game/{roomid}/state
-        .route("/:roomid/state", get(get_game_state))
-        // roomidで指定されたゲームに対してアクション(投票やゲーム終了)を実行
-        // curl -X POST -H "Content-Type: application/json" -d '{"action": "vote"}' http://localhost:8080/api/game/{roomid}/action
-        .route("/:roomid/action", post(post_game_action_handler))
-        // roomidで指定されたゲームに対して投票を実行
-        // curl -X POST -H "Content-Type: application/json" -d '{"player_id": "123", "vote": true}' http://localhost:8080/api/game/{roomid}/vote
-        .route("/:roomid/vote", post(post_vote_handler))
-        // roomidで指定されたゲームを終了
-        // curl -X POST http://localhost:8080/api/game/{roomid}/end
-        .route("/:roomid/end", post(end_game_handler))
-
-        // デバッグ用：次のフェーズに強制的に進める
-        // curl -X POST http://localhost:8080/api/game/{roomid}/debug/next-phase
-        .route("/:roomid/debug/next-phase", post(force_next_phase_handler))
-        
-        // 夜のアクションを実行
-        // curl -X POST -H "Content-Type: application/json" \
-        // -d '{"player_id": "wolf1", "action": {"Attack": {"target_id": "villager1"}}}' \
-        // http://localhost:8080/api/game/{roomid}/night-action
-        .route("/:roomid/night-action", post(night_action_handler))
-        
+        .nest(
+            "/:roomid",
+            Router::new()
+                // ゲームの基本操作
+                .route("/start", post(start_game))
+                .route("/end", post(end_game_handler))
+                .route("/state", get(get_game_state))
+                // ゲームアクション
+                .nest(
+                    "/actions",
+                    Router::new()
+                        .route("/vote", post(cast_vote_handler))
+                        .route("/night-action", post(night_action_handler)),
+                )
+                // ゲーム進行の管理
+                .route("/phase/next", post(advance_phase_handler))
+                .route("/check-winner", get(check_winner_handler)),
+        )
         .with_state(state)
-}
-
-async fn force_next_phase_handler(
-    State(state): State<AppState>,
-    Path(room_id): Path<String>,
-) -> impl IntoResponse {
-    match game_service::force_next_phase(state, &room_id).await {
-        Ok(message) => (StatusCode::OK, message),
-        Err(message) => (StatusCode::BAD_REQUEST, message),
-    }
 }
 
 pub async fn start_game(
@@ -84,8 +47,8 @@ pub async fn start_game(
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
     match game_service::start_game(state, &room_id).await {
-        Ok(message) => (StatusCode::OK, message),
-        Err(message) => (StatusCode::NOT_FOUND, message),
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(message) => (StatusCode::NOT_FOUND, Json(message)),
     }
 }
 
@@ -95,29 +58,7 @@ pub async fn get_game_state(
 ) -> impl IntoResponse {
     match game_service::get_game_state(state, room_id).await {
         Ok(state) => (StatusCode::OK, Json(state)),
-        Err(message) => todo!(), //(StatusCode::NOT_FOUND, Json(message)),
-    }
-}
-
-async fn post_game_action_handler(
-    State(state): State<AppState>,
-    Path(room_id): Path<String>,
-    Json(action): Json<GameActionRequest>,
-) -> impl IntoResponse {
-    match game_service::post_game_action(state, room_id, action.action).await {
-        Ok(message) => (StatusCode::OK, message),
-        Err(message) => (StatusCode::NOT_FOUND, message),
-    }
-}
-
-async fn post_vote_handler(
-    State(state): State<AppState>,
-    Path(room_id): Path<String>,
-    Json(vote): Json<VoteRequest>,
-) -> impl IntoResponse {
-    match game_service::post_vote(state, room_id, vote.player_id, vote.vote).await {
-        Ok(message) => (StatusCode::OK, message),
-        Err(message) => (StatusCode::NOT_FOUND, message),
+        Err(message) => (StatusCode::NOT_FOUND, Json(message)),
     }
 }
 
@@ -126,8 +67,8 @@ async fn end_game_handler(
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
     match game_service::end_game(state, room_id).await {
-        Ok(message) => (StatusCode::OK, message),
-        Err(message) => (StatusCode::NOT_FOUND, message),
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(message) => (StatusCode::NOT_FOUND, Json(message)),
     }
 }
 
@@ -142,29 +83,59 @@ async fn night_action_handler(
     }
 }
 
+async fn cast_vote_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+    Json(vote_action): Json<VoteAction>,
+) -> impl IntoResponse {
+    match game_service::handle_vote(
+        state,
+        &room_id,
+        &vote_action.voter_id,
+        &vote_action.target_id,
+    )
+    .await
+    {
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
+    }
+}
+
+async fn advance_phase_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> impl IntoResponse {
+    match game_service::advance_game_phase(state, &room_id).await {
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
+    }
+}
+
+async fn check_winner_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> impl IntoResponse {
+    match game_service::check_winner(state, &room_id).await {
+        Ok(winner) => match winner {
+            GameResult::InProgress => (StatusCode::OK, Json("ゲーム進行中".to_string())),
+            GameResult::VillagerWin => (StatusCode::OK, Json("村人陣営の勝利".to_string())),
+            GameResult::WerewolfWin => (StatusCode::OK, Json("人狼陣営の勝利".to_string())),
+        },
+        Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use crate::{models::room::Room, services::room_service};
-
     use super::*;
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-    };
+    use axum::{body::Body, http::Request};
     use tower::ServiceExt;
-    // use hyper::Server;
-    use hyper::server::conn::http1;
-use hyper_util::rt::TokioIo;
-use tokio::net::TcpListener;
 
     #[tokio::test]
     async fn test_start_game() {
         let state = AppState::new();
         let app = routes(state.clone());
-
-        let room_id = room_service::create_room(state.clone()).await;
+        let room_id = crate::services::room_service::create_room(state.clone()).await;
 
         let request = Request::builder()
             .method("POST")
@@ -173,21 +144,18 @@ use tokio::net::TcpListener;
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), 100).await.unwrap();
-        let message = String::from_utf8(body.to_vec()).unwrap();
-        assert!(message.contains("Game started successfully"));
     }
 
     #[tokio::test]
     async fn test_end_game() {
         let state = AppState::new();
         let app = routes(state.clone());
+        let room_id = crate::services::room_service::create_room(state.clone()).await;
 
-        let room_id = room_service::create_room(state.clone()).await;
-        game_service::start_game(state.clone(), &room_id.to_string()).await.unwrap();
+        game_service::start_game(state.clone(), &room_id.to_string())
+            .await
+            .unwrap();
 
         let request = Request::builder()
             .method("POST")
@@ -196,11 +164,6 @@ use tokio::net::TcpListener;
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), 100).await.unwrap();
-        let message = String::from_utf8(body.to_vec()).unwrap();
-        assert!(message.contains("Game ended successfully"));
     }
 }

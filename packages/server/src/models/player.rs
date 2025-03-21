@@ -6,16 +6,19 @@ use super::role::Role;
 pub struct Player {
     pub id: u32,
     pub name: String,
-    pub role: Role,
-    pub is_dead: bool, // 追加: プレイヤーの生死状態
+    pub role: Option<Role>,
+    pub is_dead: bool,
 }
 
 impl Player {
-    pub fn new(id: u32, name: String) -> Self {
+    // この関数は将来のクライアントサイドでのプレイヤー作成時に使用予定
+    // フロントエンドからの新規プレイヤー登録APIで使用することを想定
+    #[allow(dead_code)]
+    pub fn new(id: u32, name: String, role: Option<Role>) -> Self {
         Self {
             id,
             name,
-            role: Role::Villager,
+            role,
             is_dead: false,
         }
     }

@@ -1,7 +1,6 @@
+use super::player::Player;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-use super::{player::Player, room::RoomStatus};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Game {
@@ -12,47 +11,45 @@ pub struct Game {
     pub roles: Vec<String>,
     pub phase: GamePhase,
     pub result: GameResult,
-    pub votes: HashMap<u32, bool>, // 追加: プレイヤーIDと投票内容のマップ
-    pub night_actions: NightActions, // 追加: 夜のアクション記録
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct NightActions {
-    pub attacks: Vec<String>,  // 襲撃対象
-    pub guards: Vec<String>,   // 護衛対象
-    pub divinations: Vec<String>, // 占い対象
-}
-
-impl std::fmt::Display for Game {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Game {{ room_id: {}, name: {}, players: {:?}, max_players: {}, roles: {:?}, phase: {:?}, result: {:?} }}", 
-            self.room_id, self.name, self.players, self.max_players, self.roles, self.phase, self.result)
-    }
+    pub night_actions: NightActions,
+    pub vote_results: HashMap<u32, Vote>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum GamePhase {
-    Waiting,        // ゲーム開始前
-    Night,          // 夜フェーズ
-    Discussion,     // 議論フェーズ
-    Voting,         // 投票フェーズ
-    Result,         // 結果発表フェーズ
-    Finished        // ゲーム終了
+    Waiting,    // ゲーム開始前
+    Night,      // 夜フェーズ
+    Discussion, // 議論フェーズ
+    Voting,     // 投票フェーズ
+    Result,     // 結果発表フェーズ
+    Finished,   // ゲーム終了
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GameResult {
     InProgress,
-    VillagerWin,    // 村人陣営勝利
-    WerewolfWin,    // 人狼陣営勝利
+    VillagerWin,
+    WerewolfWin,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum NightAction {
-    Attack { target_id: String },    // 人狼の襲撃
-    Divine { target_id: String },    // 占い師の占い
-    Guard { target_id: String },     // 騎士の護衛
-    // 必要に応じて追加の役職アクション
+    Attack { target_id: String }, // 人狼の襲撃
+    Divine { target_id: String }, // 占い師の占い
+    Guard { target_id: String },  // 騎士の護衛
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct NightActions {
+    pub attacks: Vec<String>,     // 襲撃対象
+    pub guards: Vec<String>,      // 護衛対象
+    pub divinations: Vec<String>, // 占い対象
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Vote {
+    pub target_id: u32,
+    pub voters: Vec<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,56 +68,121 @@ impl Game {
             roles: vec![],
             phase: GamePhase::Waiting,
             result: GameResult::InProgress,
-            votes: HashMap::new(),
             night_actions: NightActions::default(),
+            vote_results: HashMap::new(),
         }
     }
 
+    // 夜アクション関連の実装
     pub fn register_attack(&mut self, target_id: &str) -> Result<(), String> {
+        if !self.players.iter().any(|p| p.id.to_string() == target_id) {
+            return Err("対象プレイヤーが見つかりません".to_string());
+        }
         self.night_actions.attacks.push(target_id.to_string());
         Ok(())
     }
 
     pub fn divine_player(&self, target_id: &str) -> Result<String, String> {
-        let target = self.players
+        let target = self
+            .players
             .iter()
             .find(|p| p.id.to_string() == target_id)
             .ok_or("対象プレイヤーが見つかりません")?;
-        Ok(target.role.to_string())
+
+        match &target.role {
+            Some(role) => Ok(role.to_string()),
+            None => Ok("不明".to_string()),
+        }
     }
 
     pub fn register_guard(&mut self, target_id: &str) -> Result<(), String> {
+        if !self.players.iter().any(|p| p.id.to_string() == target_id) {
+            return Err("対象プレイヤーが見つかりません".to_string());
+        }
         self.night_actions.guards.push(target_id.to_string());
         Ok(())
     }
 
     pub fn resolve_night_actions(&mut self) {
         use std::collections::HashSet;
-        
-        // 護衛成功判定
         let protected_players: HashSet<_> = self.night_actions.guards.iter().collect();
-        
-        // 襲撃処理（護衛されていない場合のみ）
+
         for target_id in &self.night_actions.attacks {
             if !protected_players.contains(target_id) {
-                if let Some(player) = self.players
+                if let Some(player) = self
+                    .players
                     .iter_mut()
-                    .find(|p| p.id.to_string() == *target_id) 
+                    .find(|p| p.id.to_string() == *target_id)
                 {
                     player.is_dead = true;
                 }
             }
         }
 
-        // 夜アクションをリセット
         self.night_actions = NightActions::default();
+    }
+
+    // 投票システムの実装
+    pub fn cast_vote(&mut self, voter_id: u32, target_id: u32) -> Result<(), String> {
+        // プレイヤーの存在確認
+        if !self.players.iter().any(|p| p.id == voter_id) {
+            return Err("投票者が見つかりません".to_string());
+        }
+        if !self.players.iter().any(|p| p.id == target_id) {
+            return Err("投票対象が見つかりません".to_string());
+        }
+
+        // 死亡プレイヤーのチェック
+        if let Some(voter) = self.players.iter().find(|p| p.id == voter_id) {
+            if voter.is_dead {
+                return Err("死亡したプレイヤーは投票できません".to_string());
+            }
+        }
+
+        // 二重投票チェック
+        if self
+            .vote_results
+            .values()
+            .any(|v| v.voters.contains(&voter_id))
+        {
+            return Err("既に投票済みです".to_string());
+        }
+
+        self.vote_results
+            .entry(target_id)
+            .or_insert_with(|| Vote {
+                target_id,
+                voters: Vec::new(),
+            })
+            .voters
+            .push(voter_id);
+
+        Ok(())
+    }
+
+    pub fn count_votes(&self) -> Option<(u32, usize)> {
+        self.vote_results
+            .iter()
+            .max_by_key(|(_, vote)| vote.voters.len())
+            .map(|(target_id, vote)| (*target_id, vote.voters.len()))
+    }
+
+    pub fn resolve_voting(&mut self) {
+        if let Some((target_id, _)) = self.count_votes() {
+            if let Some(player) = self.players.iter_mut().find(|p| p.id == target_id) {
+                player.is_dead = true;
+            }
+        }
+        self.vote_results.clear();
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum GameAction {
-    StartGame,
-    EndGame,
-    NextRole,
-    NextTurn,
+impl std::fmt::Display for Game {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Game {{ room_id: {}, name: {}, players: {:?}, phase: {:?}, result: {:?} }}",
+            self.room_id, self.name, self.players, self.phase, self.result
+        )
+    }
 }
