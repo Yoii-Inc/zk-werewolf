@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { ChatMessage, Player } from "../../types";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 
@@ -28,8 +28,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [notes, setNotes] = useState("");
   const [isNight] = useState(true);
 
-  const [websocket, setWebsocket] = useState<WebSocket | null>(null);
+  const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected"); // WebSocket接続状態
+  const hasConnectedRef = useRef(false);
 
   const connectWebSocket = () => {
     setWebsocketStatus("connecting");
@@ -52,40 +53,45 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     ws.onclose = event => {
       console.log("WebSocket接続が閉じられました", event);
       setWebsocketStatus("disconnected");
-      setWebsocket(null);
+      websocketRef.current = null;
     };
 
     ws.onerror = error => {
       console.error("WebSocketエラーが発生しました:", error);
       setWebsocketStatus("error");
-      setWebsocket(null);
+      websocketRef.current = null;
     };
 
-    setWebsocket(ws);
+    websocketRef.current = ws;
   };
 
   const disconnectWebSocket = () => {
-    if (websocket && websocket.readyState !== WebSocket.CLOSED) {
-      websocket.close();
+    if (websocketRef.current && websocketRef.current.readyState !== WebSocket.CLOSED) {
+      websocketRef.current.close();
     }
   };
 
   useEffect(() => {
+    if (!hasConnectedRef.current) {
+      hasConnectedRef.current = true;
+      connectWebSocket();
+    }
     // クリーンアップ関数
     return () => {
-      disconnectWebSocket();
+      // disconnectWebSocket();
     };
-  }, []);
+  }, [params.id]);
 
   const sendMessage = () => {
-    if (websocket && newMessage) {
-      websocket.send(newMessage);
+    console.log(websocketRef.current);
+    if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN && newMessage.trim() !== "") {
+      websocketRef.current.send(newMessage);
       setNewMessage(""); // 送信後にinputをクリア
     } else {
-      if (!websocket) {
+      if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
         console.error("WebSocket接続が確立されていません。");
       }
-      if (!newMessage) {
+      if (newMessage.trim() === "") {
         console.error("メッセージが空です。");
       }
     }
@@ -131,20 +137,6 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             <div className="p-4 border-b border-indigo-100">
               <h2 className="text-lg font-semibold text-indigo-900">参加者一覧</h2>
             </div>
-            <button
-              onClick={connectWebSocket}
-              disabled={websocketStatus === "connected" || websocketStatus === "connecting"}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-            >
-              {websocketStatus === "connecting" ? "接続中..." : "WebSocket接続"}
-            </button>
-            <button
-              onClick={disconnectWebSocket}
-              disabled={websocketStatus === "disconnected"}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-            >
-              WebSocket切断
-            </button>
             <div className="p-4 space-y-3">
               {mockPlayers.map(player => (
                 <div
@@ -167,7 +159,32 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 </div>
               ))}
             </div>
+            <div>
+              {/* webscoket関連(デバッグ用)とかく */}
+              <div className="p-4 border-b border-indigo-100">
+                <h2 className="text-lg font-semibold text-indigo-900">Websocket関連(デバッグ用)</h2>
+                <div className="text-indigo-700">WebSocket URL: ws://localhost:8080/api/room/ws</div>
+                <div className="text-indigo-700">WebSocket ReadyState: {websocketRef.current?.readyState}</div>
+                <div className="text-indigo-700">WebSocket Status: {websocketStatus}</div>
+              </div>
+
+              <button
+                onClick={connectWebSocket}
+                disabled={websocketStatus === "connected" || websocketStatus === "connecting"}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              >
+                {websocketStatus === "connecting" ? "接続中..." : "WebSocket接続"}
+              </button>
+              <button
+                onClick={disconnectWebSocket}
+                disabled={websocketStatus === "disconnected"}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              >
+                WebSocket切断
+              </button>
+            </div>
           </div>
+
           {/* Chat Area */}
           <div className="flex-1 flex flex-col">
             <div className="flex-1 overflow-y-auto p-4">
