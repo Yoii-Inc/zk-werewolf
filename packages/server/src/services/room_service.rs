@@ -8,7 +8,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
-pub async fn create_room(state: AppState) -> u32 {
+pub async fn create_room(state: AppState, name: Option<String>) -> u32 {
     let mut rooms = state.rooms.lock().await;
     let new_id = rooms
         .keys()
@@ -16,7 +16,7 @@ pub async fn create_room(state: AppState) -> u32 {
         .max()
         .unwrap_or(0)
         + 1;
-    let new_room = Room::new(new_id.to_string(), None, None);
+    let new_room = Room::new(new_id.to_string(), name, None);
     rooms.insert(new_id.to_string(), new_room);
     new_id
 }
@@ -48,6 +48,7 @@ pub async fn join_room(state: AppState, room_id: &str, player_id: &str, player_n
             name: player_name.to_string(),
             role: Some(Role::Villager),
             is_dead: false,
+            is_ready: false,
         };
         room.players.push(player);
         true

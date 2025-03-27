@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::role::Role;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Player {
@@ -7,6 +7,7 @@ pub struct Player {
     pub name: String,
     pub role: Option<Role>,
     pub is_dead: bool,
+    pub is_ready: bool,
 }
 
 impl Player {
@@ -19,6 +20,7 @@ impl Player {
             name,
             role,
             is_dead: false,
+            is_ready: false,
         }
     }
 }

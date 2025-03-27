@@ -1,12 +1,17 @@
-use crate::routes::user::auth_middleware;
 use crate::{services::room_service, state::AppState, utils::websocket};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, WebSocketUpgrade},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize)]
+pub struct CreateRoomRequest {
+    name: String,
+}
 
 pub fn routes(state: AppState) -> Router {
     Router::new()
@@ -18,24 +23,28 @@ pub fn routes(state: AppState) -> Router {
         .route("/rooms", get(get_rooms))
         // 特定のルーム情報取得
         // curl http://localhost:8080/api/room/{roomid}
-        .route("/:roomid", get(get_room_info))
-        // ルーム参加 
+        .route("/:id", get(get_room_info))
+        // ルーム参加
         // curl -X POST http://localhost:8080/api/room/{roomid}/join/{playerid}
-        .route("/:roomid/join/:playerid", post(join_room))
-        // ルーム脱退 
+        .route("/:id/join/:playerid", post(join_room))
+        // ルーム脱退
         // curl -X POST http://localhost:8080/api/room/{roomid}/leave/{playerid}
-        .route("/:roomid/leave/:playerid", post(leave_room))
-        // ルーム削除 
+        .route("/:id/leave/:playerid", post(leave_room))
+        // ルーム削除
         // curl -X DELETE http://localhost:8080/api/room/{roomid}/delete
-        .route("/:roomid/delete", delete(delete_room))
+        .route("/:id/delete", delete(delete_room))
         // WebSocket接続
         // websocat ws://localhost:8080/api/room/ws
         .route("/ws", get(websocket::handler))
+        // .route("/:id/ready", post(toggle_ready))  // 追加
         .with_state(state)
 }
 
-pub async fn create_room(State(state): State<AppState>) -> impl IntoResponse {
-    let room_id = room_service::create_room(state).await;
+pub async fn create_room(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateRoomRequest>,
+) -> impl IntoResponse {
+    let room_id = room_service::create_room(state, Some(payload.name)).await;
     (
         StatusCode::OK,
         Json(format!("Room created with ID: {}", room_id)),
@@ -119,10 +128,15 @@ mod tests {
         let state = AppState::new();
         let app = routes(state);
 
+        let create_request = CreateRoomRequest {
+            name: "テストルーム".to_string(),
+        };
+
         let request = Request::builder()
             .method("POST")
             .uri("/create")
-            .body(Body::empty())
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_string(&create_request).unwrap()))
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
