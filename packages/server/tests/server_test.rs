@@ -50,10 +50,13 @@ async fn test_join_room() {
         .replace("\"Room created with ID: ", "")
         .replace("\"", "");
 
+    // TODO: テスト用のユーザを実装する
+    let test_user_id = "2f3d8e70-f5cf-4988-a6a1-dfae28b04852";
+
     // ルーム参加のリクエストを送信
     let join_request = Request::builder()
         .method("POST")
-        .uri(format!("/api/room/{}/join/1", room_id))
+        .uri(format!("/api/room/{}/join/{}", room_id, test_user_id))
         .body(Body::empty())
         .unwrap();
 
@@ -87,6 +90,11 @@ async fn test_voting_system() {
     let room_id = body_str
         .replace("\"Room created with ID: ", "")
         .replace("\"", "");
+
+    let player_ids = [
+        "2f3d8e70-f5cf-4988-a6a1-dfae28b04852",
+        "80e20aa0-acfb-43ab-93e7-3d6791009fff",
+    ];
 
     // プレイヤー1と2を参加させる
     for player_id in 1..=2 {
