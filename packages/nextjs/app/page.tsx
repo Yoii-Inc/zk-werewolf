@@ -99,10 +99,10 @@ const Home = () => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/create`, {
         method: "POST",
-        // headers: {
-        //   "Content-Type": "application/json",
-        // },
-        // body: JSON.stringify({ name: newVillageName }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: newVillageName }),
       });
 
       if (!response.ok) {
@@ -204,7 +204,9 @@ const Home = () => {
             className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm hover:shadow-md transition-all border border-indigo-50 p-6"
           >
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-indigo-900">ルーム{room.room_id}</h2>
+              <h2 className="text-xl font-semibold text-indigo-900">
+                {room.name ? room.name : `ルーム${room.room_id}`}
+              </h2>
               <span
                 className={`px-4 py-1.5 rounded-full text-sm font-medium ${
                   room.status === "Open" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"

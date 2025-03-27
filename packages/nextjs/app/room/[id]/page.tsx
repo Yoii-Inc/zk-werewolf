@@ -19,7 +19,7 @@ const mockMessages: ChatMessage[] = [
   {
     id: "1",
     sender: "システム",
-    message: "ゲームが開始されました。",
+    message: "これはデフォルトメッセージです。",
     timestamp: new Date().toISOString(),
     type: "system",
   },
@@ -34,11 +34,27 @@ const mockPlayers: Player[] = [
 ];
 
 export default function RoomPage({ params }: { params: { id: string } }) {
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    // ページ読み込み時にローカルストレージからメッセージを復元
+    if (typeof window !== "undefined") {
+      const savedMessages = localStorage.getItem(`chat_messages_${params.id}`);
+      return savedMessages ? JSON.parse(savedMessages) : mockMessages;
+    }
+    return mockMessages;
+  });
+
+  // メッセージが更新されたときにローカルストレージに保存
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(`chat_messages_${params.id}`, JSON.stringify(messages));
+    }
+  }, [messages, params.id]);
+
   const [newMessage, setNewMessage] = useState("");
   const [notes, setNotes] = useState("");
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStarting, setIsStarting] = useState(false);
 
   const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected"); // WebSocket接続状態
@@ -134,6 +150,32 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     }
   };
 
+  const startGame = async () => {
+    if (!roomInfo) return;
+    setIsStarting(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/game/${params.id}/start`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("ゲームの開始に失敗しました");
+      }
+      // ゲーム開始成功時の処理
+      const message: ChatMessage = {
+        id: Date.now().toString(),
+        sender: "システム",
+        message: "ゲームが開始されました",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      };
+      setMessages(prev => [...prev, message]);
+    } catch (error) {
+      console.error("ゲーム開始エラー:", error);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
   return (
     <div className="h-screen flex bg-gradient-to-br from-indigo-50 to-purple-50">
       {isLoading ? (
@@ -178,6 +220,19 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {String(roomInfo.remainingTime % 60).padStart(2, "0")}
                   </span>
                 </div>
+                {roomInfo.status === "Open" && (
+                  <button
+                    onClick={startGame}
+                    disabled={isStarting || roomInfo.players.length < 2}
+                    className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+                      isStarting || roomInfo.players.length < 2
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700"
+                    }`}
+                  >
+                    {isStarting ? "開始中..." : "ゲーム開始"}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -196,7 +251,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                       player.status === "dead" ? "bg-gray-100 text-gray-500" : "bg-white text-indigo-900"
                     }`}
                   >
-                    <div className="flex items中心 gap-2">
+                    <div className="flex items-center gap-2">
                       {player.status === "alive" ? (
                         <UserCheck size={18} className="text-green-500" />
                       ) : (
