@@ -82,15 +82,10 @@ pub async fn process_night_action(
         return Err("夜のアクションは夜にのみ実行できます".to_string());
     }
 
-    let player_id = action_req
-        .player_id
-        .parse::<u32>()
-        .map_err(|_| "無効なプレイヤーID形式です".to_string())?;
-
     let player = game
         .players
         .iter()
-        .find(|p| p.id == player_id)
+        .find(|p| p.id == action_req.player_id)
         .ok_or("プレイヤーが見つかりません")?;
 
     match (
@@ -127,14 +122,7 @@ pub async fn handle_vote(
         return Err("現在は投票フェーズではありません".to_string());
     }
 
-    let voter = voter_id
-        .parse::<u32>()
-        .map_err(|_| "無効な投票者ID形式です".to_string())?;
-    let target = target_id
-        .parse::<u32>()
-        .map_err(|_| "無効な対象者ID形式です".to_string())?;
-
-    game.cast_vote(voter, target)?;
+    game.cast_vote(voter_id, target_id)?;
     Ok("投票を受け付けました".to_string())
 }
 

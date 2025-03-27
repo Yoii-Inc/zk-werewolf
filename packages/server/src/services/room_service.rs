@@ -1,22 +1,29 @@
-use std::collections::HashMap;
 use crate::{
     models::{
-        player::Player, role::Role, room::{Room, RoomStatus}
+        player::Player,
+        role::Role,
+        room::{Room, RoomStatus},
     },
     state::AppState,
 };
+use std::collections::HashMap;
 
 pub async fn create_room(state: AppState) -> u32 {
     let mut rooms = state.rooms.lock().await;
-    let new_id = rooms.keys().map(|k| k.parse::<u32>().unwrap()).max().unwrap_or(0) + 1;
+    let new_id = rooms
+        .keys()
+        .map(|k| k.parse::<u32>().unwrap())
+        .max()
+        .unwrap_or(0)
+        + 1;
     let new_room = Room::new(new_id.to_string(), None, None);
     rooms.insert(new_id.to_string(), new_room);
     new_id
 }
 
-pub async fn join_room(state: AppState, room_id: &str, player_id: u32) -> bool {
+pub async fn join_room(state: AppState, room_id: &str, player_id: &str, player_name: &str) -> bool {
     let mut rooms = state.rooms.lock().await;
-    
+
     if let Some(room) = rooms.get_mut(room_id) {
         // ルームの状態がOpenか確認
         if room.status != RoomStatus::Open {
@@ -28,15 +35,17 @@ pub async fn join_room(state: AppState, room_id: &str, player_id: u32) -> bool {
             return false;
         }
 
-        // 既に参加しているプレイヤーかチェック
-        if room.players.iter().any(|p| p.id == player_id) {
-            return false;
+        // 既に参加しているプレイヤーの場合
+        if let Some(existing_player) = room.players.iter_mut().find(|p| p.id == player_id) {
+            // 名前を更新して再接続として扱う
+            existing_player.name = player_name.to_string();
+            return true; // 再接続成功
         }
 
         // 新しいプレイヤーを追加
         let player = Player {
-            id: player_id,
-            name: format!("Player {}", player_id),
+            id: player_id.to_string(),
+            name: player_name.to_string(),
             role: Some(Role::Villager),
             is_dead: false,
         };
@@ -47,13 +56,13 @@ pub async fn join_room(state: AppState, room_id: &str, player_id: u32) -> bool {
     }
 }
 
-pub async fn leave_room(state: AppState, room_id: &str, player_id: u32) -> bool {
+pub async fn leave_room(state: AppState, room_id: &str, player_id: &str) -> bool {
     let mut rooms = state.rooms.lock().await;
-    
+
     if let Some(room) = rooms.get_mut(room_id) {
         // プレイヤーが存在するかチェック
         let player_index = room.players.iter().position(|p| p.id == player_id);
-        
+
         if let Some(index) = player_index {
             // プレイヤーを削除
             room.players.remove(index);

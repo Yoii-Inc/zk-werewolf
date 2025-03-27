@@ -36,25 +36,25 @@ async fn setup_test_room_with_players(state: &AppState) -> String {
 
     // プレイヤーを4人作成（村人2人、占い師1人、人狼1人）
     players.push(Player {
-        id: 1,
+        id: "1".to_string(),
         name: "Player1".to_string(),
         role: Some(Role::Villager),
         is_dead: false,
     });
     players.push(Player {
-        id: 2,
+        id: "2".to_string(),
         name: "Player2".to_string(),
         role: Some(Role::Seer),
         is_dead: false,
     });
     players.push(Player {
-        id: 3,
+        id: "3".to_string(),
         name: "Player3".to_string(),
         role: Some(Role::Werewolf),
         is_dead: false,
     });
     players.push(Player {
-        id: 4,
+        id: "4".to_string(),
         name: "Player4".to_string(),
         role: Some(Role::Villager),
         is_dead: false,

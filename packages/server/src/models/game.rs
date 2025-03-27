@@ -12,7 +12,7 @@ pub struct Game {
     pub phase: GamePhase,
     pub result: GameResult,
     pub night_actions: NightActions,
-    pub vote_results: HashMap<u32, Vote>,
+    pub vote_results: HashMap<String, Vote>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -48,8 +48,8 @@ pub struct NightActions {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vote {
-    pub target_id: u32,
-    pub voters: Vec<u32>,
+    pub target_id: String,
+    pub voters: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -123,7 +123,7 @@ impl Game {
     }
 
     // 投票システムの実装
-    pub fn cast_vote(&mut self, voter_id: u32, target_id: u32) -> Result<(), String> {
+    pub fn cast_vote(&mut self, voter_id: &str, target_id: &str) -> Result<(), String> {
         // プレイヤーの存在確認
         if !self.players.iter().any(|p| p.id == voter_id) {
             return Err("投票者が見つかりません".to_string());
@@ -143,28 +143,28 @@ impl Game {
         if self
             .vote_results
             .values()
-            .any(|v| v.voters.contains(&voter_id))
+            .any(|v| v.voters.contains(&voter_id.to_string()))
         {
             return Err("既に投票済みです".to_string());
         }
 
         self.vote_results
-            .entry(target_id)
+            .entry(target_id.to_string())
             .or_insert_with(|| Vote {
-                target_id,
+                target_id: target_id.to_string(),
                 voters: Vec::new(),
             })
             .voters
-            .push(voter_id);
+            .push(voter_id.to_string());
 
         Ok(())
     }
 
-    pub fn count_votes(&self) -> Option<(u32, usize)> {
+    pub fn count_votes(&self) -> Option<(String, usize)> {
         self.vote_results
             .iter()
             .max_by_key(|(_, vote)| vote.voters.len())
-            .map(|(target_id, vote)| (*target_id, vote.voters.len()))
+            .map(|(target_id, vote)| (target_id.clone(), vote.voters.len()))
     }
 
     pub fn resolve_voting(&mut self) {

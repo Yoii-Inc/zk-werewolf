@@ -10,7 +10,7 @@ use crate::models::user::{LoginUserRequest, RegisterUserRequest};
 use crate::services::user_service::UserServiceError;
 use crate::state::AppState;
 
-mod auth_middleware;
+pub mod auth_middleware;
 
 // ユーザールートの設定
 pub fn routes(state: AppState) -> Router {

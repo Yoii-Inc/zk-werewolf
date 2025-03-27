@@ -1,3 +1,5 @@
+use crate::routes::user::auth_middleware;
+use crate::{services::room_service, state::AppState, utils::websocket};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -5,8 +7,6 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-
-use crate::{services::room_service, state::AppState, utils::websocket};
 
 pub fn routes(state: AppState) -> Router {
     Router::new()
@@ -19,13 +19,13 @@ pub fn routes(state: AppState) -> Router {
         // 特定のルーム情報取得
         // curl http://localhost:8080/api/room/{roomid}
         .route("/:roomid", get(get_room_info))
-        // ルーム参加
+        // ルーム参加 
         // curl -X POST http://localhost:8080/api/room/{roomid}/join/{playerid}
         .route("/:roomid/join/:playerid", post(join_room))
-        // ルーム脱退
+        // ルーム脱退 
         // curl -X POST http://localhost:8080/api/room/{roomid}/leave/{playerid}
         .route("/:roomid/leave/:playerid", post(leave_room))
-        // ルーム削除
+        // ルーム削除 
         // curl -X DELETE http://localhost:8080/api/room/{roomid}/delete
         .route("/:roomid/delete", delete(delete_room))
         // WebSocket接続
@@ -57,9 +57,17 @@ async fn get_room_info(
 
 pub async fn join_room(
     State(state): State<AppState>,
-    Path((room_id, player_id)): Path<(String, u32)>,
+    Path((room_id, player_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let success = room_service::join_room(state, &room_id, player_id).await;
+    // ユーザー認証情報からユーザー名を取得（auth_middlewareで設定される）
+    let user = state
+        .user_service
+        .get_user_by_id(&player_id)
+        .await
+        .map_err(|_| (StatusCode::BAD_REQUEST, Json("User not found")))
+        .unwrap();
+
+    let success = room_service::join_room(state, &room_id, &player_id, &user.username).await;
     if success {
         (StatusCode::OK, Json("Successfully joined room"))
     } else {
@@ -69,9 +77,9 @@ pub async fn join_room(
 
 pub async fn leave_room(
     State(state): State<AppState>,
-    Path((room_id, player_id)): Path<(String, u32)>,
+    Path((room_id, player_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let success = room_service::leave_room(state, &room_id, player_id).await;
+    let success = room_service::leave_room(state, &room_id, &player_id).await;
     if success {
         (StatusCode::OK, Json("Successfully left room"))
     } else {
