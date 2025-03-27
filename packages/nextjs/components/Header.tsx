@@ -3,8 +3,9 @@
 import React, { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bars3Icon, BugAntIcon } from "@heroicons/react/24/outline";
+import { useAuth } from "~~/app/contexts/AuthContext";
 import { FaucetButton, RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
 import { useOutsideClick } from "~~/hooks/scaffold-eth";
 
@@ -79,10 +80,18 @@ export const HeaderMenuLinks = () => {
 export const Header = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const burgerMenuRef = useRef<HTMLDivElement>(null);
+  const { isAuthenticated, user, logout } = useAuth();
+  const router = useRouter();
+
   useOutsideClick(
     burgerMenuRef,
     useCallback(() => setIsDrawerOpen(false), []),
   );
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
 
   return (
     <div className="sticky lg:static top-0 navbar bg-base-100 min-h-0 flex-shrink-0 justify-between z-20 shadow-md shadow-secondary px-0 sm:px-2">
@@ -125,6 +134,18 @@ export const Header = () => {
       <div className="navbar-end flex-grow mr-4">
         <RainbowKitCustomConnectButton />
         <FaucetButton />
+        {isAuthenticated ? (
+          <div className="flex items-center gap-4 ml-4">
+            <span className="text-sm font-medium">{user?.username}</span>
+            <button onClick={handleLogout} className="btn btn-sm btn-ghost">
+              ログアウト
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" className="btn btn-sm btn-ghost ml-4">
+            ログイン
+          </Link>
+        )}
       </div>
     </div>
   );

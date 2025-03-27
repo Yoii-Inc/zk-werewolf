@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "./contexts/AuthContext";
 import { Clock, Moon, PlayCircle, Plus, Users } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 // interface Village {
 //     room_id: number;
@@ -73,6 +75,7 @@ const Home = () => {
   const [rooms] = useState<Room[]>(mockRooms);
   const [isCreating, setIsCreating] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const { isAuthenticated, user } = useAuth();
 
   useEffect(() => {
     const fetchVillages = async () => {
@@ -92,11 +95,51 @@ const Home = () => {
     fetchVillages();
   }, []);
 
-  const joinRoom = async (roomId: string) => {
+  const createRoom = async () => {
     try {
-      const playerId = "3"; // 仮のプレイヤーID
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/${roomId}/join/${playerId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/create`, {
         method: "POST",
+        // headers: {
+        //   "Content-Type": "application/json",
+        // },
+        // body: JSON.stringify({ name: newVillageName }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create room");
+      }
+
+      setNotification({
+        message: "Room created successfully",
+        type: "success",
+      });
+
+      setIsCreating(false);
+    } catch (error) {
+      console.error("Error creating room:", error);
+      setNotification({
+        message: "Failed to create room",
+        type: "error",
+      });
+    }
+  };
+
+  const joinRoom = async (roomId: string) => {
+    if (!isAuthenticated || !user) {
+      toast.error("ルームに参加するにはログインが必要です", {
+        duration: 4000,
+        position: "top-center",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/${roomId}/join/${user.id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
       });
 
       if (!response.ok) {
@@ -104,7 +147,7 @@ const Home = () => {
       }
 
       setNotification({
-        message: "ユーザーhogeとして参加しました",
+        message: `${user.username}として参加しました`,
         type: "success",
       });
 
@@ -136,13 +179,22 @@ const Home = () => {
           <Moon size={32} className="text-indigo-600" />
           <h1 className="text-3xl font-bold text-indigo-900">人狼ゲーム</h1>
         </div>
-        <button
-          onClick={() => setIsCreating(true)}
-          className="bg-indigo-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
-        >
-          <Plus size={20} />
-          ルーム作成
-        </button>
+        <div className="flex items-center gap-4">
+          <input
+            type="text"
+            value={newVillageName}
+            onChange={e => setNewVillageName(e.target.value)}
+            placeholder="Enter room name"
+            className="px-4 py-2 border rounded-lg"
+          />
+          <button
+            onClick={createRoom}
+            className="bg-indigo-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
+          >
+            <Plus size={20} />
+            ルーム作成
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4">
