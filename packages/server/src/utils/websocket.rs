@@ -11,6 +11,17 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::state::AppState;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WebSocketMessage {
+    message_type: String,
+    player_id: String,
+    player_name: String,
+    content: String,
+    timestamp: String,
+    room_id: String,
+}
 
 pub async fn handler(State(state): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state.channel.clone()))
@@ -27,15 +38,25 @@ pub async fn handle_socket(ws: WebSocket, tx: broadcast::Sender<Message>) {
 
     let receive_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-
             if let Message::Text(text) = msg {
-                // メッセージをブロードキャスト
-                let response = format!("Player {}: {}", player_id, text);
-                info!("Received message: {:?}", response);
-                if let Err(e) = tx.send(Message::Text(response)) {
-                    eprintln!("Error sending message: {}", e);
-                    break;
+                // JSON メッセージをパース
+                if let Ok(mut ws_message) = serde_json::from_str::<WebSocketMessage>(&text) {
+                    ws_message.player_id = player_id.clone();
+                    let response = serde_json::to_string(&ws_message).unwrap();
+                    info!("Received message: {:?}", response);
+                    if let Err(e) = tx.send(Message::Text(response)) {
+                        eprintln!("Error sending message: {}", e);
+                        break;
+                    }
                 }
+                // メッセージをブロードキャスト
+                // let response = format!("Player {}: {}", player_id, text);
+                // let response = format!("{}", text);
+                // info!("Received message: {:?}", response);
+                // if let Err(e) = tx.send(Message::Text(response)) {
+                //     eprintln!("Error sending message: {}", e);
+                //     break;
+                // }
             }
         }
     });

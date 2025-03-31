@@ -18,6 +18,10 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
             .await
             .insert(room_id.to_string(), new_game);
         room.status = RoomStatus::InProgress;
+
+        // ゲーム開始後、最初のフェーズに進める
+        advance_game_phase(state.clone(), room_id).await?;
+
         Ok("Game started successfully".to_string())
     } else {
         Err("Room not found".to_string())
@@ -36,13 +40,17 @@ pub async fn end_game(state: AppState, room_id: String) -> Result<String, String
     }
 }
 
-pub async fn get_game_state(state: AppState, room_id: String) -> Result<String, String> {
+pub async fn get_game_state(state: AppState, room_id: String) -> Result<Game, String> {
     let games = state.games.lock().await;
-    if let Some(game) = games.get(&room_id) {
-        Ok(game.to_string())
-    } else {
-        Err("Game not found".to_string())
-    }
+    // if let Some(game) = games.get(&room_id) {
+    //     Ok(game.to_string())
+    // } else {
+    //     Err("Game not found".to_string())
+    // }
+    games
+        .get(&room_id)
+        .cloned()
+        .ok_or("Game not found".to_string())
 }
 
 // ゲームフェーズ管理

@@ -1,17 +1,27 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import type { ChatMessage, Player } from "../../types";
+import type { ChatMessage, Player, WebSocketMessage } from "../../types";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 
 interface RoomInfo {
   room_id: string;
   name: string;
-  status: "Open" | "Inprogress" | "Closed"; // statusを追加
-  phase: "day" | "night";
+  status: "Open" | "InProgress" | "Closed"; // statusを追加
   max_players: number;
   currentPlayers: number;
   remainingTime: number;
+  players: Player[];
+}
+
+interface GameInfo {
+  room_id: string;
+  // name: string;
+  // status: "Open" | "Inprogress" | "Closed"; // statusを追加
+  phase: "Waiting" | "Night" | "Discussion" | "Voting" | "Result" | "Finished";
+  // max_players: number;
+  // currentPlayers: number;
+  // remainingTime: number;
   players: Player[];
 }
 
@@ -53,6 +63,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [newMessage, setNewMessage] = useState("");
   const [notes, setNotes] = useState("");
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+  const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
 
@@ -71,10 +82,18 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
     ws.onmessage = event => {
       console.log("メッセージを受信しました:", event.data);
+
+      const fullMessage: WebSocketMessage = JSON.parse(event.data);
       // サーバーからの応答を処理する
       setMessages(prevMessages => [
         ...prevMessages,
-        { id: "Server", sender: "Server", message: event.data, timestamp: new Date().toISOString(), type: "normal" },
+        {
+          id: "Server",
+          sender: fullMessage.player_name,
+          message: fullMessage.content,
+          timestamp: new Date().toISOString(),
+          type: "normal",
+        },
       ]);
     };
 
@@ -118,6 +137,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           throw new Error("ルーム情報の取得に失敗しました");
         }
         const data = await response.json();
+        // console.log(data);
         setRoomInfo(data);
       } catch (error) {
         console.error("ルーム情報の取得エラー:", error);
@@ -126,19 +146,55 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       }
     };
 
+    const fetchGameInfo = async () => {
+      try {
+        const response = await fetch(`http://localhost:8080/api/game/${params.id}/state`);
+        if (!response.ok) {
+          throw new Error("ゲーム情報の取得に失敗しました");
+        }
+        const data = await response.json();
+        console.log(data);
+        setGameInfo(data);
+      } catch (error) {
+        console.error("ゲーム情報の取得エラー:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    console.log("isStarting:", isStarting);
+
     fetchRoomInfo();
     // 定期的にルーム情報を更新
     const interval = setInterval(fetchRoomInfo, 5000);
 
+    let gameInterval: NodeJS.Timeout | null = null;
+    if (roomInfo?.status === "InProgress") {
+      fetchGameInfo();
+      gameInterval = setInterval(fetchGameInfo, 5000);
+    }
+
     return () => {
       clearInterval(interval);
+      if (gameInterval) {
+        clearInterval(gameInterval);
+      }
     };
-  }, [params.id]);
+  }, [roomInfo?.status, params.id]);
 
   const sendMessage = () => {
     console.log(websocketRef.current);
     if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN && newMessage.trim() !== "") {
-      websocketRef.current.send(newMessage);
+      // websocketRef.current.send(newMessage);
+      const message: WebSocketMessage = {
+        message_type: "normal",
+        player_id: Date.now().toString(),
+        player_name: "プレイヤー",
+        content: newMessage,
+        timestamp: new Date().toISOString(),
+        room_id: params.id,
+      };
+      websocketRef.current.send(JSON.stringify(message));
       setNewMessage(""); // 送信後にinputをクリア
     } else {
       if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
@@ -194,7 +250,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     部屋の状態：オープン(参加者待ち)
                   </span>
                 )}
-                {roomInfo.phase === "night" ? (
+                {gameInfo && gameInfo.phase === "Night" ? (
                   <span className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
                     <Moon size={16} />
                     夜フェーズ
@@ -202,7 +258,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 ) : (
                   <span className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
                     <Sun size={16} />
-                    昼フェーズ
+                    {gameInfo?.phase}フェーズ
                   </span>
                 )}
               </div>

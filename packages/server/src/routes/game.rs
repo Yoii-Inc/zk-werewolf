@@ -27,6 +27,7 @@ pub fn routes(state: AppState) -> Router {
                 // ゲームの基本操作
                 .route("/start", post(start_game))
                 .route("/end", post(end_game_handler))
+                // curl http://localhost:8080/api/game/{roomid}/state
                 .route("/state", get(get_game_state))
                 // ゲームアクション
                 .nest(
@@ -56,10 +57,13 @@ pub async fn get_game_state(
     Path(room_id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    match game_service::get_game_state(state, room_id).await {
-        Ok(state) => (StatusCode::OK, Json(state)),
-        Err(message) => (StatusCode::NOT_FOUND, Json(message)),
-    }
+    // match game_service::get_game_state(state, room_id).await {
+    //     Ok(game) => (StatusCode::OK, Json(game)),
+    //     Err(message) => (StatusCode::NOT_FOUND, Json(message)),
+    // }
+    let game = game_service::get_game_state(state, room_id).await.unwrap();
+    (StatusCode::OK, Json(game))
+    // Err(message) => (StatusCode::NOT_FOUND, Json(message)),
 }
 
 async fn end_game_handler(
