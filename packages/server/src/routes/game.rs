@@ -1,3 +1,4 @@
+use crate::models::role::Role;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -6,10 +7,11 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::state::AppState;
 use crate::{
-    models::game::{GameResult, NightActionRequest},
+    models::game::{ChangeRoleRequest, GameResult, NightActionRequest},
     services::game_service,
 };
 
@@ -36,6 +38,8 @@ pub fn routes(state: AppState) -> Router {
                         .route("/vote", post(cast_vote_handler))
                         .route("/night-action", post(night_action_handler)),
                 )
+                // デバッグ用エンドポイント
+                .route("/debug/change-role", post(change_player_role))
                 // ゲーム進行の管理
                 .route("/phase/next", post(advance_phase_handler))
                 .route("/check-winner", get(check_winner_handler)),
@@ -126,6 +130,49 @@ async fn check_winner_handler(
             GameResult::WerewolfWin => (StatusCode::OK, Json("人狼陣営の勝利".to_string())),
         },
         Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
+    }
+}
+
+pub async fn change_player_role(
+    Path(room_id): Path<String>,
+    State(state): State<AppState>,
+    Json(payload): Json<ChangeRoleRequest>,
+) -> impl IntoResponse {
+    let mut games = state.games.lock().await;
+
+    if let Some(game) = games.get_mut(&room_id) {
+        if let Some(player) = game.players.iter_mut().find(|p| p.id == payload.player_id) {
+            // 文字列から Role を変換
+            let new_role = match payload.new_role.as_str() {
+                "村人" => Some(Role::Villager),
+                "人狼" => Some(Role::Werewolf),
+                "占い師" => Some(Role::Seer),
+                _ => None,
+            };
+
+            player.role = new_role;
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "success": true,
+                    "message": "役職を変更しました"
+                })),
+            )
+        } else {
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "error": "プレイヤーが見つかりません"
+                })),
+            )
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "ゲームが見つかりません"
+            })),
+        )
     }
 }
 

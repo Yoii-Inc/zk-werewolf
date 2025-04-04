@@ -25,7 +25,7 @@ pub enum GamePhase {
     Finished,   // ゲーム終了
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum GameResult {
     InProgress,
     VillagerWin,
@@ -56,6 +56,12 @@ pub struct Vote {
 pub struct NightActionRequest {
     pub player_id: String,
     pub action: NightAction,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChangeRoleRequest {
+    pub player_id: String,
+    pub new_role: String,
 }
 
 impl Game {

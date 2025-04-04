@@ -136,8 +136,8 @@ pub async fn handle_vote(
 
 // 勝利判定
 pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, String> {
-    let games = state.games.lock().await;
-    let game = games.get(room_id).ok_or("Game not found")?;
+    let mut games = state.games.lock().await;
+    let game = games.get_mut(room_id).ok_or("Game not found")?;
 
     // 生存者のみをカウント
     let living_players: Vec<_> = game.players.iter().filter(|p| !p.is_dead).collect();
@@ -159,6 +159,14 @@ pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, 
     } else {
         GameResult::InProgress
     };
+
+    game.result = result.clone();
+
+    if result != GameResult::InProgress {
+        let mut rooms = state.rooms.lock().await;
+        let room = rooms.get_mut(room_id).ok_or("Room not found")?;
+        room.status = RoomStatus::Closed;
+    }
 
     Ok(result)
 }
