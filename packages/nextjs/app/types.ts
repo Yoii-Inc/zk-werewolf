@@ -18,6 +18,7 @@ export interface WebSocketMessage {
 export type Player = {
   id: string;
   name: string;
-  status: "alive" | "dead";
+  is_dead: boolean;
   isReady: boolean;
+  role: "Villager" | "Werewolf" | "Seer" | "Guard";
 };

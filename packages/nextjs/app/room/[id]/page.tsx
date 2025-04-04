@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import NightActionModal from "../../../components/game/NightActionModal";
+import VoteModal from "../../../components/game/VoteModal";
 import type { ChatMessage, Player, WebSocketMessage } from "../../types";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
+import { useAuth } from "~~/app/contexts/AuthContext";
 
 interface RoomInfo {
   room_id: string;
@@ -16,14 +19,36 @@ interface RoomInfo {
 
 interface GameInfo {
   room_id: string;
-  // name: string;
-  // status: "Open" | "Inprogress" | "Closed"; // statusを追加
   phase: "Waiting" | "Night" | "Discussion" | "Voting" | "Result" | "Finished";
-  // max_players: number;
-  // currentPlayers: number;
-  // remainingTime: number;
   players: Player[];
+  playerRole: "占い師" | "人狼" | "村人"; // 自分の役職
+  hasActed: boolean; // その夜にアクションを実行済みかどうか
+  result: "InProgress" | "VillagerWin" | "WerewolfWin";
 }
+
+interface GameResultModalProps {
+  result: "VillagerWin" | "WerewolfWin" | "InProgress";
+  onClose: () => void;
+}
+
+const GameResultModal = ({ result, onClose }: GameResultModalProps) => {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-8 max-w-lg w-full mx-4 text-center">
+        <h2 className="text-3xl font-bold mb-4 text-indigo-900">
+          {result === "VillagerWin" ? "村人陣営の勝利！" : "人狼陣営の勝利！"}
+        </h2>
+        {/* <p className="text-xl mb-6 text-gray-700">{result}</p> */}
+        <button
+          onClick={onClose}
+          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          閉じる
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const mockMessages: ChatMessage[] = [
   {
@@ -33,14 +58,6 @@ const mockMessages: ChatMessage[] = [
     timestamp: new Date().toISOString(),
     type: "system",
   },
-];
-
-const mockPlayers: Player[] = [
-  { id: "1", name: "プレイヤー1", status: "alive", isReady: true },
-  { id: "2", name: "プレイヤー2", status: "alive", isReady: true },
-  { id: "3", name: "プレイヤー3", status: "dead", isReady: true },
-  { id: "4", name: "プレイヤー4", status: "alive", isReady: false },
-  { id: "5", name: "プレイヤー5", status: "alive", isReady: true },
 ];
 
 export default function RoomPage({ params }: { params: { id: string } }) {
@@ -66,6 +83,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
+  const [showNightAction, setShowNightAction] = useState(false);
+  const [showVoteModal, setShowVoteModal] = useState(false);
+  const { isAuthenticated, user, logout } = useAuth();
+  const [showGameResult, setShowGameResult] = useState(false);
+  const prevPhaseRef = useRef(gameInfo?.phase);
 
   const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected"); // WebSocket接続状態
@@ -182,6 +204,36 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     };
   }, [roomInfo?.status, params.id]);
 
+  useEffect(() => {
+    if (!gameInfo) return;
+
+    const prevPhase = prevPhaseRef.current;
+    prevPhaseRef.current = gameInfo.phase;
+
+    const checkGameResult = async () => {
+      if (
+        (prevPhase === "Night" && gameInfo.phase === "Discussion") ||
+        (prevPhase === "Voting" && gameInfo.phase === "Result")
+      ) {
+        try {
+          const response = await fetch(`http://localhost:8080/api/game/${params.id}/check-winner`);
+          if (!response.ok) {
+            throw new Error("ゲーム結果の取得に失敗しました");
+          }
+          const result = await response.json();
+          if (result !== "ゲーム進行中") {
+            setGameInfo(prev => ({ ...prev!, result: result }));
+            setShowGameResult(true);
+          }
+        } catch (error) {
+          console.error("ゲーム結果の取得エラー:", error);
+        }
+      }
+    };
+
+    checkGameResult();
+  }, [gameInfo?.phase, params.id]);
+
   const sendMessage = () => {
     console.log(websocketRef.current);
     if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN && newMessage.trim() !== "") {
@@ -232,6 +284,100 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     }
   };
 
+  const handleNightAction = async (targetPlayerId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/game/${params.id}/night-action`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          targetPlayerId: targetPlayerId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("夜の行動の送信に失敗しました");
+      }
+
+      setShowNightAction(false);
+
+      // システムメッセージを追加
+      const message: ChatMessage = {
+        id: Date.now().toString(),
+        sender: "システム",
+        message: "夜の行動を実行しました",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      };
+      setMessages(prev => [...prev, message]);
+    } catch (error) {
+      console.error("夜の行動エラー:", error);
+    }
+  };
+
+  const handleChangeRole = async (playerId: string, newRole: string) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/game/${params.id}/debug/change-role`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          player_id: playerId,
+          new_role: newRole,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("役職の変更に失敗しました");
+      }
+
+      // システムメッセージを追加
+      const message: ChatMessage = {
+        id: Date.now().toString(),
+        sender: "システム",
+        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}の役職が${newRole}に変更されました`,
+        timestamp: new Date().toISOString(),
+        type: "system",
+      };
+      setMessages(prev => [...prev, message]);
+    } catch (error) {
+      console.error("役職変更エラー:", error);
+    }
+  };
+
+  const handleVote = async (targetId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/game/${params.id}/actions/vote`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          voter_id: user?.id,
+          target_id: targetId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("投票の送信に失敗しました");
+      }
+
+      // システムメッセージを追加
+      const message: ChatMessage = {
+        id: Date.now().toString(),
+        sender: "システム",
+        message: "投票を実行しました",
+        timestamp: new Date().toISOString(),
+        type: "system" as const,
+      };
+      setMessages(prev => [...prev, message]);
+    } catch (error) {
+      console.error("投票エラー:", error);
+    }
+  };
+
   return (
     <div className="h-screen flex bg-gradient-to-br from-indigo-50 to-purple-50">
       {isLoading ? (
@@ -250,16 +396,75 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     部屋の状態：オープン(参加者待ち)
                   </span>
                 )}
-                {gameInfo && gameInfo.phase === "Night" ? (
-                  <span className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                    <Moon size={16} />
-                    夜フェーズ
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
-                    <Sun size={16} />
-                    {gameInfo?.phase}フェーズ
-                  </span>
+                {gameInfo && (
+                  <>
+                    {gameInfo.phase === "Night" ? (
+                      <span className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                        <Moon size={16} />
+                        夜フェーズ
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
+                        <Sun size={16} />
+                        {gameInfo.phase}フェーズ
+                      </span>
+                    )}
+
+                    {gameInfo.result !== "InProgress" && (
+                      <span className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm">
+                        ゲーム結果: {gameInfo.result === "VillagerWin" ? "村人陣営の勝利" : "人狼陣営の勝利"}
+                      </span>
+                    )}
+
+                    <span className="flex items-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full text-sm">
+                      あなたの役職：{" "}
+                      {(() => {
+                        const role = gameInfo.players.find(player => player.name === user?.username)?.role;
+                        switch (role) {
+                          case "Seer":
+                            return "占い師";
+                          case "Werewolf":
+                            return "人狼";
+                          case "Villager":
+                            return "村人";
+                          default:
+                            return "不明";
+                        }
+                      })()}
+                    </span>
+
+                    {gameInfo.result === "InProgress" && (
+                      <>
+                        {/* デバッグ用のフェーズ進行ボタン */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(`http://localhost:8080/api/game/${params.id}/phase/next`, {
+                                method: "POST",
+                              });
+                              if (!response.ok) {
+                                throw new Error("フェーズの進行に失敗しました");
+                              }
+                              // システムメッセージを追加
+                              const message: ChatMessage = {
+                                id: Date.now().toString(),
+                                sender: "システム",
+                                message: "フェーズが進行しました",
+                                timestamp: new Date().toISOString(),
+                                type: "system" as const,
+                              };
+                              setMessages(prev => [...prev, message]);
+                            } catch (error) {
+                              console.error("フェーズ進行エラー:", error);
+                            }
+                          }}
+                          className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm border border-gray-300 transition-colors"
+                        >
+                          次のフェーズへ(デバッグ用)
+                        </button>
+                      </>
+                    )}
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-4">
@@ -289,6 +494,22 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {isStarting ? "開始中..." : "ゲーム開始"}
                   </button>
                 )}
+                {gameInfo?.phase === "Night" && !gameInfo.hasActed && (
+                  <button
+                    onClick={() => setShowNightAction(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                  >
+                    夜の行動を実行
+                  </button>
+                )}
+                {gameInfo?.phase === "Voting" && (
+                  <button
+                    onClick={() => setShowVoteModal(true)}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
+                  >
+                    投票する
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -300,23 +521,61 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <h2 className="text-lg font-semibold text-indigo-900">参加者一覧</h2>
               </div>
               <div className="p-4 space-y-3">
-                {roomInfo.players.map(player => (
+                {(gameInfo ? gameInfo.players : roomInfo.players).map(player => (
                   <div
                     key={player.id}
-                    className={`flex items-center justify-between p-2 rounded-lg ${
-                      player.status === "dead" ? "bg-gray-100 text-gray-500" : "bg-white text-indigo-900"
+                    className={`flex flex-col p-2 rounded-lg ${
+                      player.is_dead === true ? "bg-gray-100 text-gray-500" : "bg-white text-indigo-900"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      {player.status === "alive" ? (
-                        <UserCheck size={18} className="text-green-500" />
-                      ) : (
-                        <UserX size={18} className="text-red-500" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {player.is_dead === false ? (
+                          <UserCheck size={18} className="text-green-500" />
+                        ) : (
+                          <UserX size={18} className="text-red-500" />
+                        )}
+                        <span className={player.is_dead === true ? "line-through" : ""}>{player.name}</span>
+                      </div>
+                      {!player.isReady && (
+                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">準備中</span>
                       )}
-                      <span className={player.status === "dead" ? "line-through" : ""}>{player.name}</span>
                     </div>
-                    {!player.isReady && (
-                      <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">準備中</span>
+
+                    {/* デバッグ用の役職変更ボタン */}
+                    {roomInfo.status === "InProgress" && (
+                      <div className="mt-2 flex gap-1 text-xs">
+                        <button
+                          onClick={() => handleChangeRole(player.id, "村人")}
+                          className={`px-2 py-1 rounded transition-colors ${
+                            player.role === "Villager"
+                              ? "bg-gray-300 text-gray-800 font-medium border-gray-500 border-2"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          }`}
+                        >
+                          村人
+                        </button>
+                        <button
+                          onClick={() => handleChangeRole(player.id, "人狼")}
+                          className={`px-2 py-1 rounded transition-colors ${
+                            player.role === "Werewolf"
+                              ? "bg-red-300 text-red-800 font-medium border-red-500 border-2"
+                              : "bg-red-100 text-red-600 hover:bg-red-200"
+                          }`}
+                        >
+                          人狼
+                        </button>
+                        <button
+                          onClick={() => handleChangeRole(player.id, "占い師")}
+                          className={`px-2 py-1 rounded transition-colors ${
+                            player.role === "Seer"
+                              ? "bg-blue-300 text-blue-800 font-medium border-blue-500 border-2"
+                              : "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                          }`}
+                        >
+                          占い師
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -407,7 +666,27 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           placeholder="メモを入力..."
           className="flex-1 p-4 resize-none focus:outline-none bg-transparent"
         />
+        <div className="p-4 border-t border-indigo-100">
+          <h2 className="text-lg font-semibold text-indigo-900">デバッグ情報</h2>
+          <pre className="text-sm text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto">
+            gameInfo = {JSON.stringify(gameInfo, null, 2)}
+          </pre>
+        </div>
       </div>
+      {showNightAction && gameInfo?.phase === "Night" && (
+        <NightActionModal
+          players={gameInfo.players}
+          role={gameInfo.players.find(player => player.name === user?.username)?.role ?? "Villager"}
+          onSubmit={handleNightAction}
+          onClose={() => setShowNightAction(false)}
+        />
+      )}
+      {showVoteModal && gameInfo?.phase === "Voting" && (
+        <VoteModal players={gameInfo.players} onSubmit={handleVote} onClose={() => setShowVoteModal(false)} />
+      )}
+      {gameInfo?.result && showGameResult && (
+        <GameResultModal result={gameInfo.result} onClose={() => setShowGameResult(false)} />
+      )}
     </div>
   );
 }
