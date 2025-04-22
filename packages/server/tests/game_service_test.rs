@@ -1,9 +1,4 @@
-use server::services::user_service;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio;
-use tokio::sync::broadcast;
-use tokio::sync::Mutex;
+use server::models::game::GamePhase;
 
 use server::{
     models::{
@@ -17,48 +12,39 @@ use server::{
     utils::test_setup::setup_test_env,
 };
 
-fn setup_test_state() -> AppState {
-    let rooms = Arc::new(Mutex::new(HashMap::new()));
-    let games = Arc::new(Mutex::new(HashMap::new()));
-    let (tx, _) = broadcast::channel(100);
-    let user_service = user_service::UserService::new();
-    AppState {
-        rooms,
-        games,
-        channel: tx,
-        user_service,
-    }
-}
-
 async fn setup_test_room_with_players(state: &AppState) -> String {
     let room_id = "test_room".to_string();
-    let mut players = vec![];
-
     // プレイヤーを4人作成（村人2人、占い師1人、人狼1人）
-    players.push(Player {
-        id: "1".to_string(),
-        name: "Player1".to_string(),
-        role: Some(Role::Villager),
-        is_dead: false,
-    });
-    players.push(Player {
-        id: "2".to_string(),
-        name: "Player2".to_string(),
-        role: Some(Role::Seer),
-        is_dead: false,
-    });
-    players.push(Player {
-        id: "3".to_string(),
-        name: "Player3".to_string(),
-        role: Some(Role::Werewolf),
-        is_dead: false,
-    });
-    players.push(Player {
-        id: "4".to_string(),
-        name: "Player4".to_string(),
-        role: Some(Role::Villager),
-        is_dead: false,
-    });
+    let players = vec![
+        Player {
+            id: "1".to_string(),
+            name: "Player1".to_string(),
+            role: Some(Role::Villager),
+            is_dead: false,
+            is_ready: false,
+        },
+        Player {
+            id: "2".to_string(),
+            name: "Player2".to_string(),
+            role: Some(Role::Seer),
+            is_dead: false,
+            is_ready: false,
+        },
+        Player {
+            id: "3".to_string(),
+            name: "Player3".to_string(),
+            role: Some(Role::Werewolf),
+            is_dead: false,
+            is_ready: false,
+        },
+        Player {
+            id: "4".to_string(),
+            name: "Player4".to_string(),
+            role: Some(Role::Villager),
+            is_dead: false,
+            is_ready: false,
+        },
+    ];
 
     let mut room = Room::new(room_id.clone(), Some("Test Room".to_string()), Some(4));
     room.players = players;
@@ -70,16 +56,21 @@ async fn setup_test_room_with_players(state: &AppState) -> String {
 #[tokio::test]
 async fn test_complete_game_flow() {
     setup_test_env();
-    let state = setup_test_state();
+    let state = AppState::new();
     let room_id = setup_test_room_with_players(&state).await;
 
     // ゲーム開始
     let start_result = game_service::start_game(state.clone(), &room_id).await;
     assert!(start_result.is_ok(), "ゲーム開始に失敗: {:?}", start_result);
 
-    // 夜フェーズに移行
-    let phase_result = game_service::advance_game_phase(state.clone(), &room_id).await;
-    assert!(phase_result.is_ok());
+    // 夜フェーズであることを確認
+    assert_eq!(
+        game_service::get_game_state(state.clone(), room_id.clone())
+            .await
+            .unwrap()
+            .phase,
+        GamePhase::Night
+    );
 
     // 占い師（Player2）がPlayer3（人狼）を占う
     let night_action = NightActionRequest {
@@ -90,7 +81,11 @@ async fn test_complete_game_flow() {
     };
     let divine_result =
         game_service::process_night_action(state.clone(), &room_id, night_action).await;
-    assert!(divine_result.is_ok());
+    assert!(
+        divine_result.is_ok(),
+        "占い結果の処理に失敗: {:?}",
+        divine_result
+    );
     let result_text = divine_result.unwrap();
     assert!(
         result_text.contains("人狼"),
@@ -101,16 +96,30 @@ async fn test_complete_game_flow() {
     // 議論フェーズへ
     let to_discussion = game_service::advance_game_phase(state.clone(), &room_id).await;
     assert!(to_discussion.is_ok());
+    assert_eq!(
+        game_service::get_game_state(state.clone(), room_id.clone())
+            .await
+            .unwrap()
+            .phase,
+        GamePhase::Discussion
+    );
 
     // 投票フェーズへ
     let to_voting = game_service::advance_game_phase(state.clone(), &room_id).await;
     assert!(to_voting.is_ok());
+    assert_eq!(
+        game_service::get_game_state(state.clone(), room_id.clone())
+            .await
+            .unwrap()
+            .phase,
+        GamePhase::Voting
+    );
 
     // 全員がPlayer4に投票
     for voter_id in 1..=4 {
         let vote_result =
             game_service::handle_vote(state.clone(), &room_id, &voter_id.to_string(), "4").await;
-        assert!(vote_result.is_ok());
+        vote_result.expect("投票処理に失敗");
     }
 
     // 結果フェーズへ（Player4が処刑される）

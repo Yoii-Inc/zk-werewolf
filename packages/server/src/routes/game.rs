@@ -188,7 +188,7 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone()).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
 
         let request = Request::builder()
             .method("POST")
@@ -205,7 +205,7 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone()).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
 
         game_service::start_game(state.clone(), &room_id.to_string())
             .await
