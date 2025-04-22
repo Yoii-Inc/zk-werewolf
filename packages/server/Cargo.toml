@@ -24,9 +24,11 @@ jsonwebtoken = "8.3"
 bcrypt = "0.15"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+zk-mpc-node = { path = "../zk-mpc-node" }
 
 [dev-dependencies]
 tokio-tungstenite = "0.19"
 hyper = { version = "1.0", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
+wiremock = "0.5"

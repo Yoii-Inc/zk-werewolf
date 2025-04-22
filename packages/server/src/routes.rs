@@ -1,9 +1,9 @@
 use crate::state::AppState;
 use axum::Router;
 
-mod game;
-mod room;
-mod user;
+pub mod game;
+pub mod room;
+pub mod user;
 
 pub fn create_routes(state: AppState) -> Router {
     Router::new()

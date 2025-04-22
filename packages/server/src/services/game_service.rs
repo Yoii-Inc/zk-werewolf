@@ -4,8 +4,16 @@ use crate::{
         role::Role,
         room::RoomStatus,
     },
+    services::zk_proof::{check_proof_status, request_proof},
     state::AppState,
 };
+use serde_json::json;
+use std::time::Duration;
+use tokio::time::sleep;
+use zk_mpc_node::CircuitIdentifier;
+use zk_mpc_node::CircuitInputs::Built;
+use zk_mpc_node::CircuitType;
+use zk_mpc_node::CircuitType::*;
 
 // ゲームのライフサイクル管理
 pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String> {
@@ -83,8 +91,8 @@ pub async fn process_night_action(
     room_id: &str,
     action_req: NightActionRequest,
 ) -> Result<String, String> {
-    let mut games = state.games.lock().await;
-    let game = games.get_mut(room_id).ok_or("Game not found")?;
+    let games = state.games.lock().await;
+    let game = games.get(room_id).ok_or("Game not found")?;
 
     if game.phase != GamePhase::Night {
         return Err("夜のアクションは夜にのみ実行できます".to_string());
@@ -101,19 +109,81 @@ pub async fn process_night_action(
         &action_req.action,
     ) {
         (Role::Werewolf, NightAction::Attack { target_id }) => {
-            game.register_attack(target_id)?;
-            Ok("襲撃先を登録しました".to_string())
+            if state.debug_config.create_proof {
+                // request proof of werewolf attack validity
+                let attack_inputs = json!({
+                    "attacker_id": action_req.player_id,
+                    "target_id": target_id,
+                    "is_attacker_werewolf": true,
+                    "is_night_phase": true,
+                    "is_target_alive": !game.players.iter().find(|p| p.id == *target_id).map_or(true, |p| p.is_dead)
+                });
+
+                // TODO: Replace with actual circuit identifier
+
+                todo!();
+
+                // let proof_id = request_proof(
+                //     zk_mpc_node::CircuitIdentifier::Built(WerewolfAttackCircuit),
+                //     attack_inputs,
+                // )
+                // .await?;
+
+                // if check_status_with_retry(&proof_id).await? {
+                //     drop(games);
+                //     let mut games = state.games.lock().await;
+                //     let game = games.get_mut(room_id).ok_or("Game not found")?;
+                //     game.register_attack(target_id)?;
+                //     Ok("襲撃先を登録しました".to_string())
+                // } else {
+                //     Err("襲撃の証明に失敗しました".to_string())
+                // }
+            } else {
+                drop(games);
+                let mut games = state.games.lock().await;
+                let game = games.get_mut(room_id).ok_or("Game not found")?;
+                game.register_attack(target_id)?;
+                Ok("襲撃先を登録しました".to_string())
+            }
         }
         (Role::Seer, NightAction::Divine { target_id }) => {
-            let result = game.divine_player(target_id)?;
-            Ok(format!("プレイヤーの役職は {} です", result))
-        }
-        (Role::Guard, NightAction::Guard { target_id }) => {
-            game.register_guard(target_id)?;
-            Ok("護衛先を登録しました".to_string())
+            if state.debug_config.create_proof {
+                // 占いの有効性を証明
+                let divine_inputs = json!({
+                    "seer_id": action_req.player_id,
+                    "target_id": target_id,
+                    "is_seer": true,
+                    "is_night_phase": true,
+                    "is_target_alive": !game.players.iter().find(|p| p.id == *target_id).map_or(true, |p| p.is_dead)
+                });
+
+                let proof_id =
+                    request_proof(CircuitIdentifier::Built(DivinationCircuit), divine_inputs)
+                        .await?;
+
+                if check_status_with_retry(&proof_id).await? {
+                    let result = game.divine_player(target_id)?;
+                    Ok(format!("プレイヤーの役職は {} です", result))
+                } else {
+                    Err("占いの証明に失敗しました".to_string())
+                }
+            } else {
+                let result = game.divine_player(target_id)?;
+                Ok(format!("プレイヤーの役職は {} です", result))
+            }
         }
         _ => Err("このプレイヤーの役職ではこのアクションを実行できません".to_string()),
     }
+}
+
+async fn check_status_with_retry(proof_id: &str) -> Result<bool, String> {
+    for _ in 0..30 {
+        if check_proof_status(proof_id).await? {
+            return Ok(true);
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+    Ok(false)
 }
 
 // 投票システム
@@ -123,50 +193,109 @@ pub async fn handle_vote(
     voter_id: &str,
     target_id: &str,
 ) -> Result<String, String> {
-    let mut games = state.games.lock().await;
-    let game = games.get_mut(room_id).ok_or("Game not found")?;
+    let games = state.games.lock().await;
+    let game = games.get(room_id).ok_or("Game not found")?;
 
     if game.phase != GamePhase::Voting {
         return Err("現在は投票フェーズではありません".to_string());
     }
 
-    game.cast_vote(voter_id, target_id)?;
-    Ok("投票を受け付けました".to_string())
+    if state.debug_config.create_proof {
+        // 投票の有効性を証明
+        let vote_inputs = json!({
+            "voter_id": voter_id,
+            "target_id": target_id,
+            "is_voter_alive": !game.players.iter().find(|p| p.id == voter_id).map_or(true, |p| p.is_dead),
+            "is_target_alive": !game.players.iter().find(|p| p.id == target_id).map_or(true, |p| p.is_dead),
+            "is_voting_phase": game.phase == GamePhase::Voting
+        });
+
+        let proof_id = request_proof(
+            CircuitIdentifier::Built(AnonymousVotingCircuit),
+            vote_inputs,
+        )
+        .await?;
+
+        // 証明の完了を待つ
+        for _ in 0..30 {
+            if check_proof_status(&proof_id).await? {
+                drop(games); // 先のロックを解放
+                let mut games = state.games.lock().await;
+                let game = games.get_mut(room_id).ok_or("Game not found")?;
+                game.cast_vote(voter_id, target_id)?;
+                return Ok("投票を受け付けました".to_string());
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        Err("投票の証明に失敗しました".to_string())
+    } else {
+        drop(games); // 先のロックを解放
+        let mut games = state.games.lock().await;
+        let game = games.get_mut(room_id).ok_or("Game not found")?;
+        game.cast_vote(voter_id, target_id)?;
+        Ok("投票を受け付けました".to_string())
+    }
 }
 
 // 勝利判定
 pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, String> {
-    let mut games = state.games.lock().await;
-    let game = games.get_mut(room_id).ok_or("Game not found")?;
+    let games = state.games.lock().await;
+    let game = games.get(room_id).ok_or("Game not found")?;
 
-    // 生存者のみをカウント
+    // 生存者のカウント
     let living_players: Vec<_> = game.players.iter().filter(|p| !p.is_dead).collect();
-
     let alive_villagers = living_players
         .iter()
         .filter(|p| p.role.as_ref() != Some(&Role::Werewolf))
         .count();
-
     let alive_werewolves = living_players
         .iter()
         .filter(|p| p.role.as_ref() == Some(&Role::Werewolf))
         .count();
 
-    let result = if alive_werewolves == 0 {
-        GameResult::VillagerWin
-    } else if alive_werewolves >= alive_villagers {
-        GameResult::WerewolfWin
+    if state.debug_config.create_proof {
+        // 勝利判定の証明
+        let winner_inputs = json!({
+            "alive_villagers": alive_villagers,
+            "alive_werewolves": alive_werewolves,
+            "total_players": game.players.len(),
+            "is_game_in_progress": game.phase != GamePhase::Finished
+        });
+
+        let proof_id =
+            request_proof(CircuitIdentifier::Built(WinningJudgeCircuit), winner_inputs).await?;
+
+        if check_status_with_retry(&proof_id).await? {
+            let result = if alive_werewolves == 0 {
+                GameResult::VillagerWin
+            } else if alive_werewolves >= alive_villagers {
+                GameResult::WerewolfWin
+            } else {
+                GameResult::InProgress
+            };
+
+            drop(games);
+            let mut games = state.games.lock().await;
+            let game = games.get_mut(room_id).ok_or("Game not found")?;
+            game.result = result.clone();
+            Ok(result)
+        } else {
+            Err("勝利判定の証明に失敗しました".to_string())
+        }
     } else {
-        GameResult::InProgress
-    };
+        let result = if alive_werewolves == 0 {
+            GameResult::VillagerWin
+        } else if alive_werewolves >= alive_villagers {
+            GameResult::WerewolfWin
+        } else {
+            GameResult::InProgress
+        };
 
-    game.result = result.clone();
-
-    if result != GameResult::InProgress {
-        let mut rooms = state.rooms.lock().await;
-        let room = rooms.get_mut(room_id).ok_or("Room not found")?;
-        room.status = RoomStatus::Closed;
+        drop(games);
+        let mut games = state.games.lock().await;
+        let game = games.get_mut(room_id).ok_or("Game not found")?;
+        game.result = result.clone();
+        Ok(result)
     }
-
-    Ok(result)
 }

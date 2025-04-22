@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateRoomRequest {
-    name: String,
+    pub name: String,
 }
 
 pub fn routes(state: AppState) -> Router {
@@ -154,7 +154,7 @@ mod tests {
         let app = routes(state.clone());
 
         // テスト用のルームを作成
-        let room_id = room_service::create_room(state).await;
+        let room_id = room_service::create_room(state, None).await;
 
         let request = Request::builder()
             .method("GET")
