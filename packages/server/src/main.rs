@@ -3,6 +3,7 @@ use axum::{
     http::{self, HeaderValue, Method},
     routing::get,
     Json,
+    Router,
 };
 use dotenvy::dotenv;
 use env_logger::Builder;
@@ -86,33 +87,21 @@ async fn main() {
         }
     }
 
-    // CORSレイヤーの設定
-    let origins = ["http://localhost:3000".parse::<HeaderValue>().unwrap()];
-    let cors = CorsLayer::new()
-        .allow_origin(origins)
-        .allow_methods([Method::GET, Method::POST])
-        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
+    // アプリケーションの状態を初期化
+    let state = Arc::new(state::AppState::new());
 
-    // ルーティングの設定
-    let app = app::create_app()
-        .route("/greet", get(greet))
-        .layer(cors) // CORSレイヤーを追加
-        .layer(
-            TraceLayer::new_for_http() // HTTPトレースログを有効化
-                .make_span_with(|request: &http::Request<_>| {
-                    tracing::info_span!(
-                        "HTTP request",
-                        method = %request.method(),
-                        uri = %request.uri(),
-                        headers = ?request.headers()
-                    )
-                }),
-        );
+    // ルーターの設定
+    let app = Router::new()
+        .nest("/api", routes::api_routes())
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
 
     // サーバーの起動
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    let listner = tokio::net::TcpListener::bind(&addr).await.unwrap();
-
-    println!("サーバーを起動しました: http://{}", addr);
-    axum::serve(listner, app).await.unwrap();
+    let addr = "127.0.0.1:8000".parse().unwrap();
+    println!("Server running at http://{}", addr);
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }

@@ -13,6 +13,13 @@ pub struct Game {
     pub result: GameResult,
     pub night_actions: NightActions,
     pub vote_results: HashMap<String, Vote>,
+    pub night_count: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GameState {
+    pub phase: GamePhase,
+    pub night_count: i32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -76,6 +83,7 @@ impl Game {
             result: GameResult::InProgress,
             night_actions: NightActions::default(),
             vote_results: HashMap::new(),
+            night_count: 0,
         }
     }
 
