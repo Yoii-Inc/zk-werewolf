@@ -23,9 +23,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // ページ読み込み時にローカルストレージからユーザー情報を取得
-    const storedToken = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
+    // ページ読み込み時にセッションストレージからユーザー情報を取得
+    const storedToken = sessionStorage.getItem("token");
+    const storedUser = sessionStorage.getItem("user");
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
@@ -35,15 +35,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (newToken: string, userData: User) => {
     setToken(newToken);
     setUser(userData);
-    localStorage.setItem("token", newToken);
-    localStorage.setItem("user", JSON.stringify(userData));
+    sessionStorage.setItem("token", newToken);
+    sessionStorage.setItem("user", JSON.stringify(userData));
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
   };
 
   return (
