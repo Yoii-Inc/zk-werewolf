@@ -1,9 +1,14 @@
+use ark_bls12_377::Fr;
+use mpc_algebra::Reveal;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serial_test::serial;
 use std::process::{Child, Command};
 use std::time::Duration;
 use tokio::time::sleep;
+use zk_mpc::circuits::circuit::MySimpleCircuit;
+use zk_mpc::marlin::MFr;
+use zk_mpc_node::{BuiltinCircuit, CircuitIdentifier, ProofRequest};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProofStatus {
@@ -47,24 +52,22 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
     let client = reqwest::Client::new();
     let mut proof_ids = Vec::new();
 
+    let fa = MFr::from_public(Fr::from(2));
+    let fb = MFr::from_public(Fr::from(3));
+
+    let circuit = MySimpleCircuit {
+        a: Some(fa),
+        b: Some(fb),
+    };
+
     // Send requests to the three ports
     for port in [9000, 9001, 9002] {
         println!("Sending request to port {}", port);
         let response = client
             .post(format!("http://localhost:{}", port))
-            .json(&json!({
-                "circuit_type": {
-                    "Built": "MySimpleCircuit"
-                },
-                "inputs": {
-                    "Built": {
-                        "MySimpleCircuit": {
-                            "a": 2,
-                            "b": 3
-                        }
-                    }
-                }
-            }))
+            .json(&ProofRequest {
+                circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit.clone())),
+            })
             .send()
             .await?;
 

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use zk_mpc::marlin::MFr;
 
 use super::{CircuitIdentifier, CircuitInputs};
 
@@ -16,8 +17,8 @@ pub struct ProofResponse {
     pub proof_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProofRequest {
-    pub circuit_type: CircuitIdentifier,
-    pub inputs: CircuitInputs,
+    pub circuit_type: CircuitIdentifier<MFr>,
+    // pub inputs: CircuitInputs,
 }

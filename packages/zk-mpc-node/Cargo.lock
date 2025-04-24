@@ -1318,6 +1318,7 @@ dependencies = [
  "mpc-trait",
  "num-bigint",
  "rand",
+ "serde",
  "sha2",
  "structopt",
  "tokio",
@@ -2906,6 +2907,7 @@ name = "zk-mpc-node"
 version = "0.1.0"
 dependencies = [
  "ark-bls12-377",
+ "ark-ff",
  "ark-marlin",
  "ark-poly-commit",
  "ark-relations",

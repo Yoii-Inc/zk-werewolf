@@ -11,6 +11,7 @@ ark-marlin = { path = "../../../zk-mpc/arkworks/marlin", version = "0.3.0", defa
 ark-serialize = { path = "../../../zk-mpc/arkworks/algebra/serialize", version = "0.3.0", default-features = false }
 ark-poly-commit = { path = "../../../zk-mpc/arkworks/poly-commit", version = "0.3.0" }
 ark-relations = { path = "../../../zk-mpc/arkworks/snark/relations", version = "0.3.0" }
+ark-ff = { path = "../../../zk-mpc/arkworks/algebra/ff", version = "0.3.0" }
 mpc-algebra = { path = "../../../zk-mpc/mpc-algebra", version = "0.1.0" }
 mpc-net = { path = "../../../zk-mpc/mpc-net", version = "0.1.0" }
 
