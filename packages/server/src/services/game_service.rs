@@ -7,6 +7,10 @@ use crate::{
     state::AppState,
 };
 
+use rand::seq::SliceRandom;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 // ゲームのライフサイクル管理
 pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String> {
     let mut rooms = state.rooms.lock().await;
@@ -169,4 +173,55 @@ pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, 
     }
 
     Ok(result)
+}
+
+pub async fn assign_roles(state: Arc<AppState>, room_id: &str) -> Result<(), String> {
+    let mut games = state.games.lock().await;
+    let game = games.get_mut(room_id).ok_or("Game not found")?;
+    
+    let player_count = game.players.len();
+    let mut roles = Vec::new();
+    
+    // プレイヤー数に応じて役職を設定
+    match player_count {
+        5 => {
+            roles.push(Role::Werewolf);
+            roles.push(Role::Seer);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+        },
+        7 => {
+            roles.push(Role::Werewolf);
+            roles.push(Role::Werewolf);
+            roles.push(Role::Seer);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+        },
+        9 => {
+            roles.push(Role::Werewolf);
+            roles.push(Role::Werewolf);
+            roles.push(Role::Werewolf);
+            roles.push(Role::Seer);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+            roles.push(Role::Villager);
+        },
+        _ => return Err("Invalid player count".to_string()),
+    }
+    
+    // 役職をシャッフル
+    let mut rng = rand::thread_rng();
+    roles.shuffle(&mut rng);
+    
+    // プレイヤーに役職を割り当て
+    for (player, role) in game.players.iter_mut().zip(roles) {
+        player.role = Some(role);
+    }
+    
+    Ok(())
 }

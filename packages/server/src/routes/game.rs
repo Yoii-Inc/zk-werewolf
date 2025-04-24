@@ -11,9 +11,10 @@ use serde_json::json;
 
 use crate::state::AppState;
 use crate::{
-    models::game::{ChangeRoleRequest, GameResult, NightActionRequest},
+    models::game::{ChangeRoleRequest, GameResult, NightActionRequest, Game, GamePhase, GameState},
     services::game_service,
 };
+use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VoteAction {
@@ -21,40 +22,50 @@ pub struct VoteAction {
     target_id: String,
 }
 
-pub fn routes(state: AppState) -> Router {
+pub fn game_routes() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/start", post(start_game))
+        .route("/end", post(end_game_handler))
+        .route("/state", get(get_game_state))
         .nest(
-            "/:roomid",
+            "/actions",
             Router::new()
-                // ゲームの基本操作
-                .route("/start", post(start_game))
-                .route("/end", post(end_game_handler))
-                // curl http://localhost:8080/api/game/{roomid}/state
-                .route("/state", get(get_game_state))
-                // ゲームアクション
-                .nest(
-                    "/actions",
-                    Router::new()
-                        .route("/vote", post(cast_vote_handler))
-                        .route("/night-action", post(night_action_handler)),
-                )
-                // デバッグ用エンドポイント
-                .route("/debug/change-role", post(change_player_role))
-                // ゲーム進行の管理
-                .route("/phase/next", post(advance_phase_handler))
-                .route("/check-winner", get(check_winner_handler)),
+                .route("/vote", post(cast_vote_handler))
+                .route("/night-action", post(night_action_handler)),
         )
-        .with_state(state)
+        .route("/debug/change-role", post(change_player_role))
+        .route("/phase/next", post(advance_phase_handler))
+        .route("/check-winner", get(check_winner_handler))
 }
 
+#[axum::debug_handler]
 pub async fn start_game(
-    State(state): State<AppState>,
     Path(room_id): Path<String>,
-) -> impl IntoResponse {
-    match game_service::start_game(state, &room_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
-        Err(message) => (StatusCode::NOT_FOUND, Json(message)),
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<GameState>, StatusCode> {
+    let mut games = state.games.lock().await;
+    let game = games.get_mut(&room_id).ok_or(StatusCode::NOT_FOUND)?;
+    
+    if game.phase != GamePhase::Waiting {
+        return Err(StatusCode::BAD_REQUEST);
     }
+    
+    let player_count = game.players.len();
+    if player_count < 5 || player_count > 9 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    
+    if let Err(_) = game_service::assign_roles(state.clone(), &room_id).await {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    
+    game.phase = GamePhase::Night;
+    game.night_count = 1;
+    
+    Ok(Json(GameState {
+        phase: game.phase.clone(),
+        night_count: game.night_count,
+    }))
 }
 
 pub async fn get_game_state(
@@ -187,7 +198,7 @@ mod tests {
     async fn test_start_game() {
         setup_test_env();
         let state = AppState::new();
-        let app = routes(state.clone());
+        let app = game_routes();
         let room_id = crate::services::room_service::create_room(state.clone()).await;
 
         let request = Request::builder()
@@ -204,7 +215,7 @@ mod tests {
     async fn test_end_game() {
         setup_test_env();
         let state = AppState::new();
-        let app = routes(state.clone());
+        let app = game_routes();
         let room_id = crate::services::room_service::create_room(state.clone()).await;
 
         game_service::start_game(state.clone(), &room_id.to_string())
