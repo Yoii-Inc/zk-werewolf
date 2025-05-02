@@ -179,24 +179,24 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
     for (a, b) in [(2, 3), (5, 7), (11, 13)] {
         let mut proof_ids = Vec::new();
 
+        let fa = MFr::from_public(Fr::from(a));
+        let fb = MFr::from_public(Fr::from(b));
+
+        let circuit = MySimpleCircuit {
+            a: Some(fa),
+            b: Some(fb),
+        };
+
         // Sequentially send requests to the three ports
         for port in [9000, 9001, 9002] {
             println!("Testing port {} with inputs a={}, b={}", port, a, b);
             let response = client
                 .post(format!("http://localhost:{}", port))
-                .json(&json!({
-                    "circuit_type": {
-                        "Built": "MySimpleCircuit"
-                    },
-                    "inputs": {
-                        "Built": {
-                            "MySimpleCircuit": {
-                                "a": a,
-                                "b": b
-                            }
-                        }
-                    }
-                }))
+                .json(&ProofRequest {
+                    circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(
+                        circuit.clone(),
+                    )),
+                })
                 .send()
                 .await?;
 
