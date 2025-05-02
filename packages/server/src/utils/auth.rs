@@ -1,6 +1,6 @@
+use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use chrono::{Duration, Utc};
 use std::env;
 
 use crate::models::user::User;

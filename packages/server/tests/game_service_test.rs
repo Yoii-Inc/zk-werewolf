@@ -55,13 +55,17 @@ async fn setup_test_room_with_players(state: &AppState) -> String {
 
 #[tokio::test]
 async fn test_complete_game_flow() {
+    println!("Starting game flow test");
     setup_test_env();
     let state = AppState::new();
     let room_id = setup_test_room_with_players(&state).await;
 
     // ゲーム開始
+    println!("Starting game in room: {}", room_id);
     let start_result = game_service::start_game(state.clone(), &room_id).await;
     assert!(start_result.is_ok(), "ゲーム開始に失敗: {:?}", start_result);
+
+    println!("Game started successfully");
 
     // 夜フェーズであることを確認
     assert_eq!(
@@ -72,11 +76,45 @@ async fn test_complete_game_flow() {
         GamePhase::Night
     );
 
+    // 占い師のプレイヤーのIDを取得
+    let seer_id = state
+        .games
+        .lock()
+        .await
+        .get(&room_id)
+        .unwrap()
+        .players
+        .iter()
+        .find(|p| p.role == Some(Role::Seer))
+        .unwrap()
+        .id
+        .clone();
+    println!("Seer ID: {}", seer_id);
+
+    // 人狼のプレイヤーのIDを取得
+    let werewolf_id = state
+        .games
+        .lock()
+        .await
+        .get(&room_id)
+        .unwrap()
+        .players
+        .iter()
+        .find(|p| p.role == Some(Role::Werewolf))
+        .unwrap()
+        .id
+        .clone();
+
+    println!(
+        "players: {:?}",
+        state.games.lock().await.get(&room_id).unwrap().players
+    );
+
     // 占い師（Player2）がPlayer3（人狼）を占う
     let night_action = NightActionRequest {
-        player_id: "2".to_string(),
+        player_id: seer_id.to_string(),
         action: NightAction::Divine {
-            target_id: "3".to_string(),
+            target_id: werewolf_id.to_string(),
         },
     };
     let divine_result =

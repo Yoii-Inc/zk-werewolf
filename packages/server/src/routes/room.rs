@@ -1,6 +1,6 @@
 use crate::{services::room_service, state::AppState, utils::websocket};
 use axum::{
-    extract::{Path, State, WebSocketUpgrade},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},

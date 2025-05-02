@@ -1,6 +1,7 @@
 use ark_bls12_377::Fr;
 use ark_ff::PrimeField;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_std::test_rng;
 use mpc_algebra::Reveal;
 use serde::{Deserialize, Serialize};
 use zk_mpc::{
@@ -8,6 +9,7 @@ use zk_mpc::{
         circuit::MySimpleCircuit, AnonymousVotingCircuit, DivinationCircuit, ElGamalLocalOrMPC,
         KeyPublicizeCircuit, LocalOrMPC, RoleAssignmentCircuit, WinningJudgeCircuit,
     },
+    input::{MpcInputTrait, WerewolfMpcInput},
     marlin::MFr,
 };
 
@@ -53,7 +55,11 @@ impl CircuitFactory {
                     BuiltinCircuit::MySimple(MySimpleCircuit { a: None, b: None })
                 }
                 BuiltinCircuit::Divination(ref c) => {
-                    BuiltinCircuit::Divination(DivinationCircuit { mpc_input: todo!() })
+                    let rng = &mut test_rng();
+                    let local_input = WerewolfMpcInput::<Fr>::rand(rng);
+                    BuiltinCircuit::Divination(DivinationCircuit {
+                        mpc_input: local_input,
+                    })
                 }
                 BuiltinCircuit::AnonymousVoting(ref c) => {
                     BuiltinCircuit::AnonymousVoting(AnonymousVotingCircuit {

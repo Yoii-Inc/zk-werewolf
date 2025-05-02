@@ -9,6 +9,10 @@ pub struct DebugConfig {
     // 自動でフェーズを進めるかどうか
     pub auto_advance_phases: bool,
     pub phase_duration_seconds: u64,
+    // ランダムな役職を割り当てるかどうか
+    pub random_role: bool,
+    // crypto_parametersを作るかどうか
+    pub create_crypto_parameters: bool,
     // proofを作るかどうか
     pub create_proof: bool,
     // proofをzk-mpcノードに委任するかどうか
@@ -25,6 +29,8 @@ impl Default for DebugConfig {
             show_player_roles: debug_mode,
             auto_advance_phases: false,
             phase_duration_seconds: 30,
+            random_role: false,
+            create_crypto_parameters: false,
             create_proof: false,
             delegate_proof: false,
         }
@@ -49,7 +55,12 @@ impl DebugConfig {
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(30);
-
+        let random_role = env::var("DEBUG_RANDOM_ROLE")
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        let create_crypto_parameters = env::var("DEBUG_CREATE_CRYPTO_PARAMETERS")
+            .map(|v| v == "true")
+            .unwrap_or(false);
         let create_proof = env::var("DEBUG_CREATE_PROOF")
             .map(|v| v == "true")
             .unwrap_or(false);
@@ -63,6 +74,8 @@ impl DebugConfig {
             show_player_roles,
             auto_advance_phases,
             phase_duration_seconds,
+            random_role,
+            create_crypto_parameters,
             create_proof,
             delegate_proof,
         }
