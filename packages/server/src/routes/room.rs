@@ -36,7 +36,9 @@ pub fn routes(state: AppState) -> Router {
         // WebSocket接続
         // websocat ws://localhost:8080/api/room/ws
         .route("/ws", get(websocket::handler))
-        // .route("/:id/ready", post(toggle_ready))  // 追加
+        // ルームの準備完了トグル
+        // curl -X POST http://localhost:8080/api/room/{roomid}/ready/{playerid}
+        .route("/:id/ready/:playerid", post(toggle_ready))
         .with_state(state)
 }
 
@@ -111,6 +113,16 @@ async fn delete_room(
             StatusCode::BAD_REQUEST,
             Json(format!("Failed to delete room {}", room_id)),
         )
+    }
+}
+
+pub async fn toggle_ready(
+    State(state): State<AppState>,
+    Path((room_id, player_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match room_service::toggle_ready(state, &room_id, &player_id).await {
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(e)),
     }
 }
 
