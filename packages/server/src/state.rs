@@ -10,20 +10,30 @@ use crate::services::user_service::UserService;
 pub struct AppState {
     pub rooms: Arc<Mutex<HashMap<String, Room>>>,
     pub games: Arc<Mutex<HashMap<String, Game>>>,
-    pub channel: broadcast::Sender<Message>,
+    pub channel: Arc<Mutex<HashMap<String, broadcast::Sender<Message>>>>,
     pub user_service: UserService,
     pub debug_config: Arc<DebugConfig>,
 }
 
 impl AppState {
     pub fn new() -> Self {
-        let (tx, _) = broadcast::channel::<Message>(1000);
         AppState {
             rooms: Arc::new(Mutex::new(HashMap::new())),
             games: Arc::new(Mutex::new(HashMap::new())),
-            channel: tx,
+            channel: Arc::new(Mutex::new(HashMap::new())),
             user_service: UserService::new(),
             debug_config: Arc::new(DebugConfig::default()),
+        }
+    }
+
+    pub async fn get_or_create_room_channel(&self, room_id: &str) -> broadcast::Sender<Message> {
+        let mut channels = self.channel.lock().await;
+        if let Some(channel) = channels.get(room_id) {
+            channel.clone()
+        } else {
+            let (tx, _) = broadcast::channel(1000);
+            channels.insert(room_id.to_string(), tx.clone());
+            tx
         }
     }
 }

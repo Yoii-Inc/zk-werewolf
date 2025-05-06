@@ -35,7 +35,7 @@ pub fn routes(state: AppState) -> Router {
         .route("/:id/delete", delete(delete_room))
         // WebSocket接続
         // websocat ws://localhost:8080/api/room/ws
-        .route("/ws", get(websocket::handler))
+        .route("/:id/ws", get(websocket::handler))
         // ルームの準備完了トグル
         // curl -X POST http://localhost:8080/api/room/{roomid}/ready/{playerid}
         .route("/:id/ready/:playerid", post(toggle_ready))
