@@ -1,6 +1,11 @@
 use super::player::Player;
+use ark_bls12_377::Fr;
+use ark_crypto_primitives::{
+    encryption::AsymmetricEncryptionScheme, CommitmentScheme,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Game {
@@ -13,6 +18,7 @@ pub struct Game {
     pub result: GameResult,
     pub night_actions: NightActions,
     pub vote_results: HashMap<String, Vote>,
+    pub crypto_parameters: Option<CryptoParameters>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -76,6 +82,7 @@ impl Game {
             result: GameResult::InProgress,
             night_actions: NightActions::default(),
             vote_results: HashMap::new(),
+            crypto_parameters: None,
         }
     }
 
@@ -190,5 +197,64 @@ impl std::fmt::Display for Game {
             "Game {{ room_id: {}, name: {}, players: {:?}, phase: {:?}, result: {:?} }}",
             self.room_id, self.name, self.players, self.phase, self.result
         )
+    }
+}
+
+pub struct CryptoParameters {
+    // public
+    pub pedersen_param: <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Parameters,
+    pub player_commitment:
+        Vec<<<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output>,
+    pub fortune_teller_public_key:
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey,
+    pub elgamal_param:
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Parameters,
+
+    // TODO: do not put the secret key in the struct
+    // secret
+    pub player_randomness: Vec<Fr>,
+    pub secret_key:
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::SecretKey,
+}
+
+impl Clone for CryptoParameters {
+    fn clone(&self) -> Self {
+        // Dummy implementation
+        Self {
+            pedersen_param: self.pedersen_param.clone(),
+            player_commitment: self.player_commitment.clone(),
+            fortune_teller_public_key: self.fortune_teller_public_key,
+            elgamal_param: self.elgamal_param.clone(),
+            player_randomness: self.player_randomness.clone(),
+            secret_key: ark_crypto_primitives::encryption::elgamal::SecretKey(
+                self.secret_key.0.clone(),
+            ),
+        }
+    }
+}
+
+impl std::fmt::Debug for CryptoParameters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unimplemented!("Debug not implemented for CryptoParameters");
+    }
+}
+
+impl Serialize for CryptoParameters {
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Dummy implementation
+        unimplemented!("Serialization not implemented")
+    }
+}
+
+impl<'de> Deserialize<'de> for CryptoParameters {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Dummy implementation
+        unimplemented!("Deserialization not implemented")
     }
 }

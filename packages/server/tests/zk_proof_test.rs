@@ -30,10 +30,17 @@ async fn test_request_proof() {
         "is_voting_phase": true
     });
 
-    let result = request_proof(
-        zk_mpc_node::CircuitIdentifier::Built(zk_mpc_node::CircuitType::AnonymousVotingCircuit),
-        circuit_inputs,
-    )
+    let anonymous_voting_circuit = zk_mpc::circuits::AnonymousVotingCircuit {
+        is_target_id: todo!(),
+        is_most_voted_id: todo!(),
+        pedersen_param: todo!(),
+        player_randomness: todo!(),
+        player_commitment: todo!(),
+    };
+
+    let result = request_proof(zk_mpc_node::CircuitIdentifier::Built(
+        zk_mpc_node::BuiltinCircuit::AnonymousVoting(anonymous_voting_circuit),
+    ))
     .await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "test-proof-123");

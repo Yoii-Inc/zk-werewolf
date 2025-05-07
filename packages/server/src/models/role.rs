@@ -1,12 +1,12 @@
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Role {
-    Villager,    // 村人
-    Werewolf,    // 人狼
-    Seer,        // 占い師
-    Guard,       // 騎士
+    Villager, // 村人
+    Werewolf, // 人狼
+    Seer,     // 占い師
+    Guard,    // 騎士
 }
 
 impl fmt::Display for Role {
