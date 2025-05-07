@@ -1,19 +1,19 @@
+use crate::models::game::{ChangeRoleRequest, GameResult, NightActionRequest};
 use crate::models::role::Role;
+use crate::{
+    models::chat::{ChatMessage, ChatMessageType},
+    services::game_service,
+    state::AppState,
+};
+use axum::response::IntoResponse;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-use crate::state::AppState;
-use crate::{
-    models::game::{ChangeRoleRequest, GameResult, NightActionRequest},
-    services::game_service,
-};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VoteAction {
@@ -42,7 +42,8 @@ pub fn routes(state: AppState) -> Router {
                 .route("/debug/change-role", post(change_player_role))
                 // ゲーム進行の管理
                 .route("/phase/next", post(advance_phase_handler))
-                .route("/check-winner", get(check_winner_handler)),
+                .route("/check-winner", get(check_winner_handler))
+                .route("/messages/:player_id", get(get_messages)),
         )
         .with_state(state)
 }
@@ -174,6 +175,51 @@ pub async fn change_player_role(
             })),
         )
     }
+}
+
+pub async fn get_messages(
+    State(state): State<AppState>,
+    Path((room_id, player_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let (rooms, games) = tokio::join!(state.rooms.lock(), state.games.lock());
+
+    // playerを取得
+    let player = if let Some(room) = rooms.get(&room_id) {
+        room.players.iter().find(|p| p.id == player_id)
+    } else if let Some(game) = games.get(&room_id) {
+        game.players.iter().find(|p| p.id == player_id)
+    } else {
+        None
+    };
+
+    if player.is_none() {
+        return (StatusCode::NOT_FOUND, Json(Vec::<ChatMessage>::new()));
+    }
+
+    // ゲームが存在する場合はゲームのチャットログを返す
+    if let Some(game) = games.get(&room_id) {
+        let filtered_messages = game
+            .chat_log
+            .messages
+            .iter()
+            .filter(|msg| match msg.message_type {
+                ChatMessageType::Wolf => player.unwrap().role == Some(Role::Werewolf),
+                ChatMessageType::Private => msg.player_id == player_id,
+                _ => true,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        return (StatusCode::OK, Json(filtered_messages));
+    }
+
+    // ゲームが存在しない場合はルームのチャットログを返す
+    if let Some(room) = rooms.get(&room_id) {
+        return (StatusCode::OK, Json(room.chat_log.messages.clone()));
+    }
+
+    // どちらも存在しない場合は404を返す
+    (StatusCode::NOT_FOUND, Json(Vec::<ChatMessage>::new()))
 }
 
 #[cfg(test)]
