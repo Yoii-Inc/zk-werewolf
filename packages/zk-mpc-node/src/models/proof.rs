@@ -14,10 +14,10 @@ pub struct ProofStatus {
 pub struct ProofResponse {
     pub success: bool,
     pub message: String,
-    pub proof_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProofRequest {
+    pub proof_id: String,
     pub circuit_type: CircuitIdentifier<MFr>,
 }

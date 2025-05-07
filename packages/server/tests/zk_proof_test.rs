@@ -1,3 +1,5 @@
+use ark_bls12_377::Fr;
+use mpc_algebra::Reveal;
 use serde_json::json;
 use wiremock::{
     matchers::{method, path},
@@ -5,6 +7,7 @@ use wiremock::{
 };
 
 use server::services::zk_proof::{check_proof_status, request_proof};
+use zk_mpc::{circuits::circuit::MySimpleCircuit, marlin::MFr};
 
 // TODO: fix this test
 #[tokio::test]
@@ -22,27 +25,43 @@ async fn test_request_proof() {
         .await;
 
     // テストケースの実行
-    let circuit_inputs = json!({
-        "voter_id": "1",
-        "target_id": "2",
-        "is_voter_alive": true,
-        "is_target_alive": true,
-        "is_voting_phase": true
-    });
+    // let circuit_inputs = json!({
+    //     "voter_id": "1",
+    //     "target_id": "2",
+    //     "is_voter_alive": true,
+    //     "is_target_alive": true,
+    //     "is_voting_phase": true
+    // });
 
-    let anonymous_voting_circuit = zk_mpc::circuits::AnonymousVotingCircuit {
-        is_target_id: todo!(),
-        is_most_voted_id: todo!(),
-        pedersen_param: todo!(),
-        player_randomness: todo!(),
-        player_commitment: todo!(),
+    let fa = MFr::from_public(Fr::from(2));
+    let fb = MFr::from_public(Fr::from(3));
+
+    let circuit = MySimpleCircuit {
+        a: Some(fa),
+        b: Some(fb),
     };
 
+    // let anonymous_voting_circuit = zk_mpc::circuits::AnonymousVotingCircuit {
+    //     is_target_id: todo!(),
+    //     is_most_voted_id: todo!(),
+    //     pedersen_param: todo!(),
+    //     player_randomness: todo!(),
+    //     player_commitment: todo!(),
+    // };
+
+    // let result = request_proof(zk_mpc_node::CircuitIdentifier::Built(
+    //     zk_mpc_node::BuiltinCircuit::AnonymousVoting(anonymous_voting_circuit),
+    // ))
+
     let result = request_proof(zk_mpc_node::CircuitIdentifier::Built(
-        zk_mpc_node::BuiltinCircuit::AnonymousVoting(anonymous_voting_circuit),
+        zk_mpc_node::BuiltinCircuit::MySimple(circuit),
     ))
     .await;
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Failed to request proof: {:?}",
+        result.err()
+    );
     assert_eq!(result.unwrap(), "test-proof-123");
 }
 
@@ -96,6 +115,10 @@ async fn test_check_proof_status_invalid_response() {
         .await;
 
     let result = check_proof_status("test-proof-123").await;
-    assert!(result.is_ok());
+    assert!(
+        result.is_ok(),
+        "Failed to check proof status: {:?}",
+        result.err()
+    );
     assert!(!result.unwrap());
 }

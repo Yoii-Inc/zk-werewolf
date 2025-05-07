@@ -29,16 +29,16 @@ impl ProofManager {
         }
     }
 
-    pub async fn register_proof_request(&self, _request: ProofRequest) -> String {
-        // TODO: create a common proof id for all nodes
-        let proof_id = uuid::Uuid::new_v4().to_string();
+    pub async fn register_proof_request(&self, request: ProofRequest) {
         let status = ProofStatus {
             state: "pending".to_string(),
-            proof_id: proof_id.clone(),
+            proof_id: request.proof_id.clone(),
             message: None,
         };
-        self.proofs.write().await.insert(proof_id.clone(), status);
-        proof_id
+        self.proofs
+            .write()
+            .await
+            .insert(request.proof_id.clone(), status);
     }
 
     pub async fn get_proof_status(&self, proof_id: &str) -> Option<ProofStatus> {

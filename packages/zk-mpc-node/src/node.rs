@@ -58,7 +58,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         Ok(())
     }
 
-    pub async fn generate_proof(&self, request: ProofRequest, proof_id: String) {
+    pub async fn generate_proof(&self, request: ProofRequest) {
         let pm = self.proof_manager.clone();
 
         // Setup circuit
@@ -75,7 +75,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit, inputs).await {
             true => {
                 pm.update_proof_status(
-                    &proof_id,
+                    &request.proof_id,
                     "completed",
                     Some("Proof generated successfully".to_string()),
                 )
@@ -83,7 +83,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             }
             false => {
                 pm.update_proof_status(
-                    &proof_id,
+                    &request.proof_id,
                     "failed",
                     Some("Proof verification failed".to_string()),
                 )

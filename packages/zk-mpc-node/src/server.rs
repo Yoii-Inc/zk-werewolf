@@ -39,12 +39,11 @@ pub async fn handle_client(
                 .to_string();
 
             if let Ok(request) = serde_json::from_str::<ProofRequest>(&body) {
-                let proof_id = proof_manager.register_proof_request(request.clone()).await;
+                proof_manager.register_proof_request(request.clone()).await;
 
                 let response = json!({
                     "success": true,
                     "message": "Request accepted successfully",
-                    "proof_id": proof_id.clone()
                 });
 
                 let response_str = format!(
@@ -56,16 +55,12 @@ pub async fn handle_client(
                 );
                 socket.write_all(response_str.as_bytes()).await.unwrap();
 
-                Net::simulate(
-                    node.net.clone(),
-                    (proof_id, request),
-                    move |_, (proof_id, request)| {
-                        let node_clone = node.clone();
-                        async move {
-                            node_clone.generate_proof(request, proof_id).await;
-                        }
-                    },
-                )
+                Net::simulate(node.net.clone(), request, move |_, request| {
+                    let node_clone = node.clone();
+                    async move {
+                        node_clone.generate_proof(request).await;
+                    }
+                })
                 .await;
             }
         }

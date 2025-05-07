@@ -1,6 +1,11 @@
 use reqwest::Client;
+use tokio::time::{sleep, Duration};
+use tracing_subscriber::field::debug;
 use zk_mpc::marlin::MFr;
-use zk_mpc_node::models::{CircuitIdentifier, ProofRequest, ProofResponse};
+use zk_mpc_node::{
+    models::{CircuitIdentifier, ProofRequest, ProofResponse},
+    ProofStatus,
+};
 
 const ZK_MPC_NODE_URL: [&str; 3] = [
     "http://localhost:9000",
@@ -14,10 +19,14 @@ const RETRY_DELAY_SECS: u64 = 1;
 pub async fn request_proof(circuit_identifier: CircuitIdentifier<MFr>) -> Result<String, String> {
     let client = Client::new();
 
+    let proof_id = uuid::Uuid::new_v4().to_string();
+
     let payload = ProofRequest {
+        proof_id: proof_id.clone(),
         circuit_type: circuit_identifier,
     };
 
+    // TODO: revise individual node payloads
     let proof_requests = [payload.clone(), payload.clone(), payload.clone()];
 
     let mut responses = Vec::new();
@@ -25,7 +34,7 @@ pub async fn request_proof(circuit_identifier: CircuitIdentifier<MFr>) -> Result
     for port in ZK_MPC_NODE_URL {
         let response = client
             .post(port)
-            .json(&proof_requests)
+            .json(&payload)
             .send()
             .await
             .map_err(|e| e.to_string())?;
@@ -38,34 +47,46 @@ pub async fn request_proof(circuit_identifier: CircuitIdentifier<MFr>) -> Result
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(proof_response.proof_id)
+    assert!(proof_response.success, "Failed to generate proof");
+
+    Ok(proof_id)
 }
 
 pub async fn check_proof_status(proof_id: &str) -> Result<bool, String> {
-    // if !DEBUG_CONFIG.create_proof {
-    //     return Ok(true);
-    // }
+    let client = Client::new();
 
-    // let client = Client::new();
+    for _ in 0..MAX_RETRY_ATTEMPTS {
+        let mut completed_count = 0;
+        let mut failed_count = 0;
 
-    // for _ in 0..MAX_RETRY_ATTEMPTS {
-    //     let response = client
-    //         .get(&format!("{}/proof/{}", ZK_MPC_NODE_URL, proof_id))
-    //         .send()
-    //         .await
-    //         .map_err(|e| e.to_string())?;
+        // 全ノードのステータスをチェック
+        for node_url in ZK_MPC_NODE_URL.iter() {
+            let response = client
+                .get(format!("{}/proof/{}", node_url, proof_id))
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
 
-    //     let status: ProofStatus = response.json().await.map_err(|e| e.to_string())?;
+            let status: ProofStatus = response.json().await.map_err(|e| e.to_string())?;
 
-    //     match status.state.as_str() {
-    //         "completed" => return Ok(true),
-    //         "failed" => return Ok(false),
-    //         _ => {
-    //             sleep(Duration::from_secs(RETRY_DELAY_SECS)).await;
-    //             continue;
-    //         }
-    //     }
-    // }
+            match status.state.as_str() {
+                "completed" => completed_count += 1,
+                "failed" => failed_count += 1,
+                _ => continue,
+            }
+        }
+
+        // 全ノードが完了していたら成功
+        if completed_count == ZK_MPC_NODE_URL.len() {
+            return Ok(true);
+        }
+        // 1つでも失敗していたら失敗
+        if failed_count > 0 {
+            return Ok(false);
+        }
+        // まだ完了していないノードがある場合は待機
+        sleep(Duration::from_secs(RETRY_DELAY_SECS)).await;
+    }
 
     Ok(false)
 }

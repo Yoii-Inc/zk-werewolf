@@ -50,7 +50,6 @@ impl Drop for TestNodes {
 async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Error>> {
     let _nodes = TestNodes::start(3).await?;
     let client = reqwest::Client::new();
-    let mut proof_ids = Vec::new();
 
     let fa = MFr::from_public(Fr::from(2));
     let fb = MFr::from_public(Fr::from(3));
@@ -66,6 +65,7 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
         let response = client
             .post(format!("http://localhost:{}", port))
             .json(&ProofRequest {
+                proof_id: "test_proof_id".to_string(),
                 circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit.clone())),
             })
             .send()
@@ -80,10 +80,6 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
             .as_str()
             .unwrap()
             .contains("successfully"));
-
-        let proof_id = response_body["proof_id"].as_str().unwrap().to_string();
-        println!("Proof ID from port {}: {}", port, proof_id);
-        proof_ids.push((port, proof_id));
     }
 
     // Wait briefly before checking the results
@@ -91,13 +87,16 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Verify the results for each port
-    for (port, proof_id) in proof_ids {
+    for port in [9000, 9001, 9002] {
         let mut attempts = 0;
         let max_attempts = 30;
 
         loop {
             let status = client
-                .get(format!("http://localhost:{}/proof/{}", port, proof_id))
+                .get(format!(
+                    "http://localhost:{}/proof/{}",
+                    port, "test_proof_id",
+                ))
                 .send()
                 .await?
                 .json::<ProofStatus>()
@@ -177,7 +176,7 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
 
     // List of test cases
     for (a, b) in [(2, 3), (5, 7), (11, 13)] {
-        let mut proof_ids = Vec::new();
+        let proof_id = format!("test_proof_id_{}_{}", a, b);
 
         let fa = MFr::from_public(Fr::from(a));
         let fb = MFr::from_public(Fr::from(b));
@@ -193,6 +192,7 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
             let response = client
                 .post(format!("http://localhost:{}", port))
                 .json(&ProofRequest {
+                    proof_id: proof_id.clone(),
                     circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(
                         circuit.clone(),
                     )),
@@ -212,9 +212,6 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
                 .as_str()
                 .unwrap()
                 .contains("successfully"));
-
-            let proof_id = response_body["proof_id"].as_str().unwrap().to_string();
-            proof_ids.push((port, proof_id));
         }
 
         // Wait briefly before checking the results
@@ -222,7 +219,7 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
         tokio::time::sleep(Duration::from_secs(5)).await;
 
         // Verify the results for each port
-        for (port, proof_id) in proof_ids {
+        for port in [9000, 9001, 9002] {
             let mut attempts = 0;
             let max_attempts = 30;
 
