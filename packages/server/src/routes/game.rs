@@ -233,6 +233,7 @@ mod tests {
     use super::*;
     use crate::utils::test_setup::setup_test_env;
     use axum::{body::Body, http::Request};
+    use chrono::format;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -241,6 +242,16 @@ mod tests {
         let state = AppState::new();
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+
+        for i in 0..4 {
+            crate::services::room_service::join_room(
+                state.clone(),
+                &room_id.to_string(),
+                &format!("test_id_{}", i),
+                &format!("test_player_{}", i),
+            )
+            .await;
+        }
 
         let request = Request::builder()
             .method("POST")
@@ -258,6 +269,16 @@ mod tests {
         let state = AppState::new();
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+
+        for i in 0..4 {
+            crate::services::room_service::join_room(
+                state.clone(),
+                &room_id.to_string(),
+                &format!("test_id_{}", i),
+                &format!("test_player_{}", i),
+            )
+            .await;
+        }
 
         game_service::start_game(state.clone(), &room_id.to_string())
             .await
