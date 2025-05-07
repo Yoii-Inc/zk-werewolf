@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use zk_mpc::marlin::{LocalMarlin, LocalMarlinKZG10};
 
+// TODO: Changeable to a more generic proof manager
 pub struct ProofManager {
     pub srs: UniversalSRS<ark_bls12_377::Fr, LocalMarlinKZG10>,
     proofs: Arc<RwLock<HashMap<String, ProofStatus>>>,
@@ -28,7 +29,8 @@ impl ProofManager {
         }
     }
 
-    pub async fn create_proof(&self, _request: ProofRequest) -> String {
+    pub async fn register_proof_request(&self, _request: ProofRequest) -> String {
+        // TODO: create a common proof id for all nodes
         let proof_id = uuid::Uuid::new_v4().to_string();
         let status = ProofStatus {
             state: "pending".to_string(),

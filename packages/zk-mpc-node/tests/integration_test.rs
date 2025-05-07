@@ -1,9 +1,14 @@
+use ark_bls12_377::Fr;
+use mpc_algebra::Reveal;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serial_test::serial;
 use std::process::{Child, Command};
 use std::time::Duration;
 use tokio::time::sleep;
+use zk_mpc::circuits::circuit::MySimpleCircuit;
+use zk_mpc::marlin::MFr;
+use zk_mpc_node::{BuiltinCircuit, CircuitIdentifier, ProofRequest};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ProofStatus {
@@ -26,7 +31,7 @@ impl TestNodes {
             processes.push(node);
         }
 
-        // ノードの起動を待つ
+        // wait for the nodes to start
         sleep(Duration::from_secs(15)).await;
         Ok(Self { processes })
     }
@@ -47,24 +52,22 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
     let client = reqwest::Client::new();
     let mut proof_ids = Vec::new();
 
-    // まず3つのポートにリクエストを送信
+    let fa = MFr::from_public(Fr::from(2));
+    let fb = MFr::from_public(Fr::from(3));
+
+    let circuit = MySimpleCircuit {
+        a: Some(fa),
+        b: Some(fb),
+    };
+
+    // Send requests to the three ports
     for port in [9000, 9001, 9002] {
         println!("Sending request to port {}", port);
         let response = client
             .post(format!("http://localhost:{}", port))
-            .json(&json!({
-                "circuit_type": {
-                    "Built": "MySimpleCircuit"
-                },
-                "inputs": {
-                    "Built": {
-                        "MySimpleCircuit": {
-                            "a": 2,
-                            "b": 3
-                        }
-                    }
-                }
-            }))
+            .json(&ProofRequest {
+                circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit.clone())),
+            })
             .send()
             .await?;
 
@@ -83,11 +86,11 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
         proof_ids.push((port, proof_id));
     }
 
-    // 少し待ってから結果を確認
+    // Wait briefly before checking the results
     println!("Waiting for proofs to be generated...");
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    // 各ポートの結果を確認
+    // Verify the results for each port
     for (port, proof_id) in proof_ids {
         let mut attempts = 0;
         let max_attempts = 30;
@@ -131,13 +134,13 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
 async fn test_mpc_node_invalid_request() -> Result<(), Box<dyn std::error::Error>> {
     let _nodes = TestNodes::start(3).await?;
 
-    // サーバーの起動を確実に待つ
+    // Ensure the server has started
     tokio::time::sleep(Duration::from_secs(20)).await;
 
-    // 不正なリクエストのテスト
+    // Test invalid requests
     let client = reqwest::Client::new();
 
-    // 各ポートでテスト
+    // Test on each port
     for port in [9000, 9001, 9002] {
         println!("Testing invalid request on port {}", port);
         match client
@@ -157,7 +160,7 @@ async fn test_mpc_node_invalid_request() -> Result<(), Box<dyn std::error::Error
                 );
             }
             Err(e) => {
-                // エラーレスポンスも許容する
+                // Allow error responses as well
                 println!("Got expected error from port {}: {:?}", port, e);
             }
         }
@@ -172,28 +175,28 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
     let _nodes = TestNodes::start(3).await?;
     let client = reqwest::Client::new();
 
-    // テストケースのリスト
+    // List of test cases
     for (a, b) in [(2, 3), (5, 7), (11, 13)] {
         let mut proof_ids = Vec::new();
 
-        // 3つのポートに順次リクエストを送信
+        let fa = MFr::from_public(Fr::from(a));
+        let fb = MFr::from_public(Fr::from(b));
+
+        let circuit = MySimpleCircuit {
+            a: Some(fa),
+            b: Some(fb),
+        };
+
+        // Sequentially send requests to the three ports
         for port in [9000, 9001, 9002] {
             println!("Testing port {} with inputs a={}, b={}", port, a, b);
             let response = client
                 .post(format!("http://localhost:{}", port))
-                .json(&json!({
-                    "circuit_type": {
-                        "Built": "MySimpleCircuit"
-                    },
-                    "inputs": {
-                        "Built": {
-                            "MySimpleCircuit": {
-                                "a": a,
-                                "b": b
-                            }
-                        }
-                    }
-                }))
+                .json(&ProofRequest {
+                    circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(
+                        circuit.clone(),
+                    )),
+                })
                 .send()
                 .await?;
 
@@ -214,11 +217,11 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
             proof_ids.push((port, proof_id));
         }
 
-        // 少し待ってから結果を確認
+        // Wait briefly before checking the results
         println!("Waiting for proofs to be generated...");
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        // 各ポートの結果を確認
+        // Verify the results for each port
         for (port, proof_id) in proof_ids {
             let mut attempts = 0;
             let max_attempts = 30;
@@ -263,7 +266,7 @@ async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Err
             }
         }
 
-        // 次のテストケースの前に少し待機
+        // Wait briefly before proceeding to the next test case
         sleep(Duration::from_secs(2)).await;
     }
 

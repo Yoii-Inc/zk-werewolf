@@ -1,3 +1,4 @@
+pub mod config;
 pub mod game;
 pub mod player;
 pub mod role;

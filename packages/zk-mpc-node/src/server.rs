@@ -35,7 +35,7 @@ pub async fn handle_client(
                 .to_string();
 
             if let Ok(request) = serde_json::from_str::<ProofRequest>(&body) {
-                let proof_id = proof_manager.create_proof(request.clone()).await;
+                let proof_id = proof_manager.register_proof_request(request.clone()).await;
 
                 let response = json!({
                     "success": true,

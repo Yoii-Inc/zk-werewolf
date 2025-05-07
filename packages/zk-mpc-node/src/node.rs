@@ -1,5 +1,5 @@
-use crate::models::ProofRequest;
 use crate::proof::ProofManager;
+use crate::{models::ProofRequest, CircuitFactory};
 use ark_marlin::IndexProverKey;
 use mpc_algebra::Reveal;
 use mpc_net::multi::MPCNetConnection;
@@ -29,18 +29,17 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
     pub async fn generate_proof(&self, request: ProofRequest, proof_id: String) {
         let pm = self.proof_manager.clone();
 
-        // 回路のセットアップ
-        let local_circuit = request.create_local_circuit();
+        // Setup circuit
+        let local_circuit = CircuitFactory::create_local_circuit(&request);
 
-        let mpc_circuit = request.create_mpc_circuit();
+        let mpc_circuit = CircuitFactory::create_mpc_circuit(&request);
 
-        let inputs = request.create_verify_inputs();
+        let inputs = CircuitFactory::create_verify_inputs(&request);
 
         let (index_pk, index_vk) =
             LocalMarlin::index(&self.proof_manager.srs, local_circuit).unwrap();
         let mpc_index_pk = IndexProverKey::from_public(index_pk);
 
-        // 証明の生成と検証
         match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit, inputs).await {
             true => {
                 pm.update_proof_status(
