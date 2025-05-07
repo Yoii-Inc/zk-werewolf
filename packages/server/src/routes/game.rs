@@ -152,6 +152,12 @@ pub async fn change_player_role(
             };
 
             player.role = new_role;
+
+            game.chat_log.add_system_message(format!(
+                "{}の役職が{}に変更されました",
+                player.name, payload.new_role
+            ));
+
             (
                 StatusCode::OK,
                 Json(json!({

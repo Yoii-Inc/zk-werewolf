@@ -63,12 +63,8 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
         if seer_exists {
             start_message.push_str(" 占い師も村を守るために協力してくれるでしょう。");
         }
-        game.chat_log.add_message(ChatMessage::new(
-            "system".to_string(),
-            "システム".to_string(),
-            start_message,
-            ChatMessageType::System,
-        ));
+
+        game.chat_log.add_system_message(start_message);
 
         drop(games);
 

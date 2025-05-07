@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 pub struct ChatLog {
     pub room_id: String,
     pub messages: Vec<ChatMessage>,
-    pub game_phase: Option<super::game::GamePhase>,
-    pub day: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,13 +30,21 @@ impl ChatLog {
         ChatLog {
             room_id,
             messages: Vec::new(),
-            game_phase: None,
-            day: None,
         }
     }
 
     pub fn add_message(&mut self, message: ChatMessage) {
         self.messages.push(message);
+    }
+
+    pub fn add_system_message(&mut self, content: String) {
+        let system_message = ChatMessage::new(
+            "system".to_string(),
+            "System".to_string(),
+            content,
+            ChatMessageType::System,
+        );
+        self.add_message(system_message);
     }
 
     pub fn get_messages_by_type(&self, message_type: ChatMessageType) -> Vec<&ChatMessage> {
