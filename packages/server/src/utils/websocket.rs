@@ -10,6 +10,7 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use tracing::info;
 use uuid::Uuid;
 
+use crate::models::chat::{ChatMessage, ChatMessageType};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +21,25 @@ struct WebSocketMessage {
     player_name: String,
     content: String,
     timestamp: String,
-    room_id: String, // 不要かもしれない
+    room_id: String,
+}
+
+impl WebSocketMessage {
+    fn to_chat_message(&self) -> ChatMessage {
+        let message_type = match self.message_type.as_str() {
+            "wolf" => ChatMessageType::Wolf,
+            "private" => ChatMessageType::Private,
+            "system" => ChatMessageType::System,
+            _ => ChatMessageType::Public,
+        };
+
+        ChatMessage::new(
+            self.player_id.clone(),
+            self.player_name.clone(),
+            self.content.clone(),
+            message_type,
+        )
+    }
 }
 
 pub async fn handler(
@@ -53,6 +72,15 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String) {
                             ws_message.player_id = default_player_id.clone();
                         }
                         ws_message.room_id = room_id_for_receive.clone();
+
+                        // チャットメッセージに変換して保存
+                        let chat_message = ws_message.to_chat_message();
+                        if let Err(e) = state
+                            .save_chat_message(&room_id_for_receive, chat_message)
+                            .await
+                        {
+                            eprintln!("Error saving chat message: {}", e);
+                        }
 
                         let response = serde_json::to_string(&ws_message).unwrap();
                         info!(

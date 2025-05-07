@@ -1,8 +1,6 @@
 use super::player::Player;
 use ark_bls12_377::Fr;
-use ark_crypto_primitives::{
-    encryption::AsymmetricEncryptionScheme, CommitmentScheme,
-};
+use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
@@ -19,6 +17,7 @@ pub struct Game {
     pub night_actions: NightActions,
     pub vote_results: HashMap<String, Vote>,
     pub crypto_parameters: Option<CryptoParameters>,
+    pub chat_log: super::chat::ChatLog,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -73,7 +72,7 @@ pub struct ChangeRoleRequest {
 impl Game {
     pub fn new(room_id: String, players: Vec<Player>) -> Self {
         Game {
-            room_id,
+            room_id: room_id.clone(),
             name: "".to_string(),
             players,
             max_players: 9,
@@ -83,6 +82,7 @@ impl Game {
             night_actions: NightActions::default(),
             vote_results: HashMap::new(),
             crypto_parameters: None,
+            chat_log: super::chat::ChatLog::new(room_id),
         }
     }
 

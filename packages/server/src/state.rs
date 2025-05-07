@@ -36,4 +36,18 @@ impl AppState {
             tx
         }
     }
+
+    pub async fn save_chat_message(
+        &self,
+        room_id: &str,
+        message: crate::models::chat::ChatMessage,
+    ) -> Result<(), String> {
+        let mut games = self.games.lock().await;
+        if let Some(game) = games.get_mut(room_id) {
+            game.chat_log.add_message(message);
+            Ok(())
+        } else {
+            Err("Game not found".to_string())
+        }
+    }
 }
