@@ -7,8 +7,6 @@ on:
   pull_request:
     branches:
       - main
-      # TODO: revert after this ci is fixed
-      - feat/zk-mpc-node
 
 jobs:
   ci:
