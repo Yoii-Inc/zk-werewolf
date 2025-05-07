@@ -37,8 +37,9 @@ jobs:
 
       - name: Setup keystore
         run: |
-          mkdir -p ~/.foundry/keystores
-          cast wallet import --private-key 0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6 --unsafe-password 'localhost' scaffold-eth-default
+          mkdir -p /home/runner/.foundry/keystores
+          echo "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6" > /home/runner/.foundry/keystores/scaffold-eth-default
+          chmod 600 /home/runner/.foundry/keystores/scaffold-eth-default
 
       - name: Run foundry node, deploy contracts (& generate contracts typescript output)
         env:
