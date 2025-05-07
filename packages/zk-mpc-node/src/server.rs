@@ -7,6 +7,10 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+pub mod api_client;
+
+pub use api_client::*;
+
 pub async fn handle_client(
     mut socket: TcpStream,
     proof_manager: Arc<ProofManager>,

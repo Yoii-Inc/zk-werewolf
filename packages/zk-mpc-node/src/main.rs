@@ -24,8 +24,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Listening on port {}", 9000 + opt.id);
 
+    let server_url = "http://localhost:8080".to_string();
+
     // Initialize the node
-    let node = Arc::new(Node::new(opt.id as u32, Arc::new(net), proof_manager.clone()).await);
+    let node = Arc::new(
+        Node::new(
+            opt.id as u32,
+            Arc::new(net),
+            proof_manager.clone(),
+            server_url,
+        )
+        .await,
+    );
 
     // Loop to accept requests from clients
     while let Ok((socket, _)) = listener.accept().await {

@@ -1,4 +1,6 @@
+use crate::crypto::KeyManager;
 use crate::proof::ProofManager;
+use crate::server::ApiClient; // 追加
 use crate::{models::ProofRequest, CircuitFactory};
 use ark_marlin::IndexProverKey;
 use mpc_algebra::Reveal;
@@ -11,6 +13,8 @@ pub struct Node<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
     pub id: u32,
     pub net: Arc<MPCNetConnection<IO>>,
     pub proof_manager: Arc<ProofManager>,
+    pub key_manager: Arc<KeyManager>,
+    pub api_client: Arc<ApiClient>, // 追加
 }
 
 impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
@@ -18,12 +22,40 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         id: u32,
         net: Arc<MPCNetConnection<IO>>,
         proof_manager: Arc<ProofManager>,
+        server_url: String, // 追加
     ) -> Self {
-        Self {
+        let key_manager = Arc::new(KeyManager::new());
+        // 起動時に鍵ペアを生成
+        key_manager
+            .generate_keypair()
+            .await
+            .expect("Failed to generate keypair");
+
+        let api_client = Arc::new(ApiClient::new(server_url.clone()));
+
+        let node = Self {
             id,
             net,
             proof_manager,
-        }
+            key_manager,
+            api_client: api_client.clone(),
+        };
+
+        // 生成した公開鍵をサーバーに登録
+        node.register_public_key()
+            .await
+            .expect("Failed to register public key with server");
+
+        node
+    }
+
+    // 公開鍵を登録するメソッドを追加
+    pub async fn register_public_key(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let public_key = self.key_manager.get_public_key().await?;
+        self.api_client
+            .register_public_key(self.id, public_key)
+            .await?;
+        Ok(())
     }
 
     pub async fn generate_proof(&self, request: ProofRequest, proof_id: String) {
@@ -58,5 +90,26 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                 .await;
             }
         }
+    }
+
+    pub async fn get_public_key(&self) -> Result<String, crate::crypto::CryptoError> {
+        self.key_manager.get_public_key().await
+    }
+
+    pub async fn encrypt_share(
+        &self,
+        share: &[u8],
+        recipient_public_key: &str,
+    ) -> Result<Vec<u8>, crate::crypto::CryptoError> {
+        self.key_manager
+            .encrypt_share(share, recipient_public_key)
+            .await
+    }
+
+    pub async fn decrypt_share(
+        &self,
+        encrypted_share: &[u8],
+    ) -> Result<Vec<u8>, crate::crypto::CryptoError> {
+        self.key_manager.decrypt_share(encrypted_share).await
     }
 }
