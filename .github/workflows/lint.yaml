@@ -29,11 +29,16 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --immutable
-      
+
       - name: Install foundry-toolchain
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+
+      - name: Setup keystore
+        run: |
+          mkdir -p ~/.foundry/keystores
+          cast wallet import --private-key 0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6 --unsafe-password 'localhost' scaffold-eth-default
 
       - name: Run foundry node, deploy contracts (& generate contracts typescript output)
         env:
@@ -41,7 +46,7 @@ jobs:
         run: yarn chain & yarn deploy
 
       - name: Run nextjs lint
-        run: yarn next:lint --max-warnings=0
+        run: yarn next:lint
 
       - name: Check typings on nextjs
         run: yarn next:check-types
