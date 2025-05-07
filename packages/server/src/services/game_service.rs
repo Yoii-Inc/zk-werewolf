@@ -1,5 +1,6 @@
 use crate::{
     models::{
+        chat::{ChatMessage, ChatMessageType},
         game::{Game, GamePhase, GameResult, NightAction, NightActionRequest},
         role::Role,
         room::RoomStatus,
@@ -46,6 +47,29 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
 
         room.status = RoomStatus::InProgress;
 
+        // ゲーム開始のシステムメッセージを追加
+        let player_count = game.players.len();
+        let werewolf_count = game
+            .players
+            .iter()
+            .filter(|p| p.role == Some(Role::Werewolf))
+            .count();
+        let seer_exists = game.players.iter().any(|p| p.role == Some(Role::Seer));
+
+        let mut start_message = format!(
+            "ゲームを開始します。{}人のプレイヤーが参加し、その中に{}人の人狼がいます。",
+            player_count, werewolf_count
+        );
+        if seer_exists {
+            start_message.push_str(" 占い師も村を守るために協力してくれるでしょう。");
+        }
+        game.chat_log.add_message(ChatMessage::new(
+            "system".to_string(),
+            "システム".to_string(),
+            start_message,
+            ChatMessageType::System,
+        ));
+
         drop(games);
 
         // ゲーム開始後、最初のフェーズに進める
@@ -86,7 +110,8 @@ pub async fn get_game_state(state: AppState, room_id: String) -> Result<Game, St
 pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String, String> {
     let mut games = state.games.lock().await;
     if let Some(game) = games.get_mut(room_id) {
-        game.phase = match game.phase {
+        let current_phase = game.phase.clone();
+        let next_phase = match current_phase {
             GamePhase::Waiting => GamePhase::Night,
             GamePhase::Night => {
                 game.resolve_night_actions();
@@ -100,6 +125,8 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
             GamePhase::Result => GamePhase::Night,
             GamePhase::Finished => return Err("ゲームは既に終了しています".to_string()),
         };
+        game.add_phase_change_message(current_phase, next_phase.clone());
+        game.phase = next_phase;
         Ok(format!("フェーズを更新しました: {:?}", game.phase))
     } else {
         Err("Game not found".to_string())
@@ -373,6 +400,33 @@ pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, 
         drop(games);
         let mut games = state.games.lock().await;
         let game = games.get_mut(room_id).ok_or("Game not found")?;
+
+        if result != GameResult::InProgress {
+            let (winner_message, details) = match result {
+                GameResult::VillagerWin => (
+                    "村人陣営の勝利です！",
+                    format!("残りの村人: {}人", alive_villagers),
+                ),
+                GameResult::WerewolfWin => (
+                    "人狼陣営の勝利です！",
+                    format!(
+                        "残りの人狼: {}人、残りの村人: {}人",
+                        alive_werewolves, alive_villagers
+                    ),
+                ),
+                GameResult::InProgress => unreachable!(),
+            };
+
+            game.chat_log.add_message(ChatMessage::new(
+                "system".to_string(),
+                "システム".to_string(),
+                format!("{} {}", winner_message, details),
+                ChatMessageType::System,
+            ));
+
+            game.phase = GamePhase::Finished;
+        }
+
         game.result = result.clone();
         Ok(result)
     }

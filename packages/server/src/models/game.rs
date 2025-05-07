@@ -188,6 +188,30 @@ impl Game {
         }
         self.vote_results.clear();
     }
+
+    pub fn add_phase_change_message(&mut self, from_phase: GamePhase, to_phase: GamePhase) {
+        let message = match to_phase {
+            GamePhase::Night => {
+                "夜になりました。人狼は獲物を選び、占い師は占う相手を選んでください。"
+            }
+            GamePhase::Discussion => "朝になりました。昨晩の出来事について話し合いましょう。",
+            GamePhase::Voting => "投票の時間です。最も疑わしい人物に投票してください。",
+            GamePhase::Result => "投票が終了しました。結果を発表します。",
+            GamePhase::Finished => match self.result {
+                GameResult::VillagerWin => "村人陣営の勝利です！",
+                GameResult::WerewolfWin => "人狼陣営の勝利です！",
+                GameResult::InProgress => "ゲームが終了しました。",
+            },
+            GamePhase::Waiting => "ゲームの開始を待っています。",
+        };
+
+        self.chat_log.add_message(super::chat::ChatMessage::new(
+            "system".to_string(),
+            "システム".to_string(),
+            message.to_string(),
+            super::chat::ChatMessageType::System,
+        ));
+    }
 }
 
 impl std::fmt::Display for Game {
