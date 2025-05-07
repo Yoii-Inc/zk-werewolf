@@ -36,7 +36,7 @@ ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/intr
 
 [dev-dependencies]
 tokio-tungstenite = "0.19"
-hyper = { version = "1.0", features = ["full"] }
-hyper-util = { version = "0.1", features = ["full"] }
-tower = { version = "0.4", features = ["util"] }
+hyper = { version = "1.0" }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 wiremock = "0.5"

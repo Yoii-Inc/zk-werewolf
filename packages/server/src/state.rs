@@ -4,6 +4,7 @@ use tokio::sync::{broadcast, Mutex};
 
 use crate::models::config::DebugConfig;
 use crate::models::{game::Game, room::Room};
+use crate::services::node_key::NodeKeyService;
 use crate::services::user_service::UserService;
 
 #[derive(Clone)]
@@ -13,6 +14,7 @@ pub struct AppState {
     pub channel: Arc<Mutex<HashMap<String, broadcast::Sender<Message>>>>,
     pub user_service: UserService,
     pub debug_config: Arc<DebugConfig>,
+    pub node_key_service: Arc<NodeKeyService>,
 }
 
 impl AppState {
@@ -23,6 +25,7 @@ impl AppState {
             channel: Arc::new(Mutex::new(HashMap::new())),
             user_service: UserService::new(),
             debug_config: Arc::new(DebugConfig::default()),
+            node_key_service: Arc::new(NodeKeyService::new()),
         }
     }
 
