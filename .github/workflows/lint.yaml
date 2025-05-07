@@ -41,7 +41,7 @@ jobs:
           RPC_URL: localhost
           ETH_KEYSTORE_ACCOUNT: scaffold-eth-default
         run: |
-          yarn chain &
+          yarn chain --silent &
           sleep 5
           yarn deploy
 
