@@ -47,12 +47,11 @@ for PORT in 9000 9001 9002; do
   wait_for_port $PORT
 done
 
-# インテグレーションテストの実行
+# zk-mpc-node インテグレーションテストの実行
+cargo test --test integration_test -- --nocapture --test-threads=1
+
+# server インテグレーションテストの実行
 cd ../server
 cargo test --test "*" -- --nocapture --test-threads=1
 
-
-# 個別に実行する場合
-# cargo test --test zk_proof_test -- --nocapture --test-threads=1 --test integration_test_node_0
-
-echo "Integration tests(server) completed"
+echo "Integration tests completed"
