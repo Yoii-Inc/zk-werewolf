@@ -5,7 +5,7 @@ use crate::{
         role::Role,
         room::RoomStatus,
     },
-    services::zk_proof::{check_proof_status, request_proof},
+    services::zk_proof::{check_proof_status, request_proof_with_output},
     state::AppState,
 };
 use ark_bls12_377::Fr;
@@ -21,8 +21,8 @@ use zk_mpc::{
     input::{MpcInputTrait, WerewolfKeyInput, WerewolfMpcInput},
     marlin::MFr,
 };
-use zk_mpc_node::BuiltinCircuit;
 use zk_mpc_node::CircuitIdentifier;
+use zk_mpc_node::{BuiltinCircuit, ProofOutputType};
 
 // ゲームのライフサイクル管理
 pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String> {
@@ -239,9 +239,10 @@ pub async fn process_night_action(
                     mpc_input: mpc_input.clone(),
                 };
 
-                let proof_id = request_proof(CircuitIdentifier::Built(BuiltinCircuit::Divination(
-                    divination_circuit,
-                )))
+                let proof_id = request_proof_with_output(
+                    CircuitIdentifier::Built(BuiltinCircuit::Divination(divination_circuit)),
+                    ProofOutputType::Public,
+                )
                 .await?;
 
                 if check_status_with_retry(&proof_id).await? {
@@ -261,7 +262,7 @@ pub async fn process_night_action(
 
 async fn check_status_with_retry(proof_id: &str) -> Result<bool, String> {
     for _ in 0..30 {
-        if check_proof_status(proof_id).await? {
+        if check_proof_status(proof_id).await?.0 {
             return Ok(true);
         }
         sleep(Duration::from_secs(1)).await;
@@ -301,14 +302,15 @@ pub async fn handle_vote(
             player_commitment: todo!(),
         };
 
-        let proof_id = request_proof(CircuitIdentifier::Built(BuiltinCircuit::AnonymousVoting(
-            anonymous_voting_circuit,
-        )))
+        let proof_id = request_proof_with_output(
+            CircuitIdentifier::Built(BuiltinCircuit::AnonymousVoting(anonymous_voting_circuit)),
+            ProofOutputType::Public,
+        )
         .await?;
 
         // 証明の完了を待つ
         for _ in 0..30 {
-            if check_proof_status(&proof_id).await? {
+            if check_proof_status(&proof_id).await?.0 {
                 drop(games); // 先のロックを解放
                 let mut games = state.games.lock().await;
                 let game = games.get_mut(room_id).ok_or("Game not found")?;
@@ -362,9 +364,10 @@ pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, 
             player_commitment: todo!(),
         };
 
-        let proof_id = request_proof(CircuitIdentifier::Built(BuiltinCircuit::WinningJudge(
-            winning_judge_circuit,
-        )))
+        let proof_id = request_proof_with_output(
+            CircuitIdentifier::Built(BuiltinCircuit::WinningJudge(winning_judge_circuit)),
+            ProofOutputType::Public,
+        )
         .await?;
 
         if check_status_with_retry(&proof_id).await? {
@@ -533,9 +536,10 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
     println!("proof request");
 
     // proof request
-    let proof_id = request_proof(CircuitIdentifier::Built(BuiltinCircuit::KeyPublicize(
-        key_publicize_circuit,
-    )))
+    let proof_id = request_proof_with_output(
+        CircuitIdentifier::Built(BuiltinCircuit::KeyPublicize(key_publicize_circuit)),
+        ProofOutputType::Public,
+    )
     .await?;
 
     println!("proof id: {}", proof_id);
