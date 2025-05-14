@@ -66,6 +66,61 @@ Run smart contract test with `yarn foundry:test`
 - Edit your frontend homepage at `packages/nextjs/app/page.tsx`. For guidance on [routing](https://nextjs.org/docs/app/building-your-application/routing/defining-routes) and configuring [pages/layouts](https://nextjs.org/docs/app/building-your-application/routing/pages-and-layouts) checkout the Next.js documentation.
 - Edit your deployment scripts in `packages/foundry/script`
 
+## Repository Structure
+
+This project follows a monorepo structure using Yarn workspaces. Here's an overview of the main directories and their purposes:
+
+```text
+.
+├── packages/                # Main packages directory
+│   ├── zk-mpc-node/         # Zero-knowledge MPC node implementation
+│   ├── nextjs/              # Frontend application (Next.js)
+│   ├── server/              # Backend server (Rust)
+│   └── foundry/             # Smart contract development environment
+├── .husky/                  # Git hooks configuration
+├── .yarn/                   # Yarn configuration
+└── .github/                 # GitHub Actions configuration
+```
+
+### Package Details
+
+- **zk-mpc-node/**
+
+  - Zero-knowledge proof and MPC implementation
+  - Handles secure computation and verification
+
+- **nextjs/**
+
+  - Frontend user interface
+  - Built with Next.js and React
+  - Integrates with smart contracts and backend
+
+- **server/**
+
+  - Backend API server
+  - Implemented in Rust
+  - Handles business logic and data management
+
+- **foundry/**
+  - Smart contract development environment
+  - Contract compilation and deployment
+  - Testing and verification tools
+
+### Development Tools
+
+- **.husky/**
+
+  - Git hooks for pre-commit checks
+  - Code quality enforcement
+
+- **.yarn/**
+
+  - Yarn package manager configuration
+  - Workspace management
+
+- **.github/**
+  - CI/CD pipeline configuration
+  - Automated testing and deployment
 
 ## Documentation
 
