@@ -26,13 +26,13 @@ thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 zk-mpc-node = { path = "../zk-mpc-node" }
 rand = "0.8.5"
-zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace" }
-ark-marlin = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-marlin", version = "0.3.0", default-features = false, features = [ "std" ] }
-ark-ff = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-ff", version = "0.3.0" }
-mpc-algebra = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "mpc-algebra", version = "0.1.0" }
-ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
-ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-crypto-primitives", version = "0.3.0" }
-ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
+zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git" }
+ark-marlin = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-marlin", version = "0.3.0", default-features = false, features = [ "std" ] }
+ark-ff = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ff", version = "0.3.0" }
+mpc-algebra = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "mpc-algebra", version = "0.1.0" }
+ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
+ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0" }
+ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.19"
