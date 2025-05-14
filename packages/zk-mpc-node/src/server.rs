@@ -66,7 +66,40 @@ pub async fn handle_client(
         }
 
         (Some("GET"), Some(path)) if path.starts_with("/proof/") => {
-            let proof_id = path.trim_start_matches("/proof/");
+            let path = path.trim_start_matches("/proof/");
+
+            // /proof/{id}/output エンドポイントの処理
+            if path.ends_with("/output") {
+                let proof_id = path.trim_end_matches("/output");
+                if let Some(status) = proof_manager.get_proof_status(proof_id).await {
+                    if let Some(output) = &status.output {
+                        let response_str = format!(
+                            "HTTP/1.1 200 OK\r\n\
+                             Content-Type: application/json\r\n\
+                             Content-Length: {}\r\n\r\n{}",
+                            serde_json::to_string(&output).unwrap().len(),
+                            serde_json::to_string(&output).unwrap()
+                        );
+                        socket.write_all(response_str.as_bytes()).await.unwrap();
+                        return;
+                    }
+                }
+                let response = json!({
+                    "error": "Proof output not found"
+                });
+                let response_str = format!(
+                    "HTTP/1.1 404 Not Found\r\n\
+                     Content-Type: application/json\r\n\
+                     Content-Length: {}\r\n\r\n{}",
+                    response.to_string().len(),
+                    response
+                );
+                socket.write_all(response_str.as_bytes()).await.unwrap();
+                return;
+            }
+
+            // 通常の /proof/{id} エンドポイントの処理
+            let proof_id = path;
             if let Some(status) = proof_manager.get_proof_status(proof_id).await {
                 let response_str = format!(
                     "HTTP/1.1 200 OK\r\n\

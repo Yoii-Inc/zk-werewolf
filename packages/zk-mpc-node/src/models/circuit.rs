@@ -1,6 +1,7 @@
 use ark_bls12_377::Fr;
 use ark_ff::PrimeField;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
 use mpc_algebra::Reveal;
 use serde::{Deserialize, Serialize};
@@ -97,9 +98,6 @@ impl CircuitFactory {
                     BuiltinCircuit::KeyPublicize(KeyPublicizeCircuit { mpc_input: todo!() })
                 }
             },
-            // CircuitIdentifier::Built(BuiltinCircuit::MySimple(_)) => {
-            //     MySimpleCircuit { a: None, b: None }
-            // }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
         }
     }
@@ -117,6 +115,31 @@ impl CircuitFactory {
                 vec![circuit.a.unwrap().sync_reveal() * circuit.b.unwrap().sync_reveal()]
             }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
+        }
+    }
+
+    pub fn get_circuit_outputs(request: &ProofRequest) -> Vec<u8> {
+        match &request.circuit_type {
+            CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit)) => {
+                let c = circuit.a.unwrap() * circuit.b.unwrap();
+                let mut buffer = Vec::new();
+                CanonicalSerialize::serialize(&c, &mut buffer).unwrap();
+                buffer
+            }
+            CircuitIdentifier::Built(BuiltinCircuit::Divination(circuit)) => {
+                let peculiar = circuit.mpc_input.peculiar.clone().unwrap();
+                let is_target_vec = peculiar.is_target;
+                let is_werewolf_vec = peculiar.is_werewolf;
+
+                let mut sum = MFr::default();
+                for (t, w) in is_target_vec.iter().zip(is_werewolf_vec.iter()) {
+                    sum += t.input * w.input;
+                }
+                let mut buffer = Vec::new();
+                CanonicalSerialize::serialize(&sum, &mut buffer).unwrap();
+                buffer
+            }
+            _ => panic!("Unsupported circuit type for get_circuit_outputs"),
         }
     }
 }

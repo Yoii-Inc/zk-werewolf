@@ -1,5 +1,6 @@
 use crate::models::ProofRequest;
 use crate::models::ProofStatus;
+use crate::ProofOutput;
 use ark_marlin::UniversalSRS;
 use ark_std::test_rng;
 use std::collections::HashMap;
@@ -28,12 +29,12 @@ impl ProofManager {
             proofs: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-
     pub async fn register_proof_request(&self, request: ProofRequest) {
         let status = ProofStatus {
             state: "pending".to_string(),
             proof_id: request.proof_id.clone(),
             message: None,
+            output: None,
         };
         self.proofs
             .write()
@@ -44,11 +45,24 @@ impl ProofManager {
     pub async fn get_proof_status(&self, proof_id: &str) -> Option<ProofStatus> {
         self.proofs.read().await.get(proof_id).cloned()
     }
-
     pub async fn update_proof_status(&self, proof_id: &str, state: &str, message: Option<String>) {
         if let Some(status) = self.proofs.write().await.get_mut(proof_id) {
             status.state = state.to_string();
             status.message = message;
+        }
+    }
+
+    pub async fn update_proof_status_with_output(
+        &self,
+        proof_id: &str,
+        state: &str,
+        message: Option<String>,
+        output: Option<ProofOutput>,
+    ) {
+        if let Some(status) = self.proofs.write().await.get_mut(proof_id) {
+            status.state = state.to_string();
+            status.message = message;
+            status.output = output;
         }
     }
 }

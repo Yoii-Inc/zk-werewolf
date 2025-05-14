@@ -1,10 +1,13 @@
 use crate::crypto::KeyManager;
 use crate::proof::ProofManager;
-use crate::server::ApiClient; // 追加
+use crate::server::ApiClient;
+use crate::{EncryptedShare, ProofOutput, ProofOutputType, UserPublicKey};
+// 追加
 use crate::{models::ProofRequest, CircuitFactory};
 use ark_marlin::IndexProverKey;
 use mpc_algebra::Reveal;
 use mpc_net::multi::MPCNetConnection;
+use std::iter::zip;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use zk_mpc::marlin::{prove_and_verify, LocalMarlin};
@@ -72,24 +75,101 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             LocalMarlin::index(&self.proof_manager.srs, local_circuit).unwrap();
         let mpc_index_pk = IndexProverKey::from_public(index_pk);
 
-        match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit, inputs).await {
-            true => {
-                pm.update_proof_status(
-                    &request.proof_id,
-                    "completed",
-                    Some("Proof generated successfully".to_string()),
-                )
-                .await;
-            }
-            false => {
-                pm.update_proof_status(
-                    &request.proof_id,
-                    "failed",
-                    Some("Proof verification failed".to_string()),
-                )
-                .await;
-            }
+        let (outputs, is_valid) =
+            match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit, inputs).await {
+                true => {
+                    let proof_outputs = CircuitFactory::get_circuit_outputs(&request);
+                    match &request.output_type {
+                        ProofOutputType::Public => {
+                            let proof_output = ProofOutput {
+                                output_type: request.output_type.clone(),
+                                value: Some(proof_outputs),
+                                shares: None,
+                            };
+                            (Some(proof_output), true)
+                        }
+                        ProofOutputType::PrivateToPublic(pubkeys) => {
+                            // TODO: 出力をシェアに分割して暗号化
+                            let shares = self
+                                .split_and_encrypt_output(&proof_outputs, pubkeys)
+                                .await
+                                .unwrap();
+                            let proof_output = ProofOutput {
+                                output_type: request.output_type.clone(),
+                                value: None,
+                                shares: Some(shares),
+                            };
+                            (Some(proof_output), true)
+                        }
+                        ProofOutputType::PrivateToPrivate(pubkey) => {
+                            // TODO: 出力を直接暗号化
+                            let encrypted =
+                                self.encrypt_output(&proof_outputs, pubkey).await.unwrap();
+                            let proof_output = ProofOutput {
+                                output_type: request.output_type.clone(),
+                                value: Some(encrypted),
+                                shares: None,
+                            };
+                            (Some(proof_output), true)
+                        }
+                    }
+                }
+                false => (None, false),
+            };
+
+        if is_valid {
+            pm.update_proof_status_with_output(
+                &request.proof_id,
+                "completed",
+                Some("Proof generated successfully".to_string()),
+                outputs,
+            )
+            .await;
+        } else {
+            pm.update_proof_status(
+                &request.proof_id,
+                "failed",
+                Some("Proof verification failed".to_string()),
+            )
+            .await;
         }
+    }
+
+    async fn split_and_encrypt_output(
+        &self,
+        output: &[u8],
+        pubkeys: &[UserPublicKey],
+    ) -> Result<Vec<EncryptedShare>, Box<dyn std::error::Error>> {
+        // 出力をシェアに分割（実際の分割ロジックは省略）
+        let shares = vec![output.to_vec(); pubkeys.len()]; // TODO: 実際のシェア分割を実装
+        let pubkeys = pubkeys.to_vec();
+
+        // 各シェアを暗号化
+        let mut encrypted_shares = Vec::new();
+        for (share, pubkey) in zip(shares, pubkeys) {
+            let encrypted = self
+                .key_manager
+                .encrypt_share(&share, &pubkey.public_key)
+                .await?;
+            encrypted_shares.push(EncryptedShare {
+                node_id: self.id,
+                user_id: pubkey.user_id,
+                encrypted_data: encrypted,
+            });
+        }
+
+        Ok(encrypted_shares)
+    }
+
+    async fn encrypt_output(
+        &self,
+        output: &[u8],
+        pubkey: &str,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        self.key_manager
+            .encrypt_share(output, pubkey)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
     }
 
     pub async fn get_public_key(&self) -> Result<String, crate::crypto::CryptoError> {

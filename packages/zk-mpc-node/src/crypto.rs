@@ -24,6 +24,21 @@ pub struct NodeKeys {
     secret_key: String, // Base64エンコードされた秘密鍵
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserPublicKey {
+    pub user_id: String,
+    pub public_key: String,
+}
+
+impl UserPublicKey {
+    pub fn new(user_id: String, public_key: String) -> Self {
+        Self {
+            user_id,
+            public_key,
+        }
+    }
+}
+
 pub struct KeyManager {
     keys: Arc<RwLock<Option<NodeKeys>>>,
 }
