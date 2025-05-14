@@ -69,7 +69,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Run integration tests
-        run: ./integration_test_node.zsh
+        run: bash ./integration_test_node.zsh
 
   integration_test_server:
     name: Run Integration Tests of server
@@ -97,4 +97,4 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Run integration tests
-        run: ./integration_test_server.zsh
+        run: bash ./integration_test_server.zsh
