@@ -1,6 +1,6 @@
 use crate::{services::room_service, state::AppState, utils::websocket};
 use axum::{
-    extract::{Path, State, WebSocketUpgrade},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateRoomRequest {
-    name: String,
+    pub name: String,
 }
 
 pub fn routes(state: AppState) -> Router {
@@ -35,8 +35,10 @@ pub fn routes(state: AppState) -> Router {
         .route("/:id/delete", delete(delete_room))
         // WebSocket接続
         // websocat ws://localhost:8080/api/room/ws
-        .route("/ws", get(websocket::handler))
-        // .route("/:id/ready", post(toggle_ready))  // 追加
+        .route("/:id/ws", get(websocket::handler))
+        // ルームの準備完了トグル
+        // curl -X POST http://localhost:8080/api/room/{roomid}/ready/{playerid}
+        .route("/:id/ready/:playerid", post(toggle_ready))
         .with_state(state)
 }
 
@@ -114,6 +116,16 @@ async fn delete_room(
     }
 }
 
+pub async fn toggle_ready(
+    State(state): State<AppState>,
+    Path((room_id, player_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match room_service::toggle_ready(state, &room_id, &player_id).await {
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(e)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,7 +166,7 @@ mod tests {
         let app = routes(state.clone());
 
         // テスト用のルームを作成
-        let room_id = room_service::create_room(state).await;
+        let room_id = room_service::create_room(state, None).await;
 
         let request = Request::builder()
             .method("GET")

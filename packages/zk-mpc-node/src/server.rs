@@ -7,6 +7,10 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+pub mod api_client;
+
+pub use api_client::*;
+
 pub async fn handle_client(
     mut socket: TcpStream,
     proof_manager: Arc<ProofManager>,
@@ -35,12 +39,11 @@ pub async fn handle_client(
                 .to_string();
 
             if let Ok(request) = serde_json::from_str::<ProofRequest>(&body) {
-                let proof_id = proof_manager.create_proof(request.clone()).await;
+                proof_manager.register_proof_request(request.clone()).await;
 
                 let response = json!({
                     "success": true,
                     "message": "Request accepted successfully",
-                    "proof_id": proof_id.clone()
                 });
 
                 let response_str = format!(
@@ -52,22 +55,51 @@ pub async fn handle_client(
                 );
                 socket.write_all(response_str.as_bytes()).await.unwrap();
 
-                Net::simulate(
-                    node.net.clone(),
-                    (proof_id, request),
-                    move |_, (proof_id, request)| {
-                        let node_clone = node.clone();
-                        async move {
-                            node_clone.generate_proof(request, proof_id).await;
-                        }
-                    },
-                )
+                Net::simulate(node.net.clone(), request, move |_, request| {
+                    let node_clone = node.clone();
+                    async move {
+                        node_clone.generate_proof(request).await;
+                    }
+                })
                 .await;
             }
         }
 
         (Some("GET"), Some(path)) if path.starts_with("/proof/") => {
-            let proof_id = path.trim_start_matches("/proof/");
+            let path = path.trim_start_matches("/proof/");
+
+            // /proof/{id}/output エンドポイントの処理
+            if path.ends_with("/output") {
+                let proof_id = path.trim_end_matches("/output");
+                if let Some(status) = proof_manager.get_proof_status(proof_id).await {
+                    if let Some(output) = &status.output {
+                        let response_str = format!(
+                            "HTTP/1.1 200 OK\r\n\
+                             Content-Type: application/json\r\n\
+                             Content-Length: {}\r\n\r\n{}",
+                            serde_json::to_string(&output).unwrap().len(),
+                            serde_json::to_string(&output).unwrap()
+                        );
+                        socket.write_all(response_str.as_bytes()).await.unwrap();
+                        return;
+                    }
+                }
+                let response = json!({
+                    "error": "Proof output not found"
+                });
+                let response_str = format!(
+                    "HTTP/1.1 404 Not Found\r\n\
+                     Content-Type: application/json\r\n\
+                     Content-Length: {}\r\n\r\n{}",
+                    response.to_string().len(),
+                    response
+                );
+                socket.write_all(response_str.as_bytes()).await.unwrap();
+                return;
+            }
+
+            // 通常の /proof/{id} エンドポイントの処理
+            let proof_id = path;
             if let Some(status) = proof_manager.get_proof_status(proof_id).await {
                 let response_str = format!(
                     "HTTP/1.1 200 OK\r\n\

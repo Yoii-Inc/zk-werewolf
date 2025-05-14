@@ -1,19 +1,19 @@
+use crate::models::game::{ChangeRoleRequest, GameResult, NightActionRequest};
 use crate::models::role::Role;
+use crate::{
+    models::chat::{ChatMessage, ChatMessageType},
+    services::game_service,
+    state::AppState,
+};
+use axum::response::IntoResponse;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-use crate::state::AppState;
-use crate::{
-    models::game::{ChangeRoleRequest, GameResult, NightActionRequest},
-    services::game_service,
-};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VoteAction {
@@ -42,7 +42,8 @@ pub fn routes(state: AppState) -> Router {
                 .route("/debug/change-role", post(change_player_role))
                 // ゲーム進行の管理
                 .route("/phase/next", post(advance_phase_handler))
-                .route("/check-winner", get(check_winner_handler)),
+                .route("/check-winner", get(check_winner_handler))
+                .route("/messages/:player_id", get(get_messages)),
         )
         .with_state(state)
 }
@@ -151,6 +152,12 @@ pub async fn change_player_role(
             };
 
             player.role = new_role;
+
+            game.chat_log.add_system_message(format!(
+                "{}の役職が{}に変更されました",
+                player.name, payload.new_role
+            ));
+
             (
                 StatusCode::OK,
                 Json(json!({
@@ -176,11 +183,57 @@ pub async fn change_player_role(
     }
 }
 
+pub async fn get_messages(
+    State(state): State<AppState>,
+    Path((room_id, player_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let (rooms, games) = tokio::join!(state.rooms.lock(), state.games.lock());
+
+    // playerを取得
+    let player = if let Some(room) = rooms.get(&room_id) {
+        room.players.iter().find(|p| p.id == player_id)
+    } else if let Some(game) = games.get(&room_id) {
+        game.players.iter().find(|p| p.id == player_id)
+    } else {
+        None
+    };
+
+    if player.is_none() {
+        return (StatusCode::NOT_FOUND, Json(Vec::<ChatMessage>::new()));
+    }
+
+    // ゲームが存在する場合はゲームのチャットログを返す
+    if let Some(game) = games.get(&room_id) {
+        let filtered_messages = game
+            .chat_log
+            .messages
+            .iter()
+            .filter(|msg| match msg.message_type {
+                ChatMessageType::Wolf => player.unwrap().role == Some(Role::Werewolf),
+                ChatMessageType::Private => msg.player_id == player_id,
+                _ => true,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        return (StatusCode::OK, Json(filtered_messages));
+    }
+
+    // ゲームが存在しない場合はルームのチャットログを返す
+    if let Some(room) = rooms.get(&room_id) {
+        return (StatusCode::OK, Json(room.chat_log.messages.clone()));
+    }
+
+    // どちらも存在しない場合は404を返す
+    (StatusCode::NOT_FOUND, Json(Vec::<ChatMessage>::new()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::utils::test_setup::setup_test_env;
     use axum::{body::Body, http::Request};
+    use chrono::format;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -188,7 +241,17 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone()).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+
+        for i in 0..4 {
+            crate::services::room_service::join_room(
+                state.clone(),
+                &room_id.to_string(),
+                &format!("test_id_{}", i),
+                &format!("test_player_{}", i),
+            )
+            .await;
+        }
 
         let request = Request::builder()
             .method("POST")
@@ -205,7 +268,17 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone()).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+
+        for i in 0..4 {
+            crate::services::room_service::join_room(
+                state.clone(),
+                &room_id.to_string(),
+                &format!("test_id_{}", i),
+                &format!("test_player_{}", i),
+            )
+            .await;
+        }
 
         game_service::start_game(state.clone(), &room_id.to_string())
             .await

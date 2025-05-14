@@ -90,6 +90,36 @@ pub async fn delete_room(state: AppState, room_id: &str) -> bool {
     rooms.remove(room_id).is_some()
 }
 
+pub async fn toggle_ready(
+    state: AppState,
+    room_id: &str,
+    player_id: &str,
+) -> Result<String, String> {
+    let mut rooms = state.rooms.lock().await;
+
+    if let Some(room) = rooms.get_mut(room_id) {
+        // プレイヤーの存在確認
+        if let Some(player) = room.players.iter_mut().find(|p| p.id == player_id) {
+            // ready状態を切り替え
+            player.is_ready = !player.is_ready;
+
+            // 全員の準備が完了しているかチェック
+            let all_ready = room.players.len() >= 4 && room.players.iter().all(|p| p.is_ready);
+
+            if all_ready {
+                room.status = RoomStatus::Ready;
+                Ok("全員の準備が完了しました。".to_string())
+            } else {
+                Ok("準備状態を切り替えました。".to_string())
+            }
+        } else {
+            Err("プレイヤーが見つかりません。".to_string())
+        }
+    } else {
+        Err("ルームが見つかりません。".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

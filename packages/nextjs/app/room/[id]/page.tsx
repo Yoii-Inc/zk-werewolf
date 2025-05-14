@@ -95,7 +95,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const connectWebSocket = () => {
     setWebsocketStatus("connecting");
-    const ws = new WebSocket("ws://localhost:8080/api/room/ws");
+    const ws = new WebSocket(`ws://localhost:8080/api/room/${params.id}/ws`);
 
     ws.onopen = () => {
       console.log("WebSocket接続が確立されました");
