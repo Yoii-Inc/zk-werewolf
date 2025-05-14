@@ -55,7 +55,4 @@ cargo test --test "*" -- --nocapture --test-threads=1
 # 個別に実行する場合
 # cargo test --test zk_proof_test -- --nocapture --test-threads=1 --test integration_test_node_0
 
-# 全プロセスの終了
-kill $SERVER_PID $NODE0_PID $NODE1_PID $NODE2_PID
-
 echo "Integration tests(server) completed"

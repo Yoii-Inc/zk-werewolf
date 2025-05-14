@@ -50,7 +50,4 @@ done
 # インテグレーションテストの実行
 cargo test --test integration_test -- --nocapture --test-threads=1
 
-# 全プロセスの終了
-kill $SERVER_PID $NODE0_PID $NODE1_PID $NODE2_PID
-
 echo "Integration tests(zk-mpc-node) completed"
