@@ -4,16 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace" }
-ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
-ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
-ark-marlin = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-marlin", version = "0.3.0", default-features = false, features = [ "std" ] }
-ark-serialize = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-serialize", version = "0.3.0", default-features = false }
-ark-poly-commit = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-poly-commit", version = "0.3.0" }
-ark-relations = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-relations", version = "0.3.0" }
-ark-ff = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "ark-ff", version = "0.3.0" }
-mpc-algebra = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "mpc-algebra", version = "0.1.0" }
-mpc-net = { git = "https://github.com/Yoii-Inc/zk-mpc.git", branch = "chore/introduce-workspace", package = "mpc-net", version = "0.1.0" }
+zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git" }
+ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
+ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
+ark-marlin = { git = "https://github.com/Yoii-Inc/zk-mpc.git",  package = "ark-marlin", version = "0.3.0", default-features = false, features = [ "std" ] }
+ark-serialize = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-serialize", version = "0.3.0", default-features = false }
+ark-poly-commit = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-poly-commit", version = "0.3.0" }
+ark-relations = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-relations", version = "0.3.0" }
+ark-ff = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ff", version = "0.3.0" }
+mpc-algebra = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "mpc-algebra", version = "0.1.0" }
+mpc-net = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "mpc-net", version = "0.1.0" }
 
 structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
