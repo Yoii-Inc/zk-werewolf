@@ -46,6 +46,10 @@ jobs:
   integration_test_zk_mpc_node:
     name: Run Integration Tests of zk-mpc-node
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,6 +78,10 @@ jobs:
   integration_test_server:
     name: Run Integration Tests of server
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
