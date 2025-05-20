@@ -296,7 +296,6 @@ pub async fn handle_vote(
 
         let anonymous_voting_circuit = zk_mpc::circuits::AnonymousVotingCircuit::<MFr> {
             is_target_id: todo!(),
-            is_most_voted_id: todo!(),
             pedersen_param: todo!(),
             player_randomness: todo!(),
             player_commitment: todo!(),
