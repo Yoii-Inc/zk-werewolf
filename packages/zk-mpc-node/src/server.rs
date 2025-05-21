@@ -11,12 +11,14 @@ pub mod api_client;
 
 pub use api_client::*;
 
+const BUFFER_SIZE: usize = 65536; // 64KB
+
 pub async fn handle_client(
     mut socket: TcpStream,
     proof_manager: Arc<ProofManager>,
     node: Arc<Node<TcpStream>>,
 ) {
-    let mut buffer = vec![0; 1024];
+    let mut buffer = vec![0; BUFFER_SIZE];
     let mut headers = [httparse::EMPTY_HEADER; 16];
     let mut req = httparse::Request::new(&mut headers);
 
@@ -62,6 +64,19 @@ pub async fn handle_client(
                     }
                 })
                 .await;
+            } else {
+                println!("Failed to parse request body");
+                let response = json!({
+                    "error": "failed to parse request body"
+                });
+                let response_str = format!(
+                    "HTTP/1.1 400 Bad Request\r\n\
+                 Content-Type: application/json\r\n\
+                 Content-Length: {}\r\n\r\n{}",
+                    response.to_string().len(),
+                    response
+                );
+                socket.write_all(response_str.as_bytes()).await.unwrap();
             }
         }
 

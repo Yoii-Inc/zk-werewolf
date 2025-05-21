@@ -1,5 +1,11 @@
 use ark_bls12_377::Fr;
+use ark_ff::BigInteger;
+use ark_ff::PrimeField;
+use ark_ff::UniformRand;
+use ark_std::test_rng;
 use ed25519_dalek::Keypair;
+use mpc_algebra::CommitmentScheme;
+use mpc_algebra::FromLocal;
 use mpc_algebra::Reveal;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -9,6 +15,7 @@ use std::process::{Child, Command};
 use std::time::Duration;
 use tokio::time::sleep;
 use zk_mpc::circuits::circuit::MySimpleCircuit;
+use zk_mpc::circuits::{AnonymousVotingCircuit, LocalOrMPC};
 use zk_mpc::marlin::MFr;
 use zk_mpc_node::{
     BuiltinCircuit, CircuitIdentifier, ProofOutput, ProofOutputType, ProofRequest, UserPublicKey,
@@ -52,7 +59,7 @@ impl Drop for TestNodes {
 
 #[tokio::test]
 #[serial]
-async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_mpc_node_proof_generation_simple() -> Result<(), Box<dyn std::error::Error>> {
     // let _nodes = TestNodes::start(3).await?;
     let client = reqwest::Client::new();
 
@@ -91,6 +98,157 @@ async fn test_mpc_node_proof_generation() -> Result<(), Box<dyn std::error::Erro
     // Wait briefly before checking the results
     println!("Waiting for proofs to be generated...");
     tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Verify the results for each port
+    for port in [9000, 9001, 9002] {
+        let mut attempts = 0;
+        let max_attempts = 30;
+
+        loop {
+            println!("Sending status request to port {}", port);
+            let status = client
+                .get(format!(
+                    "http://localhost:{}/proof/{}",
+                    port, "test_proof_id",
+                ))
+                .send()
+                .await?
+                .json::<ProofStatus>()
+                .await?;
+
+            println!("Proof Status from port {}: {:?}", port, status);
+
+            if status.state == "completed" {
+                println!("Proof generation completed successfully on port {}", port);
+                break;
+            }
+
+            if status.state == "failed" {
+                panic!(
+                    "Proof generation failed on port {}: {:?}",
+                    port, status.message
+                );
+            }
+
+            attempts += 1;
+            if attempts >= max_attempts {
+                panic!("Timeout waiting for proof generation on port {}", port);
+            }
+
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_mpc_node_proof_generation_voting() -> Result<(), Box<dyn std::error::Error>> {
+    // let _nodes = TestNodes::start(3).await?;
+    let client = reqwest::Client::new();
+
+    let rng = &mut test_rng();
+    let pedersen_param = <Fr as LocalOrMPC<Fr>>::PedersenComScheme::setup(rng).unwrap();
+
+    let mpc_pedersen_param = <MFr as LocalOrMPC<MFr>>::PedersenParam::from_local(&pedersen_param);
+
+    let player_randomness = (0..3).map(|_| Fr::rand(rng)).collect::<Vec<_>>();
+    // let player_commitment = load_random_commitment()?;
+    let player_commitment = player_randomness
+        .iter()
+        .map(|x| {
+            <Fr as LocalOrMPC<Fr>>::PedersenComScheme::commit(
+                &pedersen_param,
+                &x.into_repr().to_bytes_le(),
+                &<Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    let mpc_player_commitment = player_commitment
+        .iter()
+        .map(|x| <MFr as LocalOrMPC<MFr>>::PedersenCommitment::from_public(*x))
+        .collect::<Vec<_>>();
+
+    let votes_data = vec![
+        vec![
+            MFr::from_public(Fr::from(0)),
+            MFr::from_public(Fr::from(1)),
+            MFr::from_public(Fr::from(0)),
+        ],
+        vec![
+            MFr::from_public(Fr::from(0)),
+            MFr::from_public(Fr::from(1)),
+            MFr::from_public(Fr::from(0)),
+        ],
+        vec![
+            MFr::from_public(Fr::from(0)),
+            MFr::from_public(Fr::from(0)),
+            MFr::from_public(Fr::from(1)),
+        ],
+    ];
+
+    // 投票に関する入力データ
+    let circuit = AnonymousVotingCircuit {
+        is_target_id: votes_data, // 投票対象のID
+        // is_most_voted_id: MFr::from_public(Fr::from(1)), // 最多得票者のID
+        pedersen_param: mpc_pedersen_param, // テスト用にNoneを設定
+        player_randomness: player_randomness
+            .iter()
+            .map(|x| MFr::from_public(*x))
+            .collect::<Vec<_>>(),
+        player_commitment: mpc_player_commitment,
+    };
+
+    // シリアライズ
+    let serialized =
+        serde_json::to_vec(&circuit).map_err(|e| format!("シリアライズに失敗: {}", e))?;
+    println!(
+        "シリアライズされたデータのサイズ: {} bytes",
+        serialized.len()
+    );
+
+    // デシリアライズして検証
+    let deserialized: AnonymousVotingCircuit<MFr> =
+        serde_json::from_slice(&serialized).map_err(|e| format!("デシリアライズに失敗: {}", e))?;
+
+    // シリアライズ前後でデータが一致することを確認
+    assert_eq!(
+        circuit.is_target_id, deserialized.is_target_id,
+        "is_target_idのシリアライズ/デシリアライズ結果が一致しません"
+    );
+
+    // Send requests to the three ports
+    let requests = [9000, 9001, 9002].map(|port| {
+        let client = client.clone();
+        let circuit = circuit.clone();
+        async move {
+            let response = client
+                .post(format!("http://localhost:{}", port))
+                .json(&ProofRequest {
+                    proof_id: "test_proof_id".to_string(),
+                    circuit_type: CircuitIdentifier::Built(BuiltinCircuit::AnonymousVoting(
+                        circuit.clone(),
+                    )),
+                    output_type: ProofOutputType::Public,
+                })
+                .send()
+                .await?;
+
+            let response_body: serde_json::Value = response.json().await?;
+            println!("Response from port {}: {:?}", port, response_body);
+
+            Ok::<_, Box<dyn std::error::Error>>((port, response_body))
+        }
+    });
+
+    let responses = futures::future::join_all(requests).await;
+
+    // Wait briefly before checking the results
+    println!("Waiting for proofs to be generated...");
+    tokio::time::sleep(Duration::from_secs(90)).await;
 
     // Verify the results for each port
     for port in [9000, 9001, 9002] {
