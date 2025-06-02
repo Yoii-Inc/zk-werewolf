@@ -1,0 +1,16 @@
+[package]
+name = "mpc-algebra-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-bindgen = "0.2.100"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+rand = "0.8"
+getrandom = { version = "0.2", features = ["js"] }
+sodiumoxide = "0.2"
+base64 = "0.13"
+
+[lib]
+crate-type = ["cdylib"]
