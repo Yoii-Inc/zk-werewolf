@@ -6,12 +6,8 @@ use zk_mpc_node::{
     models::{CircuitIdentifier, ProofOutput, ProofOutputType, ProofRequest, ProofResponse},
     ProofStatus,
 };
+use crate::utils::config::CONFIG;
 
-const ZK_MPC_NODE_URL: [&str; 3] = [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002",
-];
 const MAX_RETRY_ATTEMPTS: u32 = 30;
 const RETRY_DELAY_SECS: u64 = 1;
 
@@ -35,9 +31,9 @@ pub async fn request_proof_with_output(
 
     let mut responses = Vec::new();
 
-    for port in ZK_MPC_NODE_URL {
+    for url in CONFIG.zk_mpc_node_urls() {
         let response = client
-            .post(port)
+            .post(url)
             .json(&payload)
             .send()
             .await
@@ -65,7 +61,7 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
         let mut last_completed_status: Option<ProofStatus> = None;
 
         // 全ノードのステータスをチェック
-        for node_url in ZK_MPC_NODE_URL.iter() {
+        for node_url in CONFIG.zk_mpc_node_urls() {
             let response = client
                 .get(format!("{}/proof/{}", node_url, proof_id))
                 .send()
@@ -85,7 +81,7 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
         }
 
         // 全ノードが完了していたら成功
-        if completed_count == ZK_MPC_NODE_URL.len() {
+        if completed_count == CONFIG.zk_mpc_node_urls().len() {
             return Ok((true, last_completed_status.and_then(|s| s.output)));
         }
 
