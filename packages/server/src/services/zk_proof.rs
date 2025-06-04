@@ -22,11 +22,6 @@ use crate::{
     state::AppState,
 };
 
-const ZK_MPC_NODE_URL: [&str; 3] = [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002",
-];
 const MAX_RETRY_ATTEMPTS: u32 = 30;
 const RETRY_DELAY_SECS: u64 = 1;
 
