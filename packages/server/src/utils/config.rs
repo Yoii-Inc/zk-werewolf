@@ -25,11 +25,11 @@ impl Config {
         }
     }
 
-    pub fn zk_mpc_node_urls(&self) -> Vec<&str> {
+    pub fn zk_mpc_node_urls(&self) -> Vec<String> {
         vec![
-            &self.zk_mpc_node_1,
-            &self.zk_mpc_node_2,
-            &self.zk_mpc_node_3,
+            self.zk_mpc_node_1.clone(),
+            self.zk_mpc_node_2.clone(),
+            self.zk_mpc_node_3.clone(),
         ]
     }
 }
