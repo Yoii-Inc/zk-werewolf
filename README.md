@@ -189,7 +189,15 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users (email);
    RPC_URL=your-ethereum-rpc-url  # テストネット/メインネットのRPC URL
    ```
 
-4. **Debug Settings**
+4. **zk-mpc-node URLs**
+
+   ```bash
+   ZK_MPC_NODE_1=http://localhost:9000  # MPCノード1のURL
+   ZK_MPC_NODE_2=http://localhost:9001  # MPCノード2のURL
+   ZK_MPC_NODE_3=http://localhost:9002  # MPCノード3のURL
+   ```
+
+5. **Debug Settings**
    ```bash
    DEBUG_MODE=false
    DEBUG_VERBOSE_LOGGING=false
@@ -198,8 +206,6 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users (email);
    DEBUG_PHASE_DURATION_SECONDS=30
    DEBUG_RANDOM_ROLE=false
    DEBUG_CREATE_CRYPTO_PARAMETERS=false
-   DEBUG_CREATE_PROOF=false
-   DEBUG_DELEGATE_PROOF=false
    ```
 
 ### Setting Up Secrets and Variables
