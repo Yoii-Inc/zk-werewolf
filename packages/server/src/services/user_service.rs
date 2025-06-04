@@ -1,8 +1,8 @@
 use chrono::Utc;
 use reqwest::Client;
 use serde_json::json;
-use std::env;
 
+use crate::utils::config::CONFIG;
 use crate::models::user::{
     AuthResponse, LoginUserRequest, RegisterUserRequest, User, UserResponse,
 };
@@ -31,8 +31,8 @@ pub enum UserServiceError {
 
 impl UserService {
     pub fn new() -> Self {
-        let supabase_url = env::var("SUPABASE_URL").expect("SUPABASE_URL must be set");
-        let supabase_key = env::var("SUPABASE_KEY").expect("SUPABASE_KEY must be set");
+        let supabase_url = CONFIG.supabase_url.clone();
+        let supabase_key = CONFIG.supabase_key.clone();
         let client = Client::new();
 
         Self {

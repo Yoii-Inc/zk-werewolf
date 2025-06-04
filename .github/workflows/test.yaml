@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    paths:
+      - "packages/**"
 
 jobs:
   test:
@@ -49,6 +51,9 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      ZK_MPC_NODE_1: http://localhost:9000
+      ZK_MPC_NODE_2: http://localhost:9001
+      ZK_MPC_NODE_3: http://localhost:9002
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
     steps:
       - name: Checkout code
