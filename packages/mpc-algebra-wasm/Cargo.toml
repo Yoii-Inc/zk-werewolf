@@ -16,12 +16,12 @@ nalgebra = { version = "0.33.0", features = ["serde-serialize"] }
 console_error_panic_hook = "0.1"
 anyhow = "1.0"
 
-ark-ff = { path = "../../../zk-mpc/arkworks/algebra/ff", version = "0.3.0" }
-ark-std = { path = "../../../zk-mpc/arkworks/std", version = "0.3.0", features = ["std", "print-trace"] }
-ark-crypto-primitives = { path = "../../../zk-mpc/arkworks/crypto-primitives", version = "0.3.0" }
+ark-ff = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ff", version = "0.3.0" }
+ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
+ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0" }
 
-ark-bls12-377 = { path = "../../../zk-mpc/arkworks/curves/bls12_377", version = "0.3.0", features = ["r1cs", "curve"] }
-ark-ed-on-bls12-377 = { path = "../../../zk-mpc/arkworks/curves/ed_on_bls12_377", version = "0.3.0", features = ["r1cs"] }
+ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
+ark-ed-on-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ed-on-bls12-377", version = "0.3.0", features = ["r1cs"] }
 
 [lib]
 crate-type = ["cdylib"]
