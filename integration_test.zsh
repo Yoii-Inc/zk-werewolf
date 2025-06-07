@@ -24,6 +24,8 @@ run_crypto_tests() {
     # Create test data directory
     mkdir -p test-data
 
+    yarn install
+
     # Run crypto tests
     cd ./packages/zk-mpc-node
     cargo test --test crypto_integration_test -- --nocapture

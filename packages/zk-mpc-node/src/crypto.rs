@@ -77,6 +77,8 @@ impl KeyManager {
         // NodeKeysをjsonにシリアライズしてファイルに保存する
         let keys_json = serde_json::to_string(&keys).expect("Failed to serialize keys");
         let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        // ディレクトリが存在しない場合は作成
+        std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
         let file_path = format!("{}/node_keys_{}.json", data_dir, id);
         std::fs::write(file_path, keys_json).expect("Failed to write keys to file");
     }
