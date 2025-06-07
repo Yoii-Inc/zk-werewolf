@@ -1,9 +1,10 @@
 use ark_bls12_377::Fr;
-use ark_ff::PrimeField;
+use ark_ff::{BigInteger, PrimeField};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
-use mpc_algebra::Reveal;
+use mpc_algebra::CommitmentScheme;
+use mpc_algebra::{crh::pedersen, Reveal, ToLocal};
 use serde::{Deserialize, Serialize};
 use zk_mpc::{
     circuits::{
@@ -63,12 +64,23 @@ impl CircuitFactory {
                     })
                 }
                 BuiltinCircuit::AnonymousVoting(ref c) => {
+                    let pedersen_param = c.pedersen_param.to_local();
                     BuiltinCircuit::AnonymousVoting(AnonymousVotingCircuit {
-                        is_target_id: todo!(),
-                        is_most_voted_id: todo!(),
-                        pedersen_param: todo!(),
-                        player_randomness: todo!(),
-                        player_commitment: todo!(),
+                        is_target_id: vec![
+                            vec![Fr::default(); c.is_target_id[0].len()];
+                            c.is_target_id.len()
+                        ],
+                        pedersen_param: pedersen_param.clone(),
+                        player_randomness: vec![Fr::default(); c.player_randomness.len()],
+                        player_commitment: vec![
+                            <Fr as LocalOrMPC<Fr>>::PedersenComScheme::commit(
+                                &pedersen_param,
+                                &Fr::default().into_repr().to_bytes_le(),
+                                &<Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
+                            )
+                            .unwrap();
+                            c.player_commitment.len()
+                        ],
                     })
                 }
                 BuiltinCircuit::WinningJudge(ref c) => {
@@ -114,6 +126,21 @@ impl CircuitFactory {
             CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit)) => {
                 vec![circuit.a.unwrap().sync_reveal() * circuit.b.unwrap().sync_reveal()]
             }
+            CircuitIdentifier::Built(BuiltinCircuit::AnonymousVoting(circuit)) => {
+                let mut inputs = circuit
+                    .player_commitment
+                    .iter()
+                    .flat_map(|c| {
+                        let d = c.to_local();
+                        vec![d.x, d.y]
+                    })
+                    .collect::<Vec<_>>();
+
+                let most_voted_id = circuit.calculate_output();
+
+                inputs.push(most_voted_id.sync_reveal());
+                inputs
+            }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
         }
     }
@@ -137,6 +164,50 @@ impl CircuitFactory {
                 }
                 let mut buffer = Vec::new();
                 CanonicalSerialize::serialize(&sum, &mut buffer).unwrap();
+                buffer
+            }
+            CircuitIdentifier::Built(BuiltinCircuit::AnonymousVoting(circuit)) => {
+                let most_voted_id = circuit.calculate_output().sync_reveal();
+
+                let mut buffer = Vec::new();
+                CanonicalSerialize::serialize(&most_voted_id, &mut buffer).unwrap();
+                buffer
+            }
+            CircuitIdentifier::Built(BuiltinCircuit::WinningJudge(circuit)) => {
+                // let player_commitment = circuit.player_commitment.clone();
+                // let player_randomness = circuit.player_randomness.clone();
+                // let pedersen_param = circuit.pedersen_param.clone();
+                // let num_alive = circuit.num_alive;
+                // let am_werewolf = circuit.am_werewolf;
+                // let game_state = circuit.game_state.clone();
+
+                let game_state = circuit.game_state.clone();
+                let mut buffer = Vec::new();
+                // CanonicalSerialize::serialize(&player_commitment, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&player_randomness, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&pedersen_param, &mut buffer).unwrap();
+                buffer
+            }
+            CircuitIdentifier::Built(BuiltinCircuit::RoleAssignment(circuit)) => {
+                let num_players = circuit.num_players;
+                let max_group_size = circuit.max_group_size;
+                let pedersen_param = circuit.pedersen_param.clone();
+                let tau_matrix = circuit.tau_matrix.clone();
+                let role_commitment = circuit.role_commitment.clone();
+                let player_commitment = circuit.player_commitment.clone();
+                let shuffle_matrices = circuit.shuffle_matrices.clone();
+                let randomness = circuit.randomness.clone();
+                let player_randomness = circuit.player_randomness.clone();
+                let mut buffer = Vec::new();
+                // CanonicalSerialize::serialize(&num_players, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&max_group_size, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&pedersen_param, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&tau_matrix, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&role_commitment, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&player_commitment, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&shuffle_matrices, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&randomness, &mut buffer).unwrap();
+                // CanonicalSerialize::serialize(&player_randomness, &mut buffer).unwrap();
                 buffer
             }
             _ => panic!("Unsupported circuit type for get_circuit_outputs"),
