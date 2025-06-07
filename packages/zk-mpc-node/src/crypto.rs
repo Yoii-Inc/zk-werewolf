@@ -1,5 +1,8 @@
-use sodiumoxide::crypto::box_;
-use base64::{encode, decode};
+use base64::{decode, encode};
+use crypto_box::{
+    aead::{Aead, AeadCore, OsRng},
+    PublicKey, SalsaBox, SecretKey,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -45,20 +48,18 @@ pub struct KeyManager {
 
 impl KeyManager {
     pub fn new() -> Self {
-        // sodiumoxideを初期化
-        sodiumoxide::init().expect("Failed to initialize sodiumoxide");
-        
         Self {
             keys: Arc::new(RwLock::new(None)),
         }
     }
 
     pub async fn generate_keypair(&self) -> Result<NodeKeys, CryptoError> {
-        let (public_key, secret_key) = box_::gen_keypair();
+        let secret_key = SecretKey::generate(&mut OsRng);
+        let public_key = PublicKey::from(&secret_key);
 
         let keys = NodeKeys {
-            public_key: encode(public_key.as_ref()),
-            secret_key: encode(secret_key.as_ref()),
+            public_key: encode(public_key.to_bytes()),
+            secret_key: encode(secret_key.to_bytes()),
         };
 
         *self.keys.write().await = Some(keys.clone());
@@ -85,29 +86,26 @@ impl KeyManager {
         // 秘密鍵とBase64デコード
         let secret_key_bytes = decode(&node_keys.secret_key)
             .map_err(|e| CryptoError::EncryptionError(e.to_string()))?;
-        let secret_key = box_::SecretKey::from_slice(&secret_key_bytes)
-            .ok_or_else(|| CryptoError::EncryptionError("Invalid secret key".to_string()))?;
+        let secret_key = SecretKey::from_slice(&secret_key_bytes)
+            .map_err(|_| CryptoError::EncryptionError("Invalid secret key".to_string()))?;
 
         // 受信者の公開鍵をBase64デコード
         let recipient_key_bytes = decode(recipient_public_key)
             .map_err(|e| CryptoError::EncryptionError(e.to_string()))?;
-        let recipient_key = box_::PublicKey::from_slice(&recipient_key_bytes)
-            .ok_or_else(|| CryptoError::EncryptionError("Invalid recipient public key".to_string()))?;
+        let recipient_key = PublicKey::from_slice(&recipient_key_bytes).map_err(|_| {
+            CryptoError::EncryptionError("Invalid recipient public key".to_string())
+        })?;
 
-        // ノンスを生成
-        let nonce = box_::gen_nonce();
-        
         // 暗号化
-        let encrypted = box_::seal(
-            share,
-            &nonce,
-            &recipient_key,
-            &secret_key,
-        );
+        let salsa_box = SalsaBox::new(&recipient_key, &secret_key);
+        let nonce = SalsaBox::generate_nonce(&mut OsRng);
+        let encrypted = salsa_box
+            .encrypt(&nonce, share)
+            .map_err(|e| CryptoError::EncryptionError(e.to_string()))?;
 
-        // ノンスと暗号文を結合して返す
+        // ノンスと暗号文を結合
         let mut result = Vec::new();
-        result.extend_from_slice(nonce.as_ref());
+        result.extend_from_slice(&nonce);
         result.extend_from_slice(&encrypted);
         Ok(result)
     }
@@ -119,27 +117,30 @@ impl KeyManager {
         // 秘密鍵をBase64デコード
         let secret_key_bytes = decode(&node_keys.secret_key)
             .map_err(|e| CryptoError::DecryptionError(e.to_string()))?;
-        let secret_key = box_::SecretKey::from_slice(&secret_key_bytes)
-            .ok_or_else(|| CryptoError::DecryptionError("Invalid secret key".to_string()))?;
+        let secret_key = SecretKey::from_slice(&secret_key_bytes)
+            .map_err(|_| CryptoError::DecryptionError("Invalid secret key".to_string()))?;
 
-        // ノンスと暗号文を分離
-        if encrypted_share.len() < box_::NONCEBYTES {
-            return Err(CryptoError::DecryptionError("Invalid encrypted data length".to_string()));
+        // 公開鍵をBase64デコード
+        let public_key_bytes = decode(&node_keys.public_key)
+            .map_err(|e| CryptoError::DecryptionError(e.to_string()))?;
+        let public_key = PublicKey::from_slice(&public_key_bytes)
+            .map_err(|_| CryptoError::DecryptionError("Invalid public key".to_string()))?;
+
+        if encrypted_share.len() < 24 {
+            return Err(CryptoError::DecryptionError(
+                "Invalid encrypted data length".to_string(),
+            ));
         }
 
-        let (nonce_bytes, cipher_text) = encrypted_share.split_at(box_::NONCEBYTES);
-        let nonce = box_::Nonce::from_slice(nonce_bytes)
-            .ok_or_else(|| CryptoError::DecryptionError("Invalid nonce".to_string()))?;
+        // ノンスと暗号文を分離
+        let (nonce_bytes, cipher_text) = encrypted_share.split_at(24);
+        let nonce = *crypto_box::Nonce::from_slice(nonce_bytes);
 
-        // 復号
-        box_::open(
-            cipher_text,
-            &nonce,
-            &box_::PublicKey::from_slice(&decode(&node_keys.public_key).map_err(|e| CryptoError::DecryptionError(e.to_string()))?)
-                .ok_or_else(|| CryptoError::DecryptionError("Invalid public key".to_string()))?,
-            &secret_key,
-        )
-        .map_err(|_| CryptoError::DecryptionError("Decryption failed".to_string()))
+        // 復号化
+        let salsa_box = SalsaBox::new(&public_key, &secret_key);
+        salsa_box
+            .decrypt(&nonce, cipher_text)
+            .map_err(|e| CryptoError::DecryptionError(e.to_string()))
     }
 }
 
