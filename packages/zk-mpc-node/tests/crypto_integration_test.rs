@@ -1,7 +1,10 @@
 use base64;
+use crypto_box::{
+    aead::{Aead, AeadCore, OsRng},
+    PublicKey, SalsaBox, SecretKey,
+};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use sodiumoxide::crypto::box_;
 use std::fs;
 use std::path::PathBuf;
 
@@ -23,14 +26,12 @@ struct EncryptedTestData {
 
 #[tokio::test]
 async fn test_decrypt_frontend_data() -> anyhow::Result<()> {
-    // Initialize sodiumoxide
-    sodiumoxide::init().map_err(|_| anyhow::anyhow!("Failed to initialize sodiumoxide"))?;
-
     // Generate keypair
-    let (public_key, secret_key) = box_::gen_keypair();
+    let secret_key = SecretKey::generate(&mut OsRng);
+    let public_key = PublicKey::from(&secret_key);
 
     // Encode public key to Base64
-    let public_key_base64 = base64::encode(public_key.as_ref());
+    let public_key_base64 = base64::encode(public_key.to_bytes());
 
     // Save public key to file (for frontend test)
     let key_data = serde_json::json!({
@@ -88,12 +89,14 @@ async fn test_decrypt_frontend_data() -> anyhow::Result<()> {
     let nonce_bytes = base64::decode(&encrypted_data.nonce)?;
     let sender_public_key_bytes = base64::decode(&encrypted_data.sender_public_key)?;
 
-    let nonce =
-        box_::Nonce::from_slice(&nonce_bytes).ok_or_else(|| anyhow::anyhow!("Invalid nonce"))?;
-    let sender_public_key = box_::PublicKey::from_slice(&sender_public_key_bytes)
-        .ok_or_else(|| anyhow::anyhow!("Invalid public key"))?;
+    let nonce = *crypto_box::Nonce::from_slice(&nonce_bytes);
+    let sender_public_key = PublicKey::from_slice(&sender_public_key_bytes)
+        .map_err(|_| anyhow::anyhow!("Invalid public key"))?;
 
-    let decrypted = box_::open(&encrypted_bytes, &nonce, &sender_public_key, &secret_key)
+    // 復号化処理
+    let salsa_box = SalsaBox::new(&sender_public_key, &secret_key);
+    let decrypted = salsa_box
+        .decrypt(&nonce, encrypted_bytes.as_slice())
         .map_err(|_| anyhow::anyhow!("Decryption failed"))?;
 
     // Parse decrypted data as JSON
