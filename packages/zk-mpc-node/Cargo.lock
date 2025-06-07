@@ -1633,6 +1633,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mpc-circuits"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-ff",
+ "mpc-algebra",
+ "nalgebra",
+ "serde",
+ "zk-mpc",
+]
+
+[[package]]
 name = "mpc-net"
 version = "0.1.0"
 source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
@@ -1669,6 +1681,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "num-traits",
+ "serde",
  "simba",
  "typenum",
 ]
@@ -1719,6 +1732,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -3438,6 +3452,7 @@ dependencies = [
  "futures",
  "httparse",
  "mpc-algebra",
+ "mpc-circuits",
  "mpc-net",
  "rand 0.7.3",
  "reqwest",
