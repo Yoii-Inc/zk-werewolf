@@ -46,7 +46,6 @@
     "verify": "yarn foundry:verify"
   },
   "devDependencies": {
-    "@types/react": "^19.0.2",
     "husky": "~8.0.3",
     "lint-staged": "~13.2.2"
   },
