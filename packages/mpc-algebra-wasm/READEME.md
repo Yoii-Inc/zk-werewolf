@@ -2,5 +2,5 @@
 
 Build as WebAssembly
 ```bash
-yarn test __tests__/crypto/voteEncryption.test.ts --no-cache
+wasm-pack build --target nodejs --out-dir pkg-node
 ```

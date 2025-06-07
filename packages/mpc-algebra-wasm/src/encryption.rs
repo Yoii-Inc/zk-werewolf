@@ -1,24 +1,17 @@
+use crate::mpc_circuits_wasm::*;
 use ark_bls12_377::Fr;
 use ark_ff::PubUniformRand;
 use ark_ff::Zero;
-use ark_ff::{fields::PrimeField, BigInteger};
-use base64::decode;
-use mpc_algebra::Reveal;
-use mpc_circuits::AnonymousVotingPrivateInput;
-use mpc_circuits::AnonymousVotingPublicInput;
-use mpc_circuits::DivinationPrivateInput;
-use mpc_circuits::KeyPublicizePrivateInput;
-use mpc_circuits::RoleAssignmentPrivateInput;
-use mpc_circuits::WinningJudgementPrivateInput;
+use base64::{decode, encode};
+use crypto_box::{
+    aead::{Aead, AeadCore},
+    PublicKey, SalsaBox, SecretKey,
+};
+use rand::rngs::OsRng;
 use serde::Serialize;
-use sodiumoxide::crypto::{box_::PublicKey, sealedbox};
 use wasm_bindgen::JsValue;
 
 use crate::{types::*, NodeKey, SecretSharingScheme};
-
-use mpc_algebra::malicious_majority::MpcField;
-
-pub type MFr = MpcField<Fr>;
 
 pub trait SplitAndEncrypt {
     type Input;
@@ -31,22 +24,41 @@ pub trait SplitAndEncrypt {
         unimplemented!()
     }
 
-    fn encrypt(plain_share: Self::ShareForNode, key: &NodeKey) -> NodeEncryptedShare {
-        let recipient_key_bytes = decode(key.public_key.clone())
-            .map_err(|e| JsValue::from_str(&format!("Base64 decode error: {}", e)))
-            .unwrap();
-        let recipient_key = PublicKey::from_slice(&recipient_key_bytes)
-            .ok_or_else(|| JsValue::from_str("Invalid recipient public key"))
-            .unwrap();
+    fn encrypt(
+        plain_share: Self::ShareForNode,
+        key: &NodeKey,
+    ) -> Result<NodeEncryptedShare, JsValue> {
+        // Base64デコードされた公開鍵をPublicKeyに変換
+        let recipient_key_bytes = decode(&key.public_key)
+            .map_err(|e| JsValue::from_str(&format!("Base64 decode error: {}", e)))?;
 
-        let json_string = serde_json::to_string(&plain_share).unwrap();
+        let recipient_key = PublicKey::from(
+            <[u8; 32]>::try_from(recipient_key_bytes.as_slice())
+                .map_err(|_| JsValue::from_str("Invalid public key length"))?,
+        );
 
-        let encrypted_share = sealedbox::seal(json_string.as_bytes(), &recipient_key);
+        // エフェメラルキーペアの生成
+        let ephemeral_secret = SecretKey::generate(&mut OsRng);
+        let box_ = SalsaBox::new(&recipient_key, &ephemeral_secret);
 
-        NodeEncryptedShare {
+        // シェアデータのシリアライズ
+        let plain_data = serde_json::to_vec(&plain_share)
+            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+
+        // 暗号化
+        // Get a random nonce to encrypt the message under
+        let nonce = SalsaBox::generate_nonce(&mut OsRng);
+        let encrypted_data = box_
+            .encrypt(&nonce, plain_data.as_slice())
+            .map_err(|e| JsValue::from_str(&format!("Encryption error: {}", e)))?;
+
+        // Base64エンコード
+        let encrypted_share = encode(&encrypted_data);
+
+        Ok(NodeEncryptedShare {
             node_id: key.node_id.clone(),
-            encrypted_share: String::from_utf8(encrypted_share).unwrap(),
-        }
+            encrypted_share,
+        })
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue>;
@@ -62,7 +74,7 @@ impl SplitAndEncrypt for AnonymousVotingEncryption {
     type Input = AnonymousVotingInput;
     type Output = AnonymousVotingOutput;
 
-    type ShareForNode = AnonymousVotingPrivateInput<MFr>;
+    type ShareForNode = AnonymousVotingPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
         let scheme = &input.scheme;
@@ -86,7 +98,7 @@ impl SplitAndEncrypt for AnonymousVotingEncryption {
         let plain_shares = Self::split(input);
 
         for (i, node_key) in input.node_keys.iter().enumerate() {
-            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key);
+            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key)?;
 
             shares.push(encrypted_share);
         }
@@ -102,7 +114,7 @@ impl SplitAndEncrypt for KeyPublicizeEncryption {
     type Input = KeyPublicizeInput;
     type Output = KeyPublicizeOutput;
 
-    type ShareForNode = KeyPublicizePrivateInput<MFr>;
+    type ShareForNode = KeyPublicizePrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
         let scheme = &input.scheme;
@@ -130,7 +142,7 @@ impl SplitAndEncrypt for KeyPublicizeEncryption {
         let plain_shares = Self::split(input);
 
         for (i, node_key) in input.node_keys.iter().enumerate() {
-            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key);
+            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key)?;
 
             shares.push(encrypted_share);
         }
@@ -146,7 +158,7 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
     type Input = RoleAssignmentInput;
     type Output = RoleAssignmentOutput;
 
-    type ShareForNode = RoleAssignmentPrivateInput<MFr>;
+    type ShareForNode = RoleAssignmentPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
         todo!()
@@ -158,7 +170,7 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
         let plain_shares = Self::split(input);
 
         for (i, node_key) in input.node_keys.iter().enumerate() {
-            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key);
+            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key)?;
 
             shares.push(encrypted_share);
         }
@@ -174,7 +186,7 @@ impl SplitAndEncrypt for DivinationEncryption {
     type Input = DivinationInput;
     type Output = DivinationOutput;
 
-    type ShareForNode = DivinationPrivateInput<MFr>;
+    type ShareForNode = DivinationPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
         todo!()
@@ -186,7 +198,7 @@ impl SplitAndEncrypt for DivinationEncryption {
         let plain_shares = Self::split(input);
 
         for (i, node_key) in input.node_keys.iter().enumerate() {
-            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key);
+            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key)?;
 
             shares.push(encrypted_share);
         }
@@ -202,7 +214,7 @@ impl SplitAndEncrypt for WinningJudgementEncryption {
     type Input = WinningJudgementInput;
     type Output = WinningJudgementOutput;
 
-    type ShareForNode = WinningJudgementPrivateInput<MFr>;
+    type ShareForNode = WinningJudgementPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
         todo!()
@@ -214,7 +226,7 @@ impl SplitAndEncrypt for WinningJudgementEncryption {
         let plain_shares = Self::split(input);
 
         for (i, node_key) in input.node_keys.iter().enumerate() {
-            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key);
+            let encrypted_share = Self::encrypt(plain_shares[i].clone(), node_key)?;
 
             shares.push(encrypted_share);
         }
@@ -225,43 +237,6 @@ impl SplitAndEncrypt for WinningJudgementEncryption {
         })
     }
 }
-
-// fn voting_create_encrypted_shares(
-//     input: &EncryptAndShareInput,
-// ) -> Result<EncryptedVoteResult, JsValue> {
-//     // シェアの生成とペダーセンコミットメントの計算をここで実装
-//     let mut shares = Vec::new(); // シェアの初期化
-
-//     // Shamirの秘密分散法によるシェア生成のダミー実装
-//     let total_shares = input.scheme.total_shares;
-//     let modulus = input.scheme.modulus;
-//     let secret = input.private_input.target_id as u64;
-
-//     let plain_shares = split(secret, total_shares, modulus);
-
-//     // 各ノードに対してシェアを生成
-//     for (i, node_key) in input.node_keys.iter().enumerate() {
-//         let recipient_key_bytes = decode(node_key.public_key.clone())
-//             .map_err(|e| JsValue::from_str(&format!("Base64 decode error: {}", e)))?;
-//         let recipient_key = PublicKey::from_slice(&recipient_key_bytes)
-//             .ok_or_else(|| JsValue::from_str("Invalid recipient public key"))?;
-
-//         let encrypted_share = sealedbox::seal(&plain_shares[i].to_ne_bytes(), &recipient_key);
-
-//         shares.push(VoteShare {
-//             node_id: node_key.node_id.clone(),
-//             encrypted_share: String::from_utf8(encrypted_share).unwrap(),
-//         });
-//     }
-
-//     Ok(EncryptedVoteResult {
-//         shares,
-//         public_input: PublicVoteInput {
-//             pedersen_param: "dummy_param".to_string(),
-//             player_commitment: vec!["dummy_commitment".to_string()],
-//         },
-//     })
-// }
 
 // シンプルな分割: secret = s1 + s2 + ... + sn (mod modulus)
 fn split(secret: u64, total_shares: usize, modulus: u64) -> Vec<u64> {
@@ -280,39 +255,39 @@ fn split(secret: u64, total_shares: usize, modulus: u64) -> Vec<u64> {
     shares
 }
 
-fn split_vec_fr(vec_x: Vec<Fr>, scheme: &SecretSharingScheme) -> Vec<Vec<MFr>> {
+fn split_vec_fr(vec_x: Vec<Fr>, scheme: &SecretSharingScheme) -> Vec<Vec<Fr>> {
     vec_x.iter().map(|&x| split_fr(x, scheme)).collect()
 }
 
-fn split_fr(x: Fr, scheme: &SecretSharingScheme) -> Vec<MFr> {
+fn split_fr(x: Fr, scheme: &SecretSharingScheme) -> Vec<Fr> {
     let mut shares = Vec::new();
-    let mut sum = MFr::from_add_shared(Fr::zero());
+    let mut sum = Fr::zero();
 
     let rng = &mut rand::thread_rng();
 
     for i in 0..(scheme.total_shares - 1) {
-        let share = MFr::from_add_shared(Fr::pub_rand(rng));
+        let share = Fr::pub_rand(rng);
         shares.push(share);
         sum += share;
     }
-    let last_share = MFr::from_add_shared(x) - sum;
+    let last_share = x - sum;
     shares.push(last_share);
 
     shares
 }
 
-fn combine(shares: Vec<MFr>) -> Fr {
-    let mut sum = MFr::from_add_shared(Fr::zero());
-    for share in shares {
-        sum += share;
-    }
-    sum.unwrap_as_public()
-}
+// fn combine(shares: Vec<MFr>) -> Fr {
+//     let mut sum = MFr::from_add_shared(Fr::zero());
+//     for share in shares {
+//         sum += share;
+//     }
+//     sum.unwrap_as_public()
+// }
 
 #[cfg(test)]
 mod tests {
 
-    use mpc_algebra::crh::pedersen;
+    // use mpc_algebra::crh::pedersen;
 
     use super::*;
 
@@ -330,7 +305,8 @@ mod tests {
         let shares = split_fr(x, &scheme);
         assert_eq!(shares.len(), scheme.total_shares);
 
-        let combined: Fr = combine(shares);
+        // let combined: Fr = combine(shares);
+        let combined: Fr = shares.iter().sum();
         assert_eq!(combined, x);
     }
 

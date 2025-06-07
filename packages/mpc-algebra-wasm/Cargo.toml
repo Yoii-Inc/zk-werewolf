@@ -10,18 +10,18 @@ serde-wasm-bindgen = "0.6"
 serde_json = "1.0"
 rand = "0.8"
 getrandom = { version = "0.2", features = ["js"] }
-sodiumoxide = "0.2"
 base64 = "0.13"
-
-# ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
-# ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
+crypto_box = { version = "0.9.1", features = ["std"] }
+nalgebra = { version = "0.33.0", features = ["serde-serialize"] }
+console_error_panic_hook = "0.1"
+anyhow = "1.0"
 
 ark-ff = { path = "../../../zk-mpc/arkworks/algebra/ff", version = "0.3.0" }
-ark-bls12-377 = { path = "../../../zk-mpc/arkworks/curves/bls12_377", version = "0.3.0", features = ["r1cs", "curve"] }
 ark-std = { path = "../../../zk-mpc/arkworks/std", version = "0.3.0", features = ["std", "print-trace"] }
+ark-crypto-primitives = { path = "../../../zk-mpc/arkworks/crypto-primitives", version = "0.3.0" }
 
-mpc-algebra = { path = "../../../zk-mpc/mpc-algebra", version = "0.1.0" }
-mpc-circuits = { path = "../mpc-circuits" }
+ark-bls12-377 = { path = "../../../zk-mpc/arkworks/curves/bls12_377", version = "0.3.0", features = ["r1cs", "curve"] }
+ark-ed-on-bls12-377 = { path = "../../../zk-mpc/arkworks/curves/ed_on_bls12_377", version = "0.3.0", features = ["r1cs"] }
 
 [lib]
 crate-type = ["cdylib"]
