@@ -1,9 +1,7 @@
+use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
 use serde::{Deserialize, Serialize};
-use zk_mpc::marlin::MFr;
 
 use crate::UserPublicKey;
-
-use super::CircuitIdentifier;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProofStatus {
@@ -19,10 +17,10 @@ pub struct ProofResponse {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ProofRequest {
     pub proof_id: String,
-    pub circuit_type: CircuitIdentifier<MFr>,
+    pub circuit_type: CircuitEncryptedInputIdentifier,
     pub output_type: ProofOutputType,
 }
 
