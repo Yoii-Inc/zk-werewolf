@@ -64,11 +64,11 @@ pub trait SplitAndEncrypt {
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue>;
 }
 
-pub(crate) struct AnonymousVotingEncryption;
-pub(crate) struct KeyPublicizeEncryption;
-pub(crate) struct RoleAssignmentEncryption;
-pub(crate) struct DivinationEncryption;
-pub(crate) struct WinningJudgementEncryption;
+pub struct AnonymousVotingEncryption;
+pub struct KeyPublicizeEncryption;
+pub struct RoleAssignmentEncryption;
+pub struct DivinationEncryption;
+pub struct WinningJudgementEncryption;
 
 impl SplitAndEncrypt for AnonymousVotingEncryption {
     type Input = AnonymousVotingInput;

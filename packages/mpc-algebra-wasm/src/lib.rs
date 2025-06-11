@@ -35,8 +35,8 @@ type ElGamalRandomness = <ElGamalScheme as AsymmetricEncryptionScheme>::Randomne
 #[derive(Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeKey {
-    node_id: String,
-    public_key: String,
+    pub node_id: String,
+    pub public_key: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -45,11 +45,11 @@ pub struct PrivateInput {
     target_id: usize,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretSharingScheme {
-    total_shares: usize,
-    modulus: u64,
+    pub total_shares: usize,
+    pub modulus: u64,
 }
 
 #[wasm_bindgen]
