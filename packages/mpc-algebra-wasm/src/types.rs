@@ -8,6 +8,8 @@ use crate::{NodeKey, SecretSharingScheme};
 pub struct NodeEncryptedShare {
     pub node_id: String,
     pub encrypted_share: String,
+    pub nonce: String,
+    pub ephemeral_key: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -92,9 +94,9 @@ pub struct WinningJudgementOutput {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum CircuitEncryptedInputIdentifier {
-    Divination(DivinationOutput),
-    AnonymousVoting(AnonymousVotingOutput),
-    WinningJudge(WinningJudgementOutput),
-    RoleAssignment(RoleAssignmentOutput),
-    KeyPublicize(KeyPublicizeOutput),
+    Divination(Vec<DivinationOutput>),
+    AnonymousVoting(Vec<AnonymousVotingOutput>),
+    WinningJudge(Vec<WinningJudgementOutput>),
+    RoleAssignment(Vec<RoleAssignmentOutput>),
+    KeyPublicize(Vec<KeyPublicizeOutput>),
 }

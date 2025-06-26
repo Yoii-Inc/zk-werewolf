@@ -21,10 +21,11 @@ impl ark_crypto_primitives::crh::pedersen::Window for Window {
     const NUM_WINDOWS: usize = PERDERSON_WINDOW_NUM;
 }
 
-type PedersenComSceme = Commitment<ark_ed_on_bls12_377::EdwardsProjective, Window>;
-type PedersenParam = <PedersenComSceme as ark_crypto_primitives::CommitmentScheme>::Parameters;
-type PedersenCommitment = <PedersenComSceme as ark_crypto_primitives::CommitmentScheme>::Output;
-type PedersenRandomness = <PedersenComSceme as ark_crypto_primitives::CommitmentScheme>::Randomness;
+type PedersenComScheme = Commitment<ark_ed_on_bls12_377::EdwardsProjective, Window>;
+type PedersenParam = <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Parameters;
+type PedersenCommitment = <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Output;
+type PedersenRandomness =
+    <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Randomness;
 
 type ElGamalScheme =
     ark_crypto_primitives::encryption::elgamal::ElGamal<ark_ed_on_bls12_377::EdwardsProjective>;
@@ -32,7 +33,7 @@ type ElGamalParam = <ElGamalScheme as AsymmetricEncryptionScheme>::Parameters;
 type ElGamalPubKey = <ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey;
 type ElGamalRandomness = <ElGamalScheme as AsymmetricEncryptionScheme>::Randomness;
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeKey {
     pub node_id: String,
@@ -109,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_anonymous_voting_input_serialize() {
-        let pedersen_param = PedersenComSceme::setup(&mut ark_std::test_rng()).unwrap();
+        let pedersen_param = PedersenComScheme::setup(&mut ark_std::test_rng()).unwrap();
 
         let secret_key = SecretKey::generate(&mut OsRng);
         let public_key = secret_key.public_key();
