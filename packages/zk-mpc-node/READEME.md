@@ -38,3 +38,77 @@ curl で証明の問い合わせ
 ```bash
 curl -X GET http://localhost:9000/proof/YOUR_PROOF_ID
 ```
+
+## API Endpoints
+
+The server provides REST API endpoints for submitting proof requests, checking proof generation status, and retrieving proof outputs.
+
+```
+POST /
+GET /proof/{proof_id}
+GET /proof/{proof_id}/output
+```
+
+### Submit Proof Request
+
+Submit a new proof generation request.
+
+```
+
+```
+
+**Request Body:**
+```json
+{
+    "proof_id": string,
+    // Additional proof parameters
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Request accepted successfully"
+}
+```
+
+### Get Proof Status
+
+Get the current status of a proof generation request.
+
+```
+GET /proof/{proof_id}
+```
+
+**Response:**
+```json
+{
+    "state": string,      // "pending", "processing", "completed", "failed"
+    "proof_id": string,
+    "message": string?,   // Optional status message
+    "output": object?     // Optional proof output
+}
+```
+
+### Get Proof Output
+
+Get the output of a completed proof.
+
+```
+GET /proof/{proof_id}/output
+```
+
+**Response:**
+```json
+{
+    // Proof output data
+}
+```
+
+**Error Response:**
+```json
+{
+    // Proof output data (error case)
+}
+```
