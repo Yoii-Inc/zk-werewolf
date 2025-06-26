@@ -41,7 +41,7 @@ jobs:
 
       - name: Run zk-mpc-node tests
         working-directory: ./packages/zk-mpc-node
-        run: cargo test --lib --verbose
+        run: cargo test --lib --verbose -- --test-threads=1
 
   integration_tests:
     name: Run Integration Tests
