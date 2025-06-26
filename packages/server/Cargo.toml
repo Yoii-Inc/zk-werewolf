@@ -34,9 +34,12 @@ ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark
 ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0" }
 ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
 
+mpc-circuits = { path = "../mpc-circuits" }
+
 [dev-dependencies]
 tokio-tungstenite = "0.19"
 hyper = { version = "1.0" }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 wiremock = "0.5"
+ark-serialize = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-serialize", version = "0.3.0", default-features = false }

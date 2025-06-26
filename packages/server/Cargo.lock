@@ -18,6 +18,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "aead"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0"
+dependencies = [
+ "crypto-common",
+ "generic-array",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -129,7 +139,7 @@ dependencies = [
 [[package]]
 name = "ark-bls12-377"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -140,7 +150,7 @@ dependencies = [
 [[package]]
 name = "ark-crypto-primitives"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -154,13 +164,14 @@ dependencies = [
  "derivative",
  "digest 0.9.0",
  "mpc-trait",
+ "serde",
  "tracing",
 ]
 
 [[package]]
 name = "ark-ec"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -168,25 +179,27 @@ dependencies = [
  "derivative",
  "mpc-trait",
  "num-traits",
+ "serde",
  "zeroize",
 ]
 
 [[package]]
 name = "ark-ed-on-bls12-377"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
  "ark-ff",
  "ark-r1cs-std",
  "ark-std",
+ "serde",
 ]
 
 [[package]]
 name = "ark-ff"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
@@ -197,14 +210,15 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "paste",
- "rustc_version",
+ "rustc_version 0.3.3",
+ "serde",
  "zeroize",
 ]
 
 [[package]]
 name = "ark-ff-asm"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -213,7 +227,7 @@ dependencies = [
 [[package]]
 name = "ark-ff-macros"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -224,7 +238,7 @@ dependencies = [
 [[package]]
 name = "ark-groth16"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
@@ -239,7 +253,7 @@ dependencies = [
 [[package]]
 name = "ark-marlin"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -260,7 +274,7 @@ dependencies = [
 [[package]]
 name = "ark-mnt4-753"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -270,7 +284,7 @@ dependencies = [
 [[package]]
 name = "ark-nonnative-field"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -287,7 +301,7 @@ dependencies = [
 [[package]]
 name = "ark-poly"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -300,7 +314,7 @@ dependencies = [
 [[package]]
 name = "ark-poly-commit"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -319,7 +333,7 @@ dependencies = [
 [[package]]
 name = "ark-r1cs-std"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -334,7 +348,7 @@ dependencies = [
 [[package]]
 name = "ark-relations"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ff",
  "ark-std",
@@ -345,7 +359,7 @@ dependencies = [
 [[package]]
 name = "ark-serialize"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-serialize-derive",
  "ark-std",
@@ -355,7 +369,7 @@ dependencies = [
 [[package]]
 name = "ark-serialize-derive"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -365,7 +379,7 @@ dependencies = [
 [[package]]
 name = "ark-snark"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-ff",
  "ark-relations",
@@ -375,7 +389,7 @@ dependencies = [
 [[package]]
 name = "ark-std"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "colored",
  "mpc-trait",
@@ -678,6 +692,7 @@ checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
 dependencies = [
  "crypto-common",
  "inout",
+ "zeroize",
 ]
 
 [[package]]
@@ -718,6 +733,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
+]
+
+[[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -777,6 +802,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
 dependencies = [
  "generic-array",
+ "rand_core 0.6.4",
  "typenum",
 ]
 
@@ -791,6 +817,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto_box"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16182b4f39a82ec8a6851155cc4c0cda3065bb1db33651726a29e1951de0f009"
+dependencies = [
+ "aead",
+ "crypto_secretbox",
+ "curve25519-dalek 4.1.3",
+ "salsa20",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "crypto_secretbox"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9d6cf87adf719ddf43a805e92c6870a531aedda35ff640442cbaf8674e141e1"
+dependencies = [
+ "aead",
+ "cipher",
+ "generic-array",
+ "poly1305",
+ "salsa20",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -801,6 +856,32 @@ dependencies = [
  "rand_core 0.5.1",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "curve25519-dalek"
+version = "4.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fb8b7c4503de7d6ae7b42ab72a5a59857b4c937ec27a3d4539dba95b5ab2be"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "curve25519-dalek-derive",
+ "fiat-crypto",
+ "rustc_version 0.4.1",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "curve25519-dalek-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -899,7 +980,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
- "curve25519-dalek",
+ "curve25519-dalek 3.2.0",
  "ed25519",
  "rand 0.7.3",
  "serde",
@@ -1007,6 +1088,12 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "fnv"
@@ -1156,6 +1243,7 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+ "zeroize",
 ]
 
 [[package]]
@@ -1176,8 +1264,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4567c8db10ae91089c99af84c68c38da3ec2f087c3f82960bcdbf3656b6f4d7"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1814,7 +1904,7 @@ dependencies = [
 [[package]]
 name = "mpc-algebra"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-bls12-377",
  "ark-crypto-primitives",
@@ -1845,9 +1935,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "mpc-algebra-wasm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-bls12-377",
+ "ark-crypto-primitives",
+ "ark-ed-on-bls12-377",
+ "ark-ff",
+ "ark-std",
+ "base64 0.13.1",
+ "console_error_panic_hook",
+ "crypto_box",
+ "getrandom 0.2.15",
+ "nalgebra",
+ "rand 0.8.5",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "mpc-circuits"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-bls12-377",
+ "ark-ff",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize",
+ "ark-std",
+ "crypto_box",
+ "mpc-algebra",
+ "mpc-algebra-wasm",
+ "nalgebra",
+ "serde",
+ "zk-mpc",
+]
+
+[[package]]
 name = "mpc-net"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-std",
  "async-trait",
@@ -1867,7 +1998,7 @@ dependencies = [
 [[package]]
 name = "mpc-trait"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 
 [[package]]
 name = "nalgebra"
@@ -1881,6 +2012,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "num-traits",
+ "serde",
  "simba",
  "typenum",
 ]
@@ -1941,6 +2073,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -2158,6 +2291,17 @@ name = "pkg-config"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
+
+[[package]]
+name = "poly1305"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8159bd90725d2df49889a078b54f4f79e87f1f8a8444194cdca81d38f5393abf"
+dependencies = [
+ "cpufeatures",
+ "opaque-debug",
+ "universal-hash",
+]
 
 [[package]]
 name = "portable-atomic"
@@ -2449,7 +2593,16 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0dfe2087c51c460008730de8b57e6a320782fbfb312e1f4d520e6c6fae155ee"
 dependencies = [
- "semver",
+ "semver 0.11.0",
+]
+
+[[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver 1.0.26",
 ]
 
 [[package]]
@@ -2493,6 +2646,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96b02de82ddbe1b636e6170c21be622223aea188ef2e139be0a5b219ec215323"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "salsa20"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97a22f5af31f73a954c10289c93e8a50cc23d971e80ee446f1f6f7137a088213"
+dependencies = [
+ "cipher",
 ]
 
 [[package]]
@@ -2543,6 +2705,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "semver"
+version = "1.0.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
+
+[[package]]
 name = "semver-parser"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2558,6 +2726,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b9781016e935a97e8beecf0c933758c97a5520d32930e460142b4cd80c6338e"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2624,6 +2803,7 @@ dependencies = [
  "ark-crypto-primitives",
  "ark-ff",
  "ark-marlin",
+ "ark-serialize",
  "ark-std",
  "axum",
  "bcrypt",
@@ -2636,6 +2816,7 @@ dependencies = [
  "jsonwebtoken",
  "log",
  "mpc-algebra",
+ "mpc-circuits",
  "once_cell",
  "rand 0.8.5",
  "reqwest",
@@ -3255,6 +3436,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
+name = "universal-hash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
+dependencies = [
+ "crypto-common",
+ "subtle",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3814,7 +4005,7 @@ dependencies = [
 [[package]]
 name = "zk-mpc"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#41af4c9866b512f6240bb079d32d7db15fdfdea0"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
 dependencies = [
  "ark-bls12-377",
  "ark-crypto-primitives",
@@ -3858,6 +4049,7 @@ dependencies = [
 name = "zk-mpc-node"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ark-bls12-377",
  "ark-ff",
  "ark-marlin",
@@ -3865,10 +4057,15 @@ dependencies = [
  "ark-relations",
  "ark-serialize",
  "ark-std",
+ "axum",
  "base64 0.13.1",
+ "crypto_box",
  "ed25519-dalek",
+ "futures",
  "httparse",
  "mpc-algebra",
+ "mpc-algebra-wasm",
+ "mpc-circuits",
  "mpc-net",
  "rand 0.7.3",
  "reqwest",
@@ -3877,6 +4074,7 @@ dependencies = [
  "structopt",
  "thiserror 1.0.69",
  "tokio",
+ "tower-http",
  "uuid",
  "zk-mpc",
 ]
