@@ -1,156 +1,125 @@
 use crate::models::ProofRequest;
 use crate::node::Node;
 use crate::proof::ProofManager;
+use crate::ProofStatus;
+use axum::extract::{Path, State};
+use axum::http::{self, HeaderValue, Method};
+use axum::response::IntoResponse;
+use axum::routing::{get, post};
+use axum::{Json, Router};
 use mpc_net::MpcMultiNet as Net;
 use serde_json::json;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::spawn;
+use tower_http::cors::CorsLayer;
 
 pub mod api_client;
 
 pub use api_client::*;
 
-const BUFFER_SIZE: usize = 65536; // 64KB
+#[derive(Clone)]
+pub struct AppState {
+    pub proof_manager: Arc<ProofManager>,
+    pub node: Arc<Node<TcpStream>>,
+}
 
-pub async fn handle_client(
-    mut socket: TcpStream,
-    proof_manager: Arc<ProofManager>,
-    node: Arc<Node<TcpStream>>,
-) {
-    let mut buffer = vec![0; BUFFER_SIZE];
-    let mut headers = [httparse::EMPTY_HEADER; 16];
-    let mut req = httparse::Request::new(&mut headers);
+pub async fn run_server(addr: &SocketAddr, state: AppState) -> Result<(), anyhow::Error> {
+    let origins = ["http://localhost:3000".parse::<HeaderValue>().unwrap()];
+    let cors = CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
-    let _size = socket.read(&mut buffer).await.unwrap();
-    let result = req
-        .parse(&buffer)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-        .unwrap();
+    // build our application with a single route
+    let app = Router::new()
+        .route("/", post(handle_proof_request))
+        .route("/proof/:proof_id", get(get_proof_status))
+        .route("/proof/:proof_id/output", get(get_proof_output))
+        .with_state(state);
 
-    match (req.method, req.path) {
-        (Some("POST"), Some("/")) => {
-            let body_start = match result {
-                httparse::Status::Complete(size) => size,
-                httparse::Status::Partial => {
-                    return;
-                }
-            };
-            let body = String::from_utf8_lossy(&buffer[body_start..])
-                .trim_matches(char::from(0))
-                .to_string();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 
-            if let Ok(request) = serde_json::from_str::<ProofRequest>(&body) {
-                proof_manager.register_proof_request(request.clone()).await;
+    Ok(())
+}
 
-                let response = json!({
-                    "success": true,
-                    "message": "Request accepted successfully",
-                });
+async fn handle_proof_request(
+    State(state): State<AppState>,
+    Json(payload): Json<ProofRequest>,
+) -> impl IntoResponse {
+    // Handle the proof request
+    state
+        .proof_manager
+        .register_proof_request(payload.clone())
+        .await;
 
-                let response_str = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                     Content-Type: application/json\r\n\
-                     Content-Length: {}\r\n\r\n{}",
-                    response.to_string().len(),
-                    response
+    println!("Proof request registered: {}", payload.proof_id);
+
+    let payload_clone = payload.clone();
+
+    // Simulate the network request to generate the proof
+    spawn(async move {
+        Net::simulate(state.node.net.clone(), payload_clone, move |_, request| {
+            let node_clone = state.node.clone();
+            async move {
+                println!(
+                    "Node {} is generating proof for request: {}",
+                    node_clone.id, request.proof_id
                 );
-                socket.write_all(response_str.as_bytes()).await.unwrap();
-
-                Net::simulate(node.net.clone(), request, move |_, request| {
-                    let node_clone = node.clone();
-                    async move {
-                        node_clone.generate_proof(request).await;
-                    }
-                })
-                .await;
-            } else {
-                println!("Failed to parse request body");
-                let response = json!({
-                    "error": "failed to parse request body"
-                });
-                let response_str = format!(
-                    "HTTP/1.1 400 Bad Request\r\n\
-                 Content-Type: application/json\r\n\
-                 Content-Length: {}\r\n\r\n{}",
-                    response.to_string().len(),
-                    response
-                );
-                socket.write_all(response_str.as_bytes()).await.unwrap();
+                node_clone.generate_proof(request).await;
             }
-        }
+        })
+        .await
+    });
 
-        (Some("GET"), Some(path)) if path.starts_with("/proof/") => {
-            let path = path.trim_start_matches("/proof/");
+    (
+        http::StatusCode::OK,
+        Json(json!({
+            "status": "success",
+            "message": "Proof request accepted",
+            "proof_id": payload.proof_id
+        })),
+    )
+}
 
-            // /proof/{id}/output エンドポイントの処理
-            if path.ends_with("/output") {
-                let proof_id = path.trim_end_matches("/output");
-                if let Some(status) = proof_manager.get_proof_status(proof_id).await {
-                    if let Some(output) = &status.output {
-                        let response_str = format!(
-                            "HTTP/1.1 200 OK\r\n\
-                             Content-Type: application/json\r\n\
-                             Content-Length: {}\r\n\r\n{}",
-                            serde_json::to_string(&output).unwrap().len(),
-                            serde_json::to_string(&output).unwrap()
-                        );
-                        socket.write_all(response_str.as_bytes()).await.unwrap();
-                        return;
-                    }
-                }
-                let response = json!({
-                    "error": "Proof output not found"
-                });
-                let response_str = format!(
-                    "HTTP/1.1 404 Not Found\r\n\
-                     Content-Type: application/json\r\n\
-                     Content-Length: {}\r\n\r\n{}",
-                    response.to_string().len(),
-                    response
-                );
-                socket.write_all(response_str.as_bytes()).await.unwrap();
-                return;
-            }
+async fn get_proof_output(
+    State(state): State<AppState>,
+    Path(proof_id): Path<String>,
+) -> impl IntoResponse {
+    // if let Some(output) = state.proof_manager.get_proof_output(&proof_id).await {
+    //     (
+    //         http::StatusCode::OK,
+    //         axum::Json(format!("{}", serde_json::to_string(&output).unwrap())),
+    //     )
+    // } else {
+    //     (
+    //         http::StatusCode::NOT_FOUND,
+    //         // axum::Json(json!({"error": "Proof output not found"})),
+    //         axum::Json(format!(
+    //             "{{\"error\": \"Proof output for {} not found\"}}",
+    //             proof_id
+    //         )),
+    //     )
+    // }
+    todo!()
+}
 
-            // 通常の /proof/{id} エンドポイントの処理
-            let proof_id = path;
-            if let Some(status) = proof_manager.get_proof_status(proof_id).await {
-                let response_str = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                     Content-Type: application/json\r\n\
-                     Content-Length: {}\r\n\r\n{}",
-                    serde_json::to_string(&status).unwrap().len(),
-                    serde_json::to_string(&status).unwrap()
-                );
-                socket.write_all(response_str.as_bytes()).await.unwrap();
-            } else {
-                let response = json!({
-                    "error": "Proof not found"
-                });
-                let response_str = format!(
-                    "HTTP/1.1 404 Not Found\r\n\
-                     Content-Type: application/json\r\n\
-                     Content-Length: {}\r\n\r\n{}",
-                    response.to_string().len(),
-                    response
-                );
-                socket.write_all(response_str.as_bytes()).await.unwrap();
-            }
-        }
-
-        _ => {
-            let response = json!({
-                "error": "Invalid request"
-            });
-            let response_str = format!(
-                "HTTP/1.1 400 Bad Request\r\n\
-                 Content-Type: application/json\r\n\
-                 Content-Length: {}\r\n\r\n{}",
-                response.to_string().len(),
-                response
-            );
-            socket.write_all(response_str.as_bytes()).await.unwrap();
-        }
+async fn get_proof_status(
+    State(state): State<AppState>,
+    Path(proof_id): Path<String>,
+) -> impl IntoResponse {
+    if let Some(status) = state.proof_manager.get_proof_status(&proof_id).await {
+        (http::StatusCode::OK, axum::Json(status))
+    } else {
+        let proof_status = ProofStatus {
+            state: "not_found".to_string(),
+            proof_id: proof_id.clone(),
+            message: Some(format!("Proof {} not found", proof_id)),
+            output: None,
+        };
+        (http::StatusCode::NOT_FOUND, axum::Json(proof_status))
     }
 }
