@@ -2,6 +2,7 @@ use ark_bls12_377::Fr;
 use ark_serialize::CanonicalSerialize;
 use mpc_algebra::FromLocal;
 use mpc_algebra::{crh::pedersen, reveal::Reveal};
+use zk_mpc::circuits::circuit;
 use zk_mpc::{
     circuits::{circuit::MySimpleCircuit, LocalOrMPC},
     marlin::MFr,
@@ -168,12 +169,13 @@ impl CircuitFactory {
         }
     }
 
-    pub fn create_verify_inputs(circuit_type: &CircuitEncryptedInputIdentifier) -> Vec<Fr> {
+    pub fn create_verify_inputs(circuit_type: &BuiltinCircuit<MFr>) -> Vec<Fr> {
         match circuit_type {
             // CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit)) => {
             //     vec![circuit.a.unwrap().sync_reveal() * circuit.b.unwrap().sync_reveal()]
             // }
-            CircuitEncryptedInputIdentifier::AnonymousVoting(circuit) => {
+            BuiltinCircuit::AnonymousVoting(circuit) => {
+                let mut inputs = Vec::new();
                 // let mut inputs = circuit
                 //     .player_commitment
                 //     .iter()
@@ -183,20 +185,17 @@ impl CircuitFactory {
                 //     })
                 //     .collect::<Vec<_>>();
 
-                // let most_voted_id = circuit.calculate_output();
+                let most_voted_id = circuit.calculate_output();
 
-                // inputs.push(most_voted_id.sync_reveal());
-                // inputs
-                // todo!()
-
-                vec![]
+                inputs.push(most_voted_id.sync_reveal());
+                inputs
             }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
         }
     }
 
     pub fn get_circuit_outputs(
-        circuit_type: &CircuitEncryptedInputIdentifier,
+        circuit_type: &BuiltinCircuit<MFr>,
         // output_type: &ProofOutputType,
     ) -> Vec<u8> {
         match circuit_type {
@@ -206,7 +205,7 @@ impl CircuitFactory {
             //     CanonicalSerialize::serialize(&c, &mut buffer).unwrap();
             //     buffer
             // }
-            CircuitEncryptedInputIdentifier::Divination(circuit) => {
+            BuiltinCircuit::Divination(circuit) => {
                 // let peculiar = circuit.mpc_input.peculiar.clone().unwrap();
                 // let is_target_vec = peculiar.is_target;
                 // let is_werewolf_vec = peculiar.is_werewolf;
@@ -220,15 +219,14 @@ impl CircuitFactory {
                 // buffer
                 todo!()
             }
-            CircuitEncryptedInputIdentifier::AnonymousVoting(circuit) => {
-                // let most_voted_id = circuit.calculate_output().sync_reveal();
+            BuiltinCircuit::AnonymousVoting(circuit) => {
+                let most_voted_id = circuit.calculate_output().sync_reveal();
 
-                // let mut buffer = Vec::new();
-                // CanonicalSerialize::serialize(&most_voted_id, &mut buffer).unwrap();
-                // buffer
-                todo!()
+                let mut buffer = Vec::new();
+                CanonicalSerialize::serialize(&most_voted_id, &mut buffer).unwrap();
+                buffer
             }
-            CircuitEncryptedInputIdentifier::WinningJudge(circuit) => {
+            BuiltinCircuit::WinningJudge(circuit) => {
                 // // let player_commitment = circuit.player_commitment.clone();
                 // // let player_randomness = circuit.player_randomness.clone();
                 // // let pedersen_param = circuit.pedersen_param.clone();
@@ -244,7 +242,7 @@ impl CircuitFactory {
                 // buffer
                 todo!()
             }
-            CircuitEncryptedInputIdentifier::RoleAssignment(circuit) => {
+            BuiltinCircuit::RoleAssignment(circuit) => {
                 // let num_players = circuit.num_players;
                 // let max_group_size = circuit.max_group_size;
                 // let pedersen_param = circuit.pedersen_param.clone();
