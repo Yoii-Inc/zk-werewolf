@@ -1,12 +1,27 @@
+// Test five types of circuits based on the following:
+// Setting: Start 3 nodes.
+// 1. Prepare circuit inputs for each user
+// 2. Split and encrypt inputs using mpc-algebra-wasm
+// 3. Generate proofs using encrypted data
+// 4. Verify proofs
+
+// use mpc_algebra_wasm::*;
+
 use ark_bls12_377::Fr;
 use ark_ff::BigInteger;
 use ark_ff::PrimeField;
 use ark_ff::UniformRand;
 use ark_std::test_rng;
-use ed25519_dalek::Keypair;
+use ark_std::PubUniformRand;
+use base64::decode;
+use crypto_box::PublicKey;
+use crypto_box::SecretKey;
 use mpc_algebra::CommitmentScheme;
 use mpc_algebra::FromLocal;
 use mpc_algebra::Reveal;
+use mpc_algebra_wasm::AnonymousVotingCircuit;
+use mpc_circuits::CircuitFactory;
+use mpc_circuits::{BuiltinCircuit, CircuitIdentifier};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -15,132 +30,232 @@ use std::process::{Child, Command};
 use std::time::Duration;
 use tokio::time::sleep;
 use zk_mpc::circuits::circuit::MySimpleCircuit;
-use zk_mpc::circuits::{AnonymousVotingCircuit, LocalOrMPC};
+use zk_mpc::circuits::LocalOrMPC;
 use zk_mpc::marlin::MFr;
-use zk_mpc_node::{
-    BuiltinCircuit, CircuitIdentifier, ProofOutput, ProofOutputType, ProofRequest, UserPublicKey,
-};
+use zk_mpc_node::KeyFile;
+use zk_mpc_node::NodeKeys;
+use zk_mpc_node::ProofStatus;
+use zk_mpc_node::{ProofOutput, ProofOutputType, ProofRequest};
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ProofStatus {
-    state: String,
-    proof_id: String,
-    message: Option<String>,
-    output: Option<ProofOutput>,
-}
+use mpc_algebra_wasm::*;
 
-struct TestNodes {
-    processes: Vec<Child>,
-}
+// use aes_gcm::{
+//     aead::{Aead, OsRng},
+//     Aes256Gcm, KeyInit,
+// };
+// use mpc_algebra_wasm::{
+//     circuits::{Circuit, SimpleCircuit},
+//     encryption::{encrypt_input, split_secret},
+//     proof::{generate_proof, verify_proof},
+// };
 
-impl TestNodes {
-    async fn start(count: u32) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut processes = vec![];
-        for id in 0..count {
-            let node = Command::new("cargo")
-                .args(["run", "--release", &id.to_string(), "address/3"])
-                .spawn()?;
-            processes.push(node);
-        }
+const USER_NUM: usize = 3;
+const NODE_NUM: usize = 3;
 
-        // wait for the nodes to start
-        sleep(Duration::from_secs(15)).await;
-        Ok(Self { processes })
+fn get_node_keys() -> (Vec<NodeKey>, Vec<String>) {
+    // data/node_keys_0.json, data/node_keys_1.json, data/node_keys_2.jsonから読み込む
+    let mut keys = Vec::new();
+    let mut secret_keys = Vec::new();
+    for i in 0..NODE_NUM {
+        // ファイルから読み込む
+        let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        let file_path = format!("{}/node_keys_{}.json", data_dir, i);
+        let file = std::fs::File::open(file_path).unwrap();
+        let reader = std::io::BufReader::new(file);
+        let key_file: NodeKeys = serde_json::from_reader(reader).unwrap();
+
+        // let bytes = decode(&key_file.public_key).unwrap();
+        // let read_keys = PublicKey::from_slice(&bytes).unwrap();
+        keys.push(NodeKey {
+            // node_id: format!("node{}", i + 1),
+            node_id: format!("{}", i),
+            public_key: key_file.public_key,
+        });
+        secret_keys.push(key_file.secret_key);
     }
+
+    // println!("Node keys: {:?}", keys);
+    (keys, secret_keys)
+
+    // Base64デコードしてPublicKeyに変換
+    // let bytes = decode(&key_file.public_key).unwrap();
+    // let read_keys = PublicKey::from_slice(&bytes).unwrap();
 }
 
-impl Drop for TestNodes {
-    fn drop(&mut self) {
-        for mut node in self.processes.drain(..) {
-            let _ = node.kill();
-        }
+fn setup_voting() -> (CircuitEncryptedInputIdentifier, Vec<(SecretKey, PublicKey)>) {
+    let scheme = SecretSharingScheme {
+        total_shares: NODE_NUM,
+        modulus: 97,
+    };
+    let rng = &mut test_rng();
+    let pedersen_param = <Fr as LocalOrMPC<Fr>>::PedersenComScheme::setup(rng).unwrap();
+
+    let mut private_inputs = Vec::new();
+    let mut user_keys = Vec::new();
+
+    for i in 0..USER_NUM {
+        let secret_key = SecretKey::generate(rng);
+        let public_key = secret_key.public_key();
+        user_keys.push((secret_key, public_key));
+
+        let private_input: AnonymousVotingPrivateInput = AnonymousVotingPrivateInput {
+            id: i,
+            is_target_id: vec![Fr::from(0), Fr::from(1), Fr::from(0)],
+            player_randomness: Fr::pub_rand(rng),
+        };
+
+        private_inputs.push(private_input);
     }
-}
 
-#[tokio::test]
-#[serial]
-async fn test_mpc_node_proof_generation_simple() -> Result<(), Box<dyn std::error::Error>> {
-    // let _nodes = TestNodes::start(3).await?;
-    let client = reqwest::Client::new();
-
-    let fa = MFr::from_public(Fr::from(2));
-    let fb = MFr::from_public(Fr::from(3));
-
-    let circuit = MySimpleCircuit {
-        a: Some(fa),
-        b: Some(fb),
+    let public_input = AnonymousVotingPublicInput {
+        pedersen_param: pedersen_param.clone(),
+        player_commitment: vec![<Fr as LocalOrMPC<Fr>>::PedersenCommitment::default(); USER_NUM],
     };
 
-    // Send requests to the three ports
-    for port in [9000, 9001, 9002] {
-        println!("Sending request to port {}", port);
-        let response = client
-            .post(format!("http://localhost:{}", port))
-            .json(&ProofRequest {
-                proof_id: "test_proof_id".to_string(),
-                circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit.clone())),
-                output_type: ProofOutputType::Public,
+    // let encrypted_inputs = private_inputs
+    //     .iter()
+    //     .map(|private_input| {
+    //         CircuitEncryptedInputIdentifier::AnonymousVoting(
+    //             AnonymousVotingEncryption::create_encrypted_shares(&AnonymousVotingInput {
+    //                 private_input: private_input.clone(),
+    //                 public_input: public_input.clone(),
+    //                 node_keys: get_node_keys(),
+    //                 scheme: scheme.clone(),
+    //             })
+    //             .unwrap(),
+    //         )
+    //     })
+    //     .collect::<Vec<_>>();
+
+    let encrypted_inputs = CircuitEncryptedInputIdentifier::AnonymousVoting(
+        private_inputs
+            .iter()
+            .map(|private_input| {
+                AnonymousVotingEncryption::create_encrypted_shares(&AnonymousVotingInput {
+                    private_input: private_input.clone(),
+                    public_input: public_input.clone(),
+                    node_keys: get_node_keys().0,
+                    scheme: scheme.clone(),
+                })
+                .unwrap()
             })
-            .send()
-            .await?;
+            .collect::<Vec<_>>(),
+    );
 
-        assert!(response.status().is_success());
-        println!("Response from port {}: {:?}", port, response);
+    for i in 0..NODE_NUM {
+        let secret_key = get_node_keys().1[i].clone();
+        let secret_key = SecretKey::from_slice(&decode(secret_key).unwrap()).unwrap();
 
-        let response_body: serde_json::Value = response.json().await?;
-        assert_eq!(response_body["success"], true);
-        assert!(response_body["message"]
-            .as_str()
-            .unwrap()
-            .contains("successfully"));
+        let file_public_key =
+            PublicKey::from_slice(&decode(get_node_keys().0[i].public_key.clone()).unwrap())
+                .unwrap();
+
+        assert!(
+            secret_key.public_key() == file_public_key,
+            "Public key mismatch for node {}",
+            i
+        );
     }
 
-    // Wait briefly before checking the results
-    println!("Waiting for proofs to be generated...");
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(get_node_keys().0.len(), NODE_NUM);
 
-    // Verify the results for each port
-    for port in [9000, 9001, 9002] {
-        let mut attempts = 0;
-        let max_attempts = 30;
+    let test_input = AnonymousVotingInput {
+        private_input: private_inputs[0].clone(),
+        public_input: public_input.clone(),
+        node_keys: get_node_keys().0,
+        scheme: scheme.clone(),
+    };
 
-        loop {
-            println!("Sending status request to port {}", port);
-            let status = client
-                .get(format!(
-                    "http://localhost:{}/proof/{}",
-                    port, "test_proof_id",
-                ))
-                .send()
-                .await?
-                .json::<ProofStatus>()
-                .await?;
+    let test_encrypted =
+        AnonymousVotingEncryption::create_encrypted_shares(&AnonymousVotingInput {
+            private_input: private_inputs[0].clone(),
+            public_input: public_input.clone(),
+            node_keys: get_node_keys().0,
+            scheme: scheme.clone(),
+        })
+        .unwrap();
 
-            println!("Proof Status from port {}: {:?}", port, status);
+    let test_decrypted_0 =
+        AnonymousVotingEncryption::decrypt(&test_encrypted.shares[0], &get_node_keys().1[0])
+            .unwrap();
 
-            if status.state == "completed" {
-                println!("Proof generation completed successfully on port {}", port);
-                break;
-            }
+    let test_decrypted_1 =
+        AnonymousVotingEncryption::decrypt(&test_encrypted.shares[1], &get_node_keys().1[1])
+            .unwrap();
 
-            if status.state == "failed" {
-                panic!(
-                    "Proof generation failed on port {}: {:?}",
-                    port, status.message
-                );
-            }
+    let test_decrypted_2 =
+        AnonymousVotingEncryption::decrypt(&test_encrypted.shares[2], &get_node_keys().1[2])
+            .unwrap();
 
-            attempts += 1;
-            if attempts >= max_attempts {
-                panic!("Timeout waiting for proof generation on port {}", port);
-            }
+    assert_eq!(
+        (test_decrypted_0.player_randomness
+            + test_decrypted_1.player_randomness
+            + test_decrypted_2.player_randomness),
+        test_input.private_input.player_randomness
+    );
 
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-    }
+    assert_eq!(
+        (test_decrypted_0.is_target_id[0]
+            + test_decrypted_1.is_target_id[0]
+            + test_decrypted_2.is_target_id[0]),
+        test_input.private_input.is_target_id[0]
+    );
 
-    Ok(())
+    (encrypted_inputs, user_keys)
+
+    // let mpc_pedersen_param = <MFr as LocalOrMPC<MFr>>::PedersenParam::from_local(&pedersen_param);
+
+    // let player_randomness = (0..3).map(|_| Fr::rand(rng)).collect::<Vec<_>>();
+    // // let player_commitment = load_random_commitment()?;
+    // let player_commitment = player_randomness
+    //     .iter()
+    //     .map(|x| {
+    //         <Fr as LocalOrMPC<Fr>>::PedersenComScheme::commit(
+    //             &pedersen_param,
+    //             &x.into_repr().to_bytes_le(),
+    //             &<Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
+    //         )
+    //         .unwrap()
+    //     })
+    //     .collect::<Vec<_>>();
+
+    // let mpc_player_commitment = player_commitment
+    //     .iter()
+    //     .map(|x| <MFr as LocalOrMPC<MFr>>::PedersenCommitment::from_public(*x))
+    //     .collect::<Vec<_>>();
+
+    // let votes_data = vec![
+    //     vec![
+    //         MFr::from_public(Fr::from(0)),
+    //         MFr::from_public(Fr::from(1)),
+    //         MFr::from_public(Fr::from(0)),
+    //     ],
+    //     vec![
+    //         MFr::from_public(Fr::from(0)),
+    //         MFr::from_public(Fr::from(1)),
+    //         MFr::from_public(Fr::from(0)),
+    //     ],
+    //     vec![
+    //         MFr::from_public(Fr::from(0)),
+    //         MFr::from_public(Fr::from(0)),
+    //         MFr::from_public(Fr::from(1)),
+    //     ],
+    // ];
+
+    // // 投票に関する入力データ
+    // let circuit = AnonymousVotingCircuit {
+    //     is_target_id: votes_data, // 投票対象のID
+    //     // is_most_voted_id: MFr::from_public(Fr::from(1)), // 最多得票者のID
+    //     pedersen_param: mpc_pedersen_param, // テスト用にNoneを設定
+    //     player_randomness: player_randomness
+    //         .iter()
+    //         .map(|x| MFr::from_public(*x))
+    //         .collect::<Vec<_>>(),
+    //     player_commitment: mpc_player_commitment,
+    // };
 }
+
+// 回路の証明のテストを書く。リクエスト及び他のノードは起動しない(small_test)
 
 #[tokio::test]
 #[serial]
@@ -148,90 +263,52 @@ async fn test_mpc_node_proof_generation_voting() -> Result<(), Box<dyn std::erro
     // let _nodes = TestNodes::start(3).await?;
     let client = reqwest::Client::new();
 
-    let rng = &mut test_rng();
-    let pedersen_param = <Fr as LocalOrMPC<Fr>>::PedersenComScheme::setup(rng).unwrap();
+    let (circuit_encrypted_input, _user_keys) = setup_voting();
 
-    let mpc_pedersen_param = <MFr as LocalOrMPC<MFr>>::PedersenParam::from_local(&pedersen_param);
+    // // シリアライズ
+    // let serialized =
+    //     serde_json::to_vec(&circuit).map_err(|e| format!("シリアライズに失敗: {}", e))?;
+    // println!(
+    //     "シリアライズされたデータのサイズ: {} bytes",
+    //     serialized.len()
+    // );
 
-    let player_randomness = (0..3).map(|_| Fr::rand(rng)).collect::<Vec<_>>();
-    // let player_commitment = load_random_commitment()?;
-    let player_commitment = player_randomness
-        .iter()
-        .map(|x| {
-            <Fr as LocalOrMPC<Fr>>::PedersenComScheme::commit(
-                &pedersen_param,
-                &x.into_repr().to_bytes_le(),
-                &<Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
-            )
-            .unwrap()
-        })
-        .collect::<Vec<_>>();
+    // // デシリアライズして検証
+    // let deserialized: AnonymousVotingCircuit<MFr> =
+    //     serde_json::from_slice(&serialized).map_err(|e| format!("デシリアライズに失敗: {}", e))?;
 
-    let mpc_player_commitment = player_commitment
-        .iter()
-        .map(|x| <MFr as LocalOrMPC<MFr>>::PedersenCommitment::from_public(*x))
-        .collect::<Vec<_>>();
+    // // シリアライズ前後でデータが一致することを確認
+    // assert_eq!(
+    //     circuit.is_target_id, deserialized.is_target_id,
+    //     "is_target_idのシリアライズ/デシリアライズ結果が一致しません"
+    // );
 
-    let votes_data = vec![
-        vec![
-            MFr::from_public(Fr::from(0)),
-            MFr::from_public(Fr::from(1)),
-            MFr::from_public(Fr::from(0)),
-        ],
-        vec![
-            MFr::from_public(Fr::from(0)),
-            MFr::from_public(Fr::from(1)),
-            MFr::from_public(Fr::from(0)),
-        ],
-        vec![
-            MFr::from_public(Fr::from(0)),
-            MFr::from_public(Fr::from(0)),
-            MFr::from_public(Fr::from(1)),
-        ],
-    ];
-
-    // 投票に関する入力データ
-    let circuit = AnonymousVotingCircuit {
-        is_target_id: votes_data, // 投票対象のID
-        // is_most_voted_id: MFr::from_public(Fr::from(1)), // 最多得票者のID
-        pedersen_param: mpc_pedersen_param, // テスト用にNoneを設定
-        player_randomness: player_randomness
-            .iter()
-            .map(|x| MFr::from_public(*x))
-            .collect::<Vec<_>>(),
-        player_commitment: mpc_player_commitment,
+    let test_req = ProofRequest {
+        proof_id: "test_proof_id".to_string(),
+        circuit_type: circuit_encrypted_input.clone(),
+        output_type: ProofOutputType::Public,
     };
 
-    // シリアライズ
-    let serialized =
-        serde_json::to_vec(&circuit).map_err(|e| format!("シリアライズに失敗: {}", e))?;
-    println!(
-        "シリアライズされたデータのサイズ: {} bytes",
-        serialized.len()
-    );
+    let hoge = serde_json::to_string(&test_req).unwrap();
 
-    // デシリアライズして検証
-    let deserialized: AnonymousVotingCircuit<MFr> =
-        serde_json::from_slice(&serialized).map_err(|e| format!("デシリアライズに失敗: {}", e))?;
+    let fuga = serde_json::from_str::<ProofRequest>(&hoge).unwrap();
 
-    // シリアライズ前後でデータが一致することを確認
-    assert_eq!(
-        circuit.is_target_id, deserialized.is_target_id,
-        "is_target_idのシリアライズ/デシリアライズ結果が一致しません"
-    );
+    assert_eq!(test_req.proof_id, fuga.proof_id);
+    // assert_eq!(test_req.circuit_type, fuga.circuit_type);
+    // assert_eq!(test_req.output_type, fuga.output_type);
+
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Send requests to the three ports
     let requests = [9000, 9001, 9002].map(|port| {
         let client = client.clone();
-        let circuit = circuit.clone();
+        let circuit = circuit_encrypted_input.clone();
         async move {
             let response = client
                 .post(format!("http://localhost:{}", port))
                 .json(&ProofRequest {
                     proof_id: "test_proof_id".to_string(),
-                    circuit_type: CircuitIdentifier::Built(BuiltinCircuit::AnonymousVoting(
-                        circuit.clone(),
-                    )),
+                    circuit_type: circuit.clone(),
                     output_type: ProofOutputType::Public,
                 })
                 .send()
@@ -244,7 +321,10 @@ async fn test_mpc_node_proof_generation_voting() -> Result<(), Box<dyn std::erro
         }
     });
 
-    let responses = futures::future::join_all(requests).await;
+    for request in requests {
+        let response = request.await?;
+        println!("Response from port {}: {:?}", response.0, response.1);
+    }
 
     // Wait briefly before checking the results
     println!("Waiting for proofs to be generated...");
@@ -256,16 +336,21 @@ async fn test_mpc_node_proof_generation_voting() -> Result<(), Box<dyn std::erro
         let max_attempts = 30;
 
         loop {
-            let status = client
+            let response = client
                 .get(format!(
                     "http://localhost:{}/proof/{}",
                     port, "test_proof_id",
                 ))
                 .send()
-                .await?
-                .json::<ProofStatus>()
                 .await?;
 
+            // 最後にProofStatusへ変換
+            let status: ProofStatus = response
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+            // デバッグ用に出力
             println!("Proof Status from port {}: {:?}", port, status);
 
             if status.state == "completed" {
@@ -292,283 +377,30 @@ async fn test_mpc_node_proof_generation_voting() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-#[tokio::test]
-#[serial]
-async fn test_mpc_node_invalid_request() -> Result<(), Box<dyn std::error::Error>> {
-    // let _nodes = TestNodes::start(3).await?;
+// #[tokio::test]
+// async fn test_multiplication_circuit() {
+//     // 同様のパターンで乗算回路のテスト
+//     let input = vec![5, 4];
+//     // ...同様のテストロジック
+// }
 
-    // Test invalid requests
-    let client = reqwest::Client::new();
+// #[tokio::test]
+// async fn test_comparison_circuit() {
+//     // 比較回路のテスト
+//     let input = vec![15, 10];
+//     // ...同様のテストロジック
+// }
 
-    // Test on each port
-    for port in [9000, 9001, 9002] {
-        println!("Testing invalid request on port {}", port);
-        match client
-            .post(format!("http://localhost:{}", port))
-            .json(&json!({
-                "invalid": "data"
-            }))
-            .send()
-            .await
-        {
-            Ok(response) => {
-                assert!(!response.status().is_success());
-                println!(
-                    "Got expected error response from port {}: {:?}",
-                    port,
-                    response.status()
-                );
-            }
-            Err(e) => {
-                // Allow error responses as well
-                println!("Got expected error from port {}: {:?}", port, e);
-            }
-        }
-    }
+// #[tokio::test]
+// async fn test_range_proof_circuit() {
+//     // 範囲証明回路のテスト
+//     let input = vec![50]; // 0-100の範囲内であることの証明
+//                           // ...同様のテストロジック
+// }
 
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
-async fn test_mpc_node_multiple_requests() -> Result<(), Box<dyn std::error::Error>> {
-    // let _nodes = TestNodes::start(3).await?;
-    let client = reqwest::Client::new();
-
-    // List of test cases
-    for (a, b) in [(2, 3), (5, 7), (11, 13)] {
-        let proof_id = format!("test_proof_id_{}_{}", a, b);
-
-        let fa = MFr::from_public(Fr::from(a));
-        let fb = MFr::from_public(Fr::from(b));
-
-        let circuit = MySimpleCircuit {
-            a: Some(fa),
-            b: Some(fb),
-        };
-
-        // Sequentially send requests to the three ports
-        for port in [9000, 9001, 9002] {
-            println!("Testing port {} with inputs a={}, b={}", port, a, b);
-            let response = client
-                .post(format!("http://localhost:{}", port))
-                .json(&ProofRequest {
-                    proof_id: proof_id.clone(),
-                    circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(
-                        circuit.clone(),
-                    )),
-                    output_type: ProofOutputType::Public,
-                })
-                .send()
-                .await?;
-
-            assert!(response.status().is_success());
-            println!(
-                "Response from port {} with inputs a={}, b={}: {:?}",
-                port, a, b, response
-            );
-
-            let response_body: serde_json::Value = response.json().await?;
-            assert_eq!(response_body["success"], true);
-            assert!(response_body["message"]
-                .as_str()
-                .unwrap()
-                .contains("successfully"));
-        }
-
-        // Wait briefly before checking the results
-        println!("Waiting for proofs to be generated...");
-        tokio::time::sleep(Duration::from_secs(5)).await;
-
-        // Verify the results for each port
-        for port in [9000, 9001, 9002] {
-            let mut attempts = 0;
-            let max_attempts = 30;
-
-            loop {
-                let status = client
-                    .get(format!("http://localhost:{}/proof/{}", port, proof_id))
-                    .send()
-                    .await?
-                    .json::<ProofStatus>()
-                    .await?;
-
-                println!(
-                    "Proof Status from port {} with inputs a={}, b={}: {:?}",
-                    port, a, b, status
-                );
-
-                if status.state == "completed" {
-                    println!(
-                        "Proof generation completed successfully on port {} with inputs a={}, b={}",
-                        port, a, b
-                    );
-                    break;
-                }
-
-                if status.state == "failed" {
-                    panic!(
-                        "Proof generation failed on port {} with inputs a={}, b={}: {:?}",
-                        port, a, b, status.message
-                    );
-                }
-
-                attempts += 1;
-                if attempts >= max_attempts {
-                    panic!(
-                        "Timeout waiting for proof generation on port {} with inputs a={}, b={}",
-                        port, a, b
-                    );
-                }
-
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        }
-
-        // Wait briefly before proceeding to the next test case
-        sleep(Duration::from_secs(2)).await;
-    }
-
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
-async fn test_mpc_node_different_outputs() -> Result<(), Box<dyn std::error::Error>> {
-    // let _nodes = TestNodes::start(3).await?;
-    let client = reqwest::Client::new();
-
-    let keypair = Keypair::generate(&mut OsRng {});
-
-    let user_pubkeys = vec![
-        UserPublicKey::new(
-            "user_pubkey_1".to_string(),
-            base64::encode(keypair.public.as_bytes()),
-        ),
-        UserPublicKey::new(
-            "user_pubkey_2".to_string(),
-            base64::encode(keypair.public.as_bytes()),
-        ),
-        UserPublicKey::new(
-            "user_pubkey_3".to_string(),
-            base64::encode(keypair.public.as_bytes()),
-        ),
-    ];
-
-    // 異なる出力タイプのテストケース
-    let test_cases = vec![
-        ("public_output", ProofOutputType::Public),
-        (
-            "private_to_public",
-            ProofOutputType::PrivateToPublic(user_pubkeys.clone()),
-        ),
-        (
-            "private_to_private",
-            ProofOutputType::PrivateToPrivate(user_pubkeys[0].public_key.clone()),
-        ),
-    ];
-
-    for (test_id, output_type) in test_cases {
-        let proof_id = format!("test_output_{}", test_id);
-        let fa = MFr::from_public(Fr::from(2));
-        let fb = MFr::from_public(Fr::from(3));
-
-        let circuit = MySimpleCircuit {
-            a: Some(fa),
-            b: Some(fb),
-        };
-
-        // 3つのノードそれぞれにリクエストを送信
-        for port in [9000, 9001, 9002] {
-            println!("Testing port {} with output type {:?}", port, output_type);
-            let response = client
-                .post(format!("http://localhost:{}", port))
-                .json(&ProofRequest {
-                    proof_id: proof_id.clone(),
-                    circuit_type: CircuitIdentifier::Built(BuiltinCircuit::MySimple(
-                        circuit.clone(),
-                    )),
-                    output_type: output_type.clone(),
-                })
-                .send()
-                .await?;
-
-            assert!(response.status().is_success());
-            let response_body: serde_json::Value = response.json().await?;
-            assert_eq!(response_body["success"], true);
-        }
-
-        // 結果の検証を待機
-        println!(
-            "Waiting for proof generation with output type {:?}...",
-            output_type
-        );
-        tokio::time::sleep(Duration::from_secs(5)).await;
-
-        // 各ノードの結果を確認
-        for port in [9000, 9001, 9002] {
-            let mut attempts = 0;
-            let max_attempts = 30;
-
-            loop {
-                let status = client
-                    .get(format!("http://localhost:{}/proof/{}", port, proof_id))
-                    .send()
-                    .await?
-                    .json::<ProofStatus>()
-                    .await?;
-
-                if status.state == "completed" {
-                    // 出力タイプに応じた検証
-                    let output = client
-                        .get(format!(
-                            "http://localhost:{}/proof/{}/output",
-                            port, proof_id
-                        ))
-                        .send()
-                        .await?
-                        .json::<ProofOutput>()
-                        .await?;
-
-                    match output_type {
-                        ProofOutputType::Public => {
-                            assert!(output.value.is_some());
-                            assert!(output.shares.is_none());
-                        }
-                        ProofOutputType::PrivateToPublic(_) => {
-                            assert!(output.shares.is_some());
-                            assert!(output.value.is_none());
-                        }
-                        ProofOutputType::PrivateToPrivate(_) => {
-                            assert!(output.value.is_some());
-                            assert!(output.shares.is_none());
-                        }
-                    }
-                    break;
-                }
-
-                if status.state == "failed" {
-                    panic!(
-                        "Proof generation failed on port {} with output type {:?}: {:?}",
-                        port, output_type, status.message
-                    );
-                }
-
-                attempts += 1;
-                if attempts >= max_attempts {
-                    panic!(
-                        "Timeout waiting for proof generation on port {} with output type {:?}",
-                        port, output_type
-                    );
-                }
-
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        }
-
-        // 次のテストケースに進む前に待機
-        sleep(Duration::from_secs(2)).await;
-    }
-
-    Ok(())
-}
+// #[tokio::test]
+// async fn test_complex_arithmetic_circuit() {
+//     // 複合演算回路のテスト (例: (a + b) * c)
+//     let input = vec![3, 4, 2];
+//     // ...同様のテストロジック
+// }

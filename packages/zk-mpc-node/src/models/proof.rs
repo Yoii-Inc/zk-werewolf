@@ -17,6 +17,7 @@ pub struct ProofResponse {
     pub message: String,
 }
 
+// Struct for proof requests sent from server to node
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProofRequest {
     pub proof_id: String,

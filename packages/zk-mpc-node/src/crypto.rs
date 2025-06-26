@@ -23,8 +23,13 @@ pub enum CryptoError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodeKeys {
     pub public_key: String, // Base64エンコードされた公開鍵
-    #[serde(skip_serializing)] // シリアライズ時にスキップ
-    secret_key: String, // Base64エンコードされた秘密鍵
+    // #[serde(skip_serializing)] // シリアライズ時にスキップ
+    pub secret_key: String, // Base64エンコードされた秘密鍵
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct KeyFile {
+    pub public_key: String, // Base64エンコードされた公開鍵
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +58,7 @@ impl KeyManager {
         }
     }
 
-    pub async fn generate_keypair(&self) -> Result<NodeKeys, CryptoError> {
+    pub async fn generate_keypair(&self, id: u32) -> Result<NodeKeys, CryptoError> {
         let secret_key = SecretKey::generate(&mut OsRng);
         let public_key = PublicKey::from(&secret_key);
 
@@ -62,8 +67,18 @@ impl KeyManager {
             secret_key: encode(secret_key.to_bytes()),
         };
 
+        Self::write_keys_to_file(id, keys.clone());
+
         *self.keys.write().await = Some(keys.clone());
         Ok(keys)
+    }
+
+    pub fn write_keys_to_file(id: u32, keys: crate::NodeKeys) {
+        // NodeKeysをjsonにシリアライズしてファイルに保存する
+        let keys_json = serde_json::to_string(&keys).expect("Failed to serialize keys");
+        let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        let file_path = format!("{}/node_keys_{}.json", data_dir, id);
+        std::fs::write(file_path, keys_json).expect("Failed to write keys to file");
     }
 
     pub async fn get_public_key(&self) -> Result<String, CryptoError> {
@@ -72,6 +87,15 @@ impl KeyManager {
             .await
             .as_ref()
             .map(|k| k.public_key.clone())
+            .ok_or(CryptoError::KeyNotInitialized)
+    }
+
+    pub async fn get_secret_key(&self) -> Result<String, CryptoError> {
+        self.keys
+            .read()
+            .await
+            .as_ref()
+            .map(|k| k.secret_key.clone())
             .ok_or(CryptoError::KeyNotInitialized)
     }
 
@@ -151,7 +175,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_generation() {
         let key_manager = KeyManager::new();
-        let keys = key_manager.generate_keypair().await.unwrap();
+        let keys = key_manager.generate_keypair(1).await.unwrap();
 
         assert!(!keys.public_key.is_empty());
         assert!(!keys.secret_key.is_empty());
@@ -160,7 +184,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_public_key() {
         let key_manager = KeyManager::new();
-        let keys = key_manager.generate_keypair().await.unwrap();
+        let keys = key_manager.generate_keypair(1).await.unwrap();
         let public_key = key_manager.get_public_key().await.unwrap();
 
         assert_eq!(keys.public_key, public_key);
@@ -169,7 +193,7 @@ mod tests {
     #[tokio::test]
     async fn test_encrypt_decrypt_share() {
         let key_manager = KeyManager::new();
-        key_manager.generate_keypair().await.unwrap();
+        key_manager.generate_keypair(1).await.unwrap();
         let public_key = key_manager.get_public_key().await.unwrap();
 
         let test_share = b"test share data";
@@ -180,5 +204,21 @@ mod tests {
         let decrypted = key_manager.decrypt_share(&encrypted).await.unwrap();
 
         assert_eq!(test_share.to_vec(), decrypted);
+    }
+
+    #[tokio::test]
+    async fn test_write_and_read_keys() {
+        let key_manager = KeyManager::new();
+        let keys = key_manager.generate_keypair(1).await.unwrap();
+
+        KeyManager::write_keys_to_file(1, keys.clone());
+
+        let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        let file_path = format!("{}/node_keys_{}.json", data_dir, 1);
+        let file = std::fs::File::open(file_path).unwrap();
+        let reader = std::io::BufReader::new(file);
+        let key_file: KeyFile = serde_json::from_reader(reader).unwrap();
+
+        assert_eq!(keys.public_key, key_file.public_key);
     }
 }
