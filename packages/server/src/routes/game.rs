@@ -1,5 +1,8 @@
-use crate::models::game::{ChangeRoleRequest, GameResult, NightActionRequest};
+use crate::models::game::{
+    BatchRequest, ChangeRoleRequest, ClientRequestType, GameResult, NightActionRequest,
+};
 use crate::models::role::Role;
+use crate::services::zk_proof;
 use crate::{
     models::chat::{ChatMessage, ChatMessageType},
     services::game_service,
@@ -38,6 +41,7 @@ pub fn routes(state: AppState) -> Router {
                         .route("/vote", post(cast_vote_handler))
                         .route("/night-action", post(night_action_handler)),
                 )
+                .route("/proof", post(proof_handler))
                 // デバッグ用エンドポイント
                 .route("/debug/change-role", post(change_player_role))
                 // ゲーム進行の管理
@@ -107,6 +111,17 @@ async fn cast_vote_handler(
     {
         Ok(message) => (StatusCode::OK, Json(message)),
         Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
+    }
+}
+
+pub async fn proof_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+    Json(request): Json<ClientRequestType>,
+) -> impl IntoResponse {
+    match zk_proof::batch_proof_handling(state, &room_id, &request).await {
+        Ok(batch_id) => (StatusCode::OK, Json(batch_id)),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(e)),
     }
 }
 
