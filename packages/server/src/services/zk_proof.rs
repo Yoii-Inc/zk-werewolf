@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::utils::config::CONFIG;
 use axum::{http::StatusCode, Json};
 use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
 use mpc_circuits::CircuitIdentifier;
@@ -49,9 +50,9 @@ pub async fn request_proof_with_output(
 
     let mut responses = Vec::new();
 
-    for port in ZK_MPC_NODE_URL {
+    for url in CONFIG.zk_mpc_node_urls() {
         let response = client
-            .post(port)
+            .post(url)
             .json(&payload)
             .send()
             .await
@@ -79,7 +80,7 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
         let mut last_completed_status: Option<ProofStatus> = None;
 
         // 全ノードのステータスをチェック
-        for node_url in ZK_MPC_NODE_URL.iter() {
+        for node_url in CONFIG.zk_mpc_node_urls() {
             let response = client
                 .get(format!("{}/proof/{}", node_url, proof_id))
                 .send()
@@ -99,7 +100,7 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
         }
 
         // 全ノードが完了していたら成功
-        if completed_count == ZK_MPC_NODE_URL.len() {
+        if completed_count == CONFIG.zk_mpc_node_urls().len() {
             return Ok((true, last_completed_status.and_then(|s| s.output)));
         }
 

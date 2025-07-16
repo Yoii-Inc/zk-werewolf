@@ -23,9 +23,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // ページ読み込み時にローカルストレージからユーザー情報を取得
-    const storedToken = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
+    // 環境に応じてストレージを選択
+    const isTestEnv = process.env.NODE_ENV === "development";
+    const storage = isTestEnv ? sessionStorage : localStorage;
+
+    // ページ読み込み時にストレージからユーザー情報を取得
+    const storedToken = storage.getItem("token");
+    const storedUser = storage.getItem("user");
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
@@ -33,17 +37,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = (newToken: string, userData: User) => {
+    const isTestEnv = process.env.NODE_ENV === "development";
+    const storage = isTestEnv ? sessionStorage : localStorage;
+
     setToken(newToken);
     setUser(userData);
-    localStorage.setItem("token", newToken);
-    localStorage.setItem("user", JSON.stringify(userData));
+    storage.setItem("token", newToken);
+    storage.setItem("user", JSON.stringify(userData));
   };
 
   const logout = () => {
+    const isTestEnv = process.env.NODE_ENV === "development";
+    const storage = isTestEnv ? sessionStorage : localStorage;
+
     setToken(null);
     setUser(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    storage.removeItem("token");
+    storage.removeItem("user");
   };
 
   return (

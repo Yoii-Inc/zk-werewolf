@@ -13,6 +13,15 @@ pub fn setup_test_env() {
         if std::env::var("SUPABASE_KEY").is_err() {
             std::env::set_var("SUPABASE_KEY", "test-key");
         }
+        if std::env::var("ZK_MPC_NODE_1").is_err() {
+            std::env::set_var("ZK_MPC_NODE_1", "http://localhost:9000");
+        }
+        if std::env::var("ZK_MPC_NODE_2").is_err() {
+            std::env::set_var("ZK_MPC_NODE_2", "http://localhost:9001");
+        }
+        if std::env::var("ZK_MPC_NODE_3").is_err() {
+            std::env::set_var("ZK_MPC_NODE_3", "http://localhost:9002");
+        }
         if std::env::var("JWT_SECRET").is_err() {
             std::env::set_var("JWT_SECRET", "test-jwt-secret");
         }
