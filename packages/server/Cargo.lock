@@ -2799,6 +2799,7 @@ dependencies = [
 name = "server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ark-bls12-377",
  "ark-crypto-primitives",
  "ark-ff",
@@ -2806,8 +2807,11 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "axum",
+ "base64 0.13.1",
  "bcrypt",
  "chrono",
+ "crypto_box",
+ "derivative",
  "dotenvy",
  "env_logger 0.10.2",
  "futures",
@@ -2816,6 +2820,7 @@ dependencies = [
  "jsonwebtoken",
  "log",
  "mpc-algebra",
+ "mpc-algebra-wasm",
  "mpc-circuits",
  "once_cell",
  "rand 0.8.5",

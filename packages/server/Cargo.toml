@@ -35,6 +35,9 @@ ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", packag
 ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
 
 mpc-circuits = { path = "../mpc-circuits" }
+mpc-algebra-wasm = { path = "../mpc-algebra-wasm" }
+derivative = "2.2.0"
+anyhow = "1.0.98"
 
 [dev-dependencies]
 tokio-tungstenite = "0.19"
@@ -43,3 +46,6 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 wiremock = "0.5"
 ark-serialize = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-serialize", version = "0.3.0", default-features = false }
+
+base64 = "0.13"
+crypto_box = { version = "0.9.1", features = ["std"] }
