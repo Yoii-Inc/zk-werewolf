@@ -2392,15 +2392,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:^19.0.2":
-  version: 19.0.2
-  resolution: "@types/react@npm:19.0.2"
-  dependencies:
-    csstype: ^3.0.2
-  checksum: 2f12c2a84b778283884d41560c723d815153d88c56cacf25c0166329e9099c35c82c602a21d8831a381e2ef5574434ebd7bf09a636fe073558919474b0b3c9ed
-  languageName: node
-  linkType: hard
-
 "@types/react@npm:~18.3.5":
   version: 18.3.19
   resolution: "@types/react@npm:18.3.19"
@@ -9676,7 +9667,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "se-2@workspace:."
   dependencies:
-    "@types/react": ^19.0.2
     husky: ~8.0.3
     lint-staged: ~13.2.2
     lucide-react: ^0.483.0

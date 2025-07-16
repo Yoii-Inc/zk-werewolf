@@ -1,0 +1,27 @@
+[package]
+name = "mpc-algebra-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-bindgen = "0.2.100"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+serde_json = "1.0"
+rand = "0.8"
+getrandom = { version = "0.2", features = ["js"] }
+base64 = "0.13"
+crypto_box = { version = "0.9.1", features = ["std"] }
+nalgebra = { version = "0.33.0", features = ["serde-serialize"] }
+console_error_panic_hook = "0.1"
+anyhow = "1.0"
+
+ark-ff = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ff", version = "0.3.0" }
+ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
+ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0" }
+
+ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
+ark-ed-on-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ed-on-bls12-377", version = "0.3.0", features = ["r1cs"] }
+
+[lib]
+crate-type = ["cdylib"]
