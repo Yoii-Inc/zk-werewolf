@@ -47,45 +47,45 @@ graph TD
   IPFS --> DataIndexing
 ```
 
-## Deployment Architecture (Cloudflare)
+## Deployment Architecture
 
-The system is deployed on Cloudflare's infrastructure with the following components:
+The system consists of the following components:
 
 1. **Frontend (Next.js)**
 
-   - Deployed on Cloudflare Pages
+   - Static site hosting (e.g., Vercel, Netlify)
    - Serves the React application
    - Handles client-side routing and UI rendering
 
 2. **Backend (Rust)**
 
-   - Deployed on Cloudflare Workers
+   - Containerized deployment
    - Handles WebSocket connections
    - Manages real-time communication
-   - Uses Cloudflare D1 for data storage
+   - Uses PostgreSQL for data storage
 
 3. **zk-mpc-node**
 
-   - Deployed on Cloudflare Workers
+   - Distributed node deployment
    - Handles zero-knowledge proof computations
-   - Uses Cloudflare Durable Objects for state management
+   - State management through Redis
 
 4. **Smart Contracts**
    - Deployed on Ethereum/Layer2 networks
-   - Interacts with Cloudflare infrastructure via RPC
-   - Uses Cloudflare R2 for metadata storage
+   - Interacts with backend via RPC
+   - Uses IPFS for metadata storage
 
 ## Database Architecture
 
-The system uses a combination of Supabase and in-memory storage:
+The system uses a combination of PostgreSQL and Redis:
 
-1. **Supabase (PostgreSQL)**
+1. **PostgreSQL**
 
    - User management and authentication
    - Persistent data storage
    - Row Level Security (RLS) enabled
 
-2. **In-Memory Storage**
+2. **Redis**
    - Game state management
    - Real-time communication
    - Temporary data storage
@@ -93,10 +93,7 @@ The system uses a combination of Supabase and in-memory storage:
 ### Database Schema
 
 ```sql
--- Supabaseにユーザーテーブルを作成するSQL
--- このスクリプトはSupabaseコンソールのSQL Editorで実行してください
-
--- ユーザーテーブル
+-- Create users table in PostgreSQL
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY,
   username TEXT NOT NULL,
@@ -107,94 +104,61 @@ CREATE TABLE IF NOT EXISTS users (
   last_login TIMESTAMP WITH TIME ZONE
 );
 
--- RLSポリシーの設定
+-- Set up RLS policies
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- 匿名ユーザーが新規ユーザーを作成できるようにする
-CREATE POLICY "ユーザー登録を許可" ON users
+-- Allow anonymous users to create new users
+CREATE POLICY "Allow user registration" ON users
   FOR INSERT TO anon
   WITH CHECK (true);
 
--- ユーザー自身のデータのみを取得・更新できるようにする
-CREATE POLICY "ユーザーは自分のデータのみ閲覧可能" ON users
+-- Allow users to access only their own data
+CREATE POLICY "Users can view their own data" ON users
   FOR SELECT TO authenticated
   USING (auth.uid() = id);
 
-CREATE POLICY "ユーザーは自分のデータのみ更新可能" ON users
+CREATE POLICY "Users can update their own data" ON users
   FOR UPDATE TO authenticated
   USING (auth.uid() = id);
 
--- メールアドレスによるユーザー検索を許可
-CREATE POLICY "メールアドレスによるユーザー検索を許可" ON users
+-- Allow email-based user search
+CREATE POLICY "Allow email-based user search" ON users
   FOR SELECT TO anon
   USING (true);
 
--- インデックス作成
+-- Create index
 CREATE INDEX IF NOT EXISTS users_email_idx ON users (email);
 ```
 
 ## Environment Configuration
 
-### Required Secrets (GitHub Secrets)
+### Required Environment Variables
 
-以下の値は機密情報として扱い、GitHub Secrets として設定する必要があります：
-
-1. **Cloudflare**
+1. **Database**
 
    ```bash
-   CF_API_TOKEN=your-cloudflare-api-token  # CloudflareのAPIトークン
+   DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+   REDIS_URL=redis://localhost:6379
    ```
 
 2. **Smart Contracts**
 
    ```bash
-   PRIVATE_KEY=your-deployer-private-key   # コントラクトデプロイ用の秘密鍵
+   PRIVATE_KEY=your-deployer-private-key   # Contract deployment private key
+   RPC_URL=your-ethereum-rpc-url           # Testnet/Mainnet RPC URL
    ```
 
-3. **Supabase**
+3. **Authentication**
 
    ```bash
-   SUPABASE_KEY=your-supabase-anon-key     # Supabaseの匿名キー
-   JWT_SECRET=your-secure-jwt-secret       # JWT署名用の秘密鍵
+   JWT_SECRET=your-secure-jwt-secret       # JWT signing secret
    ```
 
-4. **zk-mpc-node**
-   ```bash
-   MPC_SECRET_KEY=your-mpc-secret-key      # MPCノードの秘密鍵
-   MPC_PUBLIC_KEY=your-mpc-public-key      # MPCノードの公開鍵
-   ```
-
-### Environment Variables (GitHub Variables)
-
-以下の値は環境変数として設定可能です：
-
-1. **Supabase**
+4. **MPC Nodes**
 
    ```bash
-   SUPABASE_URL=https://your-project-id.supabase.co  # SupabaseのプロジェクトURL
-   ```
-
-2. **Frontend**
-
-   ```bash
-   NEXT_PUBLIC_API_URL=https://zk-werewolf-backend.workers.dev
-   NEXT_PUBLIC_WS_URL=wss://zk-werewolf-backend.workers.dev
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-   ```
-
-3. **Smart Contracts**
-
-   ```bash
-   RPC_URL=your-ethereum-rpc-url  # テストネット/メインネットのRPC URL
-   ```
-
-4. **zk-mpc-node URLs**
-
-   ```bash
-   ZK_MPC_NODE_1=http://localhost:9000  # MPCノード1のURL
-   ZK_MPC_NODE_2=http://localhost:9001  # MPCノード2のURL
-   ZK_MPC_NODE_3=http://localhost:9002  # MPCノード3のURL
+   MPC_SECRET_KEY=your-mpc-secret-key      # MPC node secret key
+   MPC_PUBLIC_KEY=your-mpc-public-key      # MPC node public key
    ```
 
 5. **Debug Settings**
@@ -208,38 +172,24 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users (email);
    DEBUG_CREATE_CRYPTO_PARAMETERS=false
    ```
 
-### Setting Up Secrets and Variables
-
-1. **GitHub Secrets の設定**
-
-   - リポジトリの Settings > Secrets and variables > Actions に移動
-   - "New repository secret"をクリック
-   - 上記の Secrets を追加（値は暗号化されて保存）
-
-2. **GitHub Variables の設定**
-   - リポジトリの Settings > Secrets and variables > Actions に移動
-   - "Variables"タブを選択
-   - "New repository variable"をクリック
-   - 上記の Variables を追加
-
 ### Environment-Specific Configuration
 
 - **Development**
 
-  - すべての DEBUG\_\*変数を true に設定
-  - テストネットの RPC URL を使用
-  - 開発用 Supabase プロジェクトを使用
+  - Local PostgreSQL and Redis
+  - All DEBUG\_\* variables set to true
+  - Testnet RPC URL
 
 - **Staging**
 
-  - 限定的な DEBUG\_\*変数のみ有効
-  - テストネットの RPC URL を使用
-  - ステージング用 Supabase プロジェクトを使用
+  - Managed PostgreSQL and Redis
+  - Limited DEBUG\_\* variables enabled
+  - Testnet RPC URL
 
 - **Production**
-  - すべての DEBUG\_\*変数を false に設定
-  - メインネットの RPC URL を使用
-  - 本番用 Supabase プロジェクトを使用
+  - Managed PostgreSQL and Redis with high availability
+  - All DEBUG\_\* variables set to false
+  - Mainnet RPC URL
 
 ## Deployment Process
 
@@ -248,21 +198,25 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users (email);
    ```bash
    cd packages/nextjs
    yarn build
-   wrangler pages deploy .next
+   yarn deploy
    ```
 
 2. **Backend Deployment**
 
    ```bash
    cd packages/server
-   wrangler deploy
+   cargo build --release
+   docker build -t zk-werewolf-backend .
+   docker push zk-werewolf-backend
    ```
 
 3. **zk-mpc-node Deployment**
 
    ```bash
    cd packages/zk-mpc-node
-   wrangler deploy
+   cargo build --release
+   docker build -t zk-werewolf-mpc .
+   docker push zk-werewolf-mpc
    ```
 
 4. **Smart Contract Deployment**
@@ -273,16 +227,17 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users (email);
 
 ## CI/CD Pipeline
 
-The project uses GitHub Actions for continuous deployment. The workflow:
+The project uses GitHub Actions for continuous deployment:
 
 1. Triggers on push to main branch
 2. Sets up Node.js and Rust environments
-3. Deploys smart contracts
-4. Deploys zk-mpc-node
-5. Deploys backend
-6. Builds and deploys frontend
-7. Updates environment variables
-8. Verifies deployment
+3. Runs tests
+4. Builds Docker images
+5. Deploys smart contracts
+6. Deploys backend services
+7. Deploys frontend
+8. Runs integration tests
+9. Updates environment variables
 
 ## Security Considerations
 
@@ -294,7 +249,7 @@ The project uses GitHub Actions for continuous deployment. The workflow:
 
 2. **Access Control**
 
-   - Row Level Security in Supabase
+   - Row Level Security in PostgreSQL
    - JWT-based authentication
    - Secure WebSocket connections
 
@@ -307,15 +262,15 @@ The project uses GitHub Actions for continuous deployment. The workflow:
 
 1. **Health Checks**
 
-   - Frontend: `https://zk-werewolf.pages.dev`
-   - Backend: `https://zk-werewolf-backend.workers.dev/health`
-   - zk-mpc-node: `https://zk-werewolf-mpc.workers.dev/health`
+   - Regular endpoint monitoring
+   - Service health metrics
+   - Performance tracking
 
 2. **Logging**
 
-   - Cloudflare Workers logs
-   - Supabase audit logs
+   - Centralized logging system
    - Application logs
+   - Audit logs
 
 3. **Backup Strategy**
    - Regular database backups
