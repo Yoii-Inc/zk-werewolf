@@ -140,6 +140,22 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     }
   };
 
+  // 新しい部屋が作成されたときのチャットログリセット
+  useEffect(() => {
+    if (roomInfo?.status === "Open") {
+      localStorage.removeItem(`chat_messages_${params.id}`);
+      setMessages([
+        {
+          id: Date.now().toString(),
+          sender: "システム",
+          message: "新しい部屋が作成されました",
+          timestamp: new Date().toISOString(),
+          type: "system",
+        },
+      ]);
+    }
+  }, [roomInfo?.status, params.id]);
+
   useEffect(() => {
     if (!hasConnectedRef.current) {
       hasConnectedRef.current = true;
@@ -268,15 +284,17 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       if (!response.ok) {
         throw new Error("ゲームの開始に失敗しました");
       }
-      // ゲーム開始成功時の処理
-      const message: ChatMessage = {
-        id: Date.now().toString(),
-        sender: "システム",
-        message: "ゲームが開始されました",
-        timestamp: new Date().toISOString(),
-        type: "system",
-      };
-      setMessages(prev => [...prev, message]);
+      // ゲーム開始時にチャットログをリセット
+      localStorage.removeItem(`chat_messages_${params.id}`);
+      setMessages([
+        {
+          id: Date.now().toString(),
+          sender: "システム",
+          message: "ゲームが開始されました",
+          timestamp: new Date().toISOString(),
+          type: "system",
+        },
+      ]);
     } catch (error) {
       console.error("ゲーム開始エラー:", error);
     } finally {
