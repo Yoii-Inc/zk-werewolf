@@ -26,14 +26,14 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         id: u32,
         net: Arc<MPCNetConnection<IO>>,
         proof_manager: Arc<ProofManager>,
+        key_manager: Arc<KeyManager>,
         server_url: String, // 追加
     ) -> Self {
-        let key_manager = Arc::new(KeyManager::new());
-        // 起動時に鍵ペアを生成
+        // load the keypair from file
         key_manager
-            .generate_keypair(id)
+            .load_keypair(id)
             .await
-            .expect("Failed to generate keypair");
+            .expect("Failed to load keypair");
 
         let api_client = Arc::new(ApiClient::new(server_url.clone()));
 

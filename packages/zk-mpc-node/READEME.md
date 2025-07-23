@@ -1,9 +1,21 @@
 # ZK-MPC-Node
 
-サーバーの起動
-
+鍵ペアの生成
 ```bash
-cargo run --release 0 ./address/3
+# ノード0の鍵を生成(例)
+cargo run --release keygen --id 0
+
+# ノード1の鍵を生成(例)
+cargo run --release keygen --id 1
+```
+
+ノードの起動
+```bash
+# ノード0を起動(例)
+cargo run --release start --id 0 --input ./address/3
+
+# ノード1を起動(例)
+cargo run --release start --id 1 --input ./address/3
 ```
 
 インテグレーションテスト

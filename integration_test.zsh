@@ -49,12 +49,17 @@ run_server_node_tests() {
     cd ../zk-mpc-node
     cargo build --release
 
+    # 鍵ペアの生成
+    cargo run --release keygen --id 0
+    cargo run --release keygen --id 1
+    cargo run --release keygen --id 2
+
     # 3つのノードを起動（それぞれ異なるポートで）
-    ./target/release/zk-mpc-node 0 ./address/3 &
+    ./target/release/zk-mpc-node start --id 0 --input ./address/3 &
     NODE0_PID=$!
-    ./target/release/zk-mpc-node 1 ./address/3 >/dev/null &
+    ./target/release/zk-mpc-node start --id 1 --input ./address/3 >/dev/null &
     NODE1_PID=$!
-    ./target/release/zk-mpc-node 2 ./address/3 >/dev/null &
+    ./target/release/zk-mpc-node start --id 2 --input ./address/3 >/dev/null &
     NODE2_PID=$!
 
     # ノードの起動を待機

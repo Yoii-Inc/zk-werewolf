@@ -73,6 +73,23 @@ impl KeyManager {
         Ok(keys)
     }
 
+    pub async fn load_keypair(&self, id: u32) -> Result<NodeKeys, CryptoError> {
+        let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        let file_path = format!("{}/node_keys_{}.json", data_dir, id);
+
+        let file = std::fs::File::open(&file_path).map_err(|e| {
+            CryptoError::KeyGenerationError(format!("Failed to open key file: {}", e))
+        })?;
+
+        let reader = std::io::BufReader::new(file);
+        let keys: NodeKeys = serde_json::from_reader(reader).map_err(|e| {
+            CryptoError::KeyGenerationError(format!("Failed to parse key file: {}", e))
+        })?;
+
+        *self.keys.write().await = Some(keys.clone());
+        Ok(keys)
+    }
+
     pub fn write_keys_to_file(id: u32, keys: crate::NodeKeys) {
         // NodeKeysをjsonにシリアライズしてファイルに保存する
         let keys_json = serde_json::to_string(&keys).expect("Failed to serialize keys");
