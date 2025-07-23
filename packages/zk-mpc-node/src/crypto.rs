@@ -1,5 +1,8 @@
-use ed25519_dalek::{Keypair, PublicKey, SecretKey};
-use rand::rngs::OsRng;
+use base64::{decode, encode};
+use crypto_box::{
+    aead::{Aead, AeadCore, OsRng},
+    PublicKey, SalsaBox, SecretKey,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -20,8 +23,13 @@ pub enum CryptoError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodeKeys {
     pub public_key: String, // Base64エンコードされた公開鍵
-    #[serde(skip_serializing)] // シリアライズ時にスキップ
-    secret_key: String, // Base64エンコードされた秘密鍵
+    // #[serde(skip_serializing)] // シリアライズ時にスキップ
+    pub secret_key: String, // Base64エンコードされた秘密鍵
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct KeyFile {
+    pub public_key: String, // Base64エンコードされた公開鍵
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,17 +58,46 @@ impl KeyManager {
         }
     }
 
-    pub async fn generate_keypair(&self) -> Result<NodeKeys, CryptoError> {
-        let mut csprng = OsRng {};
-        let keypair = Keypair::generate(&mut csprng);
+    pub async fn generate_keypair(&self, id: u32) -> Result<NodeKeys, CryptoError> {
+        let secret_key = SecretKey::generate(&mut OsRng);
+        let public_key = PublicKey::from(&secret_key);
 
         let keys = NodeKeys {
-            public_key: base64::encode(keypair.public.as_bytes()),
-            secret_key: base64::encode(keypair.secret.as_bytes()),
+            public_key: encode(public_key.to_bytes()),
+            secret_key: encode(secret_key.to_bytes()),
         };
+
+        Self::write_keys_to_file(id, keys.clone());
 
         *self.keys.write().await = Some(keys.clone());
         Ok(keys)
+    }
+
+    pub async fn load_keypair(&self, id: u32) -> Result<NodeKeys, CryptoError> {
+        let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        let file_path = format!("{}/node_keys_{}.json", data_dir, id);
+
+        let file = std::fs::File::open(&file_path).map_err(|e| {
+            CryptoError::KeyGenerationError(format!("Failed to open key file: {}", e))
+        })?;
+
+        let reader = std::io::BufReader::new(file);
+        let keys: NodeKeys = serde_json::from_reader(reader).map_err(|e| {
+            CryptoError::KeyGenerationError(format!("Failed to parse key file: {}", e))
+        })?;
+
+        *self.keys.write().await = Some(keys.clone());
+        Ok(keys)
+    }
+
+    pub fn write_keys_to_file(id: u32, keys: crate::NodeKeys) {
+        // NodeKeysをjsonにシリアライズしてファイルに保存する
+        let keys_json = serde_json::to_string(&keys).expect("Failed to serialize keys");
+        let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        // ディレクトリが存在しない場合は作成
+        std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
+        let file_path = format!("{}/node_keys_{}.json", data_dir, id);
+        std::fs::write(file_path, keys_json).expect("Failed to write keys to file");
     }
 
     pub async fn get_public_key(&self) -> Result<String, CryptoError> {
@@ -72,34 +109,81 @@ impl KeyManager {
             .ok_or(CryptoError::KeyNotInitialized)
     }
 
+    pub async fn get_secret_key(&self) -> Result<String, CryptoError> {
+        self.keys
+            .read()
+            .await
+            .as_ref()
+            .map(|k| k.secret_key.clone())
+            .ok_or(CryptoError::KeyNotInitialized)
+    }
+
     pub async fn encrypt_share(
         &self,
         share: &[u8],
         recipient_public_key: &str,
     ) -> Result<Vec<u8>, CryptoError> {
-        // Base64デコード
-        let public_key_bytes = base64::decode(recipient_public_key)
+        let keys = self.keys.read().await;
+        let node_keys = keys.as_ref().ok_or(CryptoError::KeyNotInitialized)?;
+
+        // 秘密鍵とBase64デコード
+        let secret_key_bytes = decode(&node_keys.secret_key)
+            .map_err(|e| CryptoError::EncryptionError(e.to_string()))?;
+        let secret_key = SecretKey::from_slice(&secret_key_bytes)
+            .map_err(|_| CryptoError::EncryptionError("Invalid secret key".to_string()))?;
+
+        // 受信者の公開鍵をBase64デコード
+        let recipient_key_bytes = decode(recipient_public_key)
+            .map_err(|e| CryptoError::EncryptionError(e.to_string()))?;
+        let recipient_key = PublicKey::from_slice(&recipient_key_bytes).map_err(|_| {
+            CryptoError::EncryptionError("Invalid recipient public key".to_string())
+        })?;
+
+        // 暗号化
+        let salsa_box = SalsaBox::new(&recipient_key, &secret_key);
+        let nonce = SalsaBox::generate_nonce(&mut OsRng);
+        let encrypted = salsa_box
+            .encrypt(&nonce, share)
             .map_err(|e| CryptoError::EncryptionError(e.to_string()))?;
 
-        let public_key = PublicKey::from_bytes(&public_key_bytes)
-            .map_err(|e| CryptoError::EncryptionError(e.to_string()))?;
-
-        // TODO: 実際の暗号化処理を実装
-        // この例では単純にデータを返していますが、実際にはEd25519で暗号化する必要があります
-        Ok(share.to_vec())
+        // ノンスと暗号文を結合
+        let mut result = Vec::new();
+        result.extend_from_slice(&nonce);
+        result.extend_from_slice(&encrypted);
+        Ok(result)
     }
 
     pub async fn decrypt_share(&self, encrypted_share: &[u8]) -> Result<Vec<u8>, CryptoError> {
         let keys = self.keys.read().await;
         let node_keys = keys.as_ref().ok_or(CryptoError::KeyNotInitialized)?;
 
-        // Base64デコード
-        let secret_key_bytes = base64::decode(&node_keys.secret_key)
+        // 秘密鍵をBase64デコード
+        let secret_key_bytes = decode(&node_keys.secret_key)
             .map_err(|e| CryptoError::DecryptionError(e.to_string()))?;
+        let secret_key = SecretKey::from_slice(&secret_key_bytes)
+            .map_err(|_| CryptoError::DecryptionError("Invalid secret key".to_string()))?;
 
-        // TODO: 実際の復号処理を実装
-        // この例では単純にデータを返していますが、実際にはEd25519で復号する必要があります
-        Ok(encrypted_share.to_vec())
+        // 公開鍵をBase64デコード
+        let public_key_bytes = decode(&node_keys.public_key)
+            .map_err(|e| CryptoError::DecryptionError(e.to_string()))?;
+        let public_key = PublicKey::from_slice(&public_key_bytes)
+            .map_err(|_| CryptoError::DecryptionError("Invalid public key".to_string()))?;
+
+        if encrypted_share.len() < 24 {
+            return Err(CryptoError::DecryptionError(
+                "Invalid encrypted data length".to_string(),
+            ));
+        }
+
+        // ノンスと暗号文を分離
+        let (nonce_bytes, cipher_text) = encrypted_share.split_at(24);
+        let nonce = *crypto_box::Nonce::from_slice(nonce_bytes);
+
+        // 復号化
+        let salsa_box = SalsaBox::new(&public_key, &secret_key);
+        salsa_box
+            .decrypt(&nonce, cipher_text)
+            .map_err(|e| CryptoError::DecryptionError(e.to_string()))
     }
 }
 
@@ -110,7 +194,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_generation() {
         let key_manager = KeyManager::new();
-        let keys = key_manager.generate_keypair().await.unwrap();
+        let keys = key_manager.generate_keypair(1).await.unwrap();
 
         assert!(!keys.public_key.is_empty());
         assert!(!keys.secret_key.is_empty());
@@ -119,7 +203,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_public_key() {
         let key_manager = KeyManager::new();
-        let keys = key_manager.generate_keypair().await.unwrap();
+        let keys = key_manager.generate_keypair(1).await.unwrap();
         let public_key = key_manager.get_public_key().await.unwrap();
 
         assert_eq!(keys.public_key, public_key);
@@ -128,7 +212,7 @@ mod tests {
     #[tokio::test]
     async fn test_encrypt_decrypt_share() {
         let key_manager = KeyManager::new();
-        key_manager.generate_keypair().await.unwrap();
+        key_manager.generate_keypair(1).await.unwrap();
         let public_key = key_manager.get_public_key().await.unwrap();
 
         let test_share = b"test share data";
@@ -139,5 +223,21 @@ mod tests {
         let decrypted = key_manager.decrypt_share(&encrypted).await.unwrap();
 
         assert_eq!(test_share.to_vec(), decrypted);
+    }
+
+    #[tokio::test]
+    async fn test_write_and_read_keys() {
+        let key_manager = KeyManager::new();
+        let keys = key_manager.generate_keypair(1).await.unwrap();
+
+        KeyManager::write_keys_to_file(1, keys.clone());
+
+        let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        let file_path = format!("{}/node_keys_{}.json", data_dir, 1);
+        let file = std::fs::File::open(file_path).unwrap();
+        let reader = std::io::BufReader::new(file);
+        let key_file: KeyFile = serde_json::from_reader(reader).unwrap();
+
+        assert_eq!(keys.public_key, key_file.public_key);
     }
 }

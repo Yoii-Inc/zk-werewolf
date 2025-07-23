@@ -1,11 +1,16 @@
 use super::player::Player;
 use ark_bls12_377::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
+use derivative::Derivative;
+use mpc_algebra_wasm::*;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
+use zk_mpc_node::{ProofOutputType, ProofRequest};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Derivative, Clone)]
+#[derivative(Debug)]
 pub struct Game {
     pub room_id: String,
     pub name: String,
@@ -18,6 +23,8 @@ pub struct Game {
     pub vote_results: HashMap<String, Vote>,
     pub crypto_parameters: Option<CryptoParameters>,
     pub chat_log: super::chat::ChatLog,
+    #[derivative(Debug = "ignore")]
+    pub batch_request: BatchRequest,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -69,6 +76,189 @@ pub struct ChangeRoleRequest {
     pub new_role: String,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub enum ClientRequestType {
+    Divination(DivinationOutput),
+    AnonymousVoting(AnonymousVotingOutput),
+    WinningJudge(WinningJudgementOutput),
+    RoleAssignment(RoleAssignmentOutput),
+    KeyPublicize(KeyPublicizeOutput),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct BatchRequest {
+    pub batch_id: String,
+    pub requests: Vec<ClientRequestType>,
+    pub status: BatchStatus,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+const ZK_MPC_NODE_URL: [&str; 3] = [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002",
+];
+
+impl BatchRequest {
+    pub fn new() -> Self {
+        BatchRequest {
+            batch_id: uuid::Uuid::new_v4().to_string(),
+            requests: Vec::new(),
+            status: BatchStatus::Collecting,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    pub async fn add_request(&mut self, request: ClientRequestType) -> String {
+        self.requests.push(request);
+
+        // バッチが満杯になったら処理を開始
+        if self.requests.len() >= /*self.batch_size_limit*/ 3 {
+            // let completed_batch = batch_guard.take().unwrap();
+            let batch_id = self.batch_id.clone();
+
+            let mut service = self.clone();
+
+            // 非同期でバッチ処理を開始
+            tokio::spawn(async move {
+                service.process_batch().await;
+            });
+
+            // 新しいバッチを作成
+            *self = BatchRequest::new();
+
+            batch_id
+        } else {
+            self.batch_id.clone()
+        }
+    }
+
+    async fn process_batch(&mut self) {
+        self.status = BatchStatus::Processing;
+
+        // requsets: Vec<ClientRequestType>をCircuitEncryptedInputIdentifierに変換
+        let identifier = try_convert_to_identifier(self.requests.clone())
+            .map_err(|e| {
+                self.status = BatchStatus::Failed;
+                e
+            })
+            .unwrap();
+
+        let client = Client::new();
+
+        let mut responses = Vec::new();
+
+        let req_to_node = ProofRequest {
+            proof_id: "test_proof_id".to_string(),
+            circuit_type: identifier.clone(),
+            output_type: ProofOutputType::Public,
+        };
+
+        // identifierをzk-mpc-nodeに送信するなどの処理を行う
+        for port in ZK_MPC_NODE_URL {
+            let response = client
+                .post(port)
+                .json(&req_to_node)
+                .send()
+                .await
+                .map_err(|e| e.to_string());
+            responses.push(response);
+        }
+
+        for (port, response) in ZK_MPC_NODE_URL.iter().zip(responses) {
+            let response_body: serde_json::Value = response.unwrap().json().await.unwrap();
+            println!("Response from port {}: {:?}", port, response_body);
+        }
+
+        self.status = BatchStatus::Completed;
+    }
+}
+
+fn try_convert_to_identifier(
+    requests: Vec<ClientRequestType>,
+) -> Result<CircuitEncryptedInputIdentifier, String> {
+    use ClientRequestType::*;
+    match requests.split_first() {
+        Some((first, rest)) => match first {
+            Divination(_) if rest.iter().all(|r| matches!(r, Divination(_))) => {
+                let items = requests
+                    .into_iter()
+                    .map(|r| {
+                        if let Divination(d) = r {
+                            d
+                        } else {
+                            unreachable!()
+                        }
+                    })
+                    .collect();
+                Ok(CircuitEncryptedInputIdentifier::Divination(items))
+            }
+            AnonymousVoting(_) if rest.iter().all(|r| matches!(r, AnonymousVoting(_))) => {
+                let items = requests
+                    .into_iter()
+                    .map(|r| {
+                        if let AnonymousVoting(d) = r {
+                            d
+                        } else {
+                            unreachable!()
+                        }
+                    })
+                    .collect();
+                Ok(CircuitEncryptedInputIdentifier::AnonymousVoting(items))
+            }
+            WinningJudge(_) if rest.iter().all(|r| matches!(r, WinningJudge(_))) => {
+                let items = requests
+                    .into_iter()
+                    .map(|r| {
+                        if let WinningJudge(d) = r {
+                            d
+                        } else {
+                            unreachable!()
+                        }
+                    })
+                    .collect();
+                Ok(CircuitEncryptedInputIdentifier::WinningJudge(items))
+            }
+            RoleAssignment(_) if rest.iter().all(|r| matches!(r, RoleAssignment(_))) => {
+                let items = requests
+                    .into_iter()
+                    .map(|r| {
+                        if let RoleAssignment(d) = r {
+                            d
+                        } else {
+                            unreachable!()
+                        }
+                    })
+                    .collect();
+                Ok(CircuitEncryptedInputIdentifier::RoleAssignment(items))
+            }
+            KeyPublicize(_) if rest.iter().all(|r| matches!(r, KeyPublicize(_))) => {
+                let items = requests
+                    .into_iter()
+                    .map(|r| {
+                        if let KeyPublicize(d) = r {
+                            d
+                        } else {
+                            unreachable!()
+                        }
+                    })
+                    .collect();
+                Ok(CircuitEncryptedInputIdentifier::KeyPublicize(items))
+            }
+            _ => Err("ClientRequestType variants are mixed; cannot convert".to_string()),
+        },
+        None => Err("Empty request list".to_string()),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum BatchStatus {
+    Collecting,
+    Processing,
+    Completed,
+    Failed,
+}
+
 impl Game {
     pub fn new(room_id: String, players: Vec<Player>) -> Self {
         Game {
@@ -83,6 +273,7 @@ impl Game {
             vote_results: HashMap::new(),
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
+            batch_request: BatchRequest::new(),
         }
     }
 

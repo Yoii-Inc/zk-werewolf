@@ -9,8 +9,8 @@ MAX_WAIT=60 # 最大待機時間（秒）
 wait_for_port() {
     local port=$1
     local start_time=$(date +%s)
-    
-    while ! curl -s http://localhost:${port} > /dev/null; do
+
+    while ! curl -s http://localhost:${port} >/dev/null; do
         if [ $(($(date +%s) - start_time)) -gt $MAX_WAIT ]; then
             echo "タイムアウト: ポート ${port} が開きませんでした"
             exit 1
@@ -19,39 +19,72 @@ wait_for_port() {
     done
 }
 
-# サーバーのビルドと起動（release mode）
-cd ./packages/server
-cargo build --release
-./target/release/server &
-SERVER_PID=$!
+run_crypto_tests() {
+    echo "Running crypto integration tests..."
+    # Create test data directory
+    mkdir -p test-data
 
-# サーバーの起動を待機
-wait_for_port 8080
+    yarn install
 
-# zk-mpc-nodeのビルド
-cd ../zk-mpc-node
-cargo build --release
+    # Run crypto tests
+    cd ./packages/zk-mpc-node
+    cargo test --test crypto_integration_test -- --nocapture
 
+    # Cleanup
+    cd ../../
+    rm -rf test-data
+}
 
-# 3つのノードを起動（それぞれ異なるポートで）
-./target/release/zk-mpc-node 0 ./address/3 &
-NODE0_PID=$!
-./target/release/zk-mpc-node 1 ./address/3 > /dev/null &
-NODE1_PID=$!
-./target/release/zk-mpc-node 2 ./address/3 > /dev/null &
-NODE2_PID=$!
+run_server_node_tests() {
+    # サーバーのビルドと起動（release mode）
+    cd ./packages/server
+    cargo build --release
+    ./target/release/server &
+    SERVER_PID=$!
 
+    # サーバーの起動を待機
+    wait_for_port 8080
 
-# ノードの起動を待機
-for PORT in 9000 9001 9002; do
-  wait_for_port $PORT
-done
+    # zk-mpc-nodeのビルド
+    cd ../zk-mpc-node
+    cargo build --release
 
-# zk-mpc-node インテグレーションテストの実行
-cargo test --test integration_test -- --nocapture --test-threads=1
+    # 鍵ペアの生成
+    cargo run --release keygen --id 0
+    cargo run --release keygen --id 1
+    cargo run --release keygen --id 2
 
-# server インテグレーションテストの実行
-cd ../server
-cargo test --test "*" -- --nocapture --test-threads=1
+    # 3つのノードを起動（それぞれ異なるポートで）
+    ./target/release/zk-mpc-node start --id 0 --input ./address/3 &
+    NODE0_PID=$!
+    ./target/release/zk-mpc-node start --id 1 --input ./address/3 >/dev/null &
+    NODE1_PID=$!
+    ./target/release/zk-mpc-node start --id 2 --input ./address/3 >/dev/null &
+    NODE2_PID=$!
 
-echo "Integration tests completed"
+    # ノードの起動を待機
+    for PORT in 9000 9001 9002; do
+        wait_for_port $PORT
+    done
+
+    # zk-mpc-node インテグレーションテストの実行
+    cargo test --test integration_test -- --nocapture --test-threads=1
+
+    # server インテグレーションテストの実行
+    cd ../server
+    cargo test --test "*" -- --nocapture --test-threads=1
+}
+
+main() {
+    echo "Starting all tests..."
+
+    # First run crypto tests (no server/node required)
+    run_crypto_tests
+
+    # Then run tests requiring server and nodes
+    run_server_node_tests
+
+    echo "All tests completed successfully"
+}
+
+main "$@"

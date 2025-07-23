@@ -24,4 +24,4 @@ ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark
 ark-ed-on-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ed-on-bls12-377", version = "0.3.0", features = ["r1cs"] }
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["rlib", "cdylib"]

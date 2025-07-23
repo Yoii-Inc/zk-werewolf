@@ -3,9 +3,10 @@ use crate::proof::ProofManager;
 use crate::server::ApiClient;
 use crate::{EncryptedShare, ProofOutput, ProofOutputType, UserPublicKey};
 // 追加
-use crate::{models::ProofRequest, CircuitFactory};
+use crate::models::ProofRequest;
 use ark_marlin::IndexProverKey;
 use mpc_algebra::Reveal;
+use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
 use std::iter::zip;
 use std::sync::Arc;
@@ -25,14 +26,14 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         id: u32,
         net: Arc<MPCNetConnection<IO>>,
         proof_manager: Arc<ProofManager>,
+        key_manager: Arc<KeyManager>,
         server_url: String, // 追加
     ) -> Self {
-        let key_manager = Arc::new(KeyManager::new());
-        // 起動時に鍵ペアを生成
+        // load the keypair from file
         key_manager
-            .generate_keypair()
+            .load_keypair(id)
             .await
-            .expect("Failed to generate keypair");
+            .expect("Failed to load keypair");
 
         let api_client = Arc::new(ApiClient::new(server_url.clone()));
 
@@ -65,20 +66,26 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         let pm = self.proof_manager.clone();
 
         // Setup circuit
-        let local_circuit = CircuitFactory::create_local_circuit(&request);
+        let local_circuit = CircuitFactory::create_local_circuit(&request.circuit_type);
 
-        let mpc_circuit = CircuitFactory::create_mpc_circuit(&request);
+        let secret_key = self.key_manager.get_secret_key().await.unwrap();
 
-        let inputs = CircuitFactory::create_verify_inputs(&request);
+        let mpc_circuit = CircuitFactory::create_mpc_circuit(
+            &request.circuit_type,
+            &self.id.to_string(),
+            &secret_key,
+        );
+
+        let inputs = CircuitFactory::create_verify_inputs(&mpc_circuit);
 
         let (index_pk, index_vk) =
             LocalMarlin::index(&self.proof_manager.srs, local_circuit).unwrap();
         let mpc_index_pk = IndexProverKey::from_public(index_pk);
 
         let (outputs, is_valid) =
-            match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit, inputs).await {
+            match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit.clone(), inputs).await {
                 true => {
-                    let proof_outputs = CircuitFactory::get_circuit_outputs(&request);
+                    let proof_outputs = CircuitFactory::get_circuit_outputs(&mpc_circuit);
                     match &request.output_type {
                         ProofOutputType::Public => {
                             let proof_output = ProofOutput {

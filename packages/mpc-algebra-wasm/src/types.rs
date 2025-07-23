@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{NodeKey, SecretSharingScheme};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeEncryptedShare {
     pub node_id: String,
     pub encrypted_share: String,
+    pub nonce: String,
+    pub ephemeral_key: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -19,7 +21,7 @@ pub struct AnonymousVotingInput {
     pub scheme: SecretSharingScheme,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AnonymousVotingOutput {
     pub shares: Vec<NodeEncryptedShare>,
@@ -35,7 +37,7 @@ pub struct KeyPublicizeInput {
     pub scheme: SecretSharingScheme,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyPublicizeOutput {
     pub shares: Vec<NodeEncryptedShare>,
@@ -51,7 +53,7 @@ pub struct RoleAssignmentInput {
     pub scheme: SecretSharingScheme,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoleAssignmentOutput {
     pub shares: Vec<NodeEncryptedShare>,
@@ -67,7 +69,7 @@ pub struct DivinationInput {
     pub scheme: SecretSharingScheme,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DivinationOutput {
     pub shares: Vec<NodeEncryptedShare>,
@@ -83,9 +85,18 @@ pub struct WinningJudgementInput {
     pub scheme: SecretSharingScheme,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WinningJudgementOutput {
     pub shares: Vec<NodeEncryptedShare>,
     pub public_input: WinningJudgementPublicInput,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum CircuitEncryptedInputIdentifier {
+    Divination(Vec<DivinationOutput>),
+    AnonymousVoting(Vec<AnonymousVotingOutput>),
+    WinningJudge(Vec<WinningJudgementOutput>),
+    RoleAssignment(Vec<RoleAssignmentOutput>),
+    KeyPublicize(Vec<KeyPublicizeOutput>),
 }

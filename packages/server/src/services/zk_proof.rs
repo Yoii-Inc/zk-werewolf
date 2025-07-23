@@ -1,19 +1,33 @@
+use std::{collections::HashMap, sync::Arc};
+
+use crate::utils::config::CONFIG;
+use axum::{http::StatusCode, Json};
+use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
+use mpc_circuits::CircuitIdentifier;
 use reqwest::Client;
-use tokio::time::{sleep, Duration};
+use serde_json::json;
+use tokio::{
+    sync::Mutex,
+    time::{sleep, Duration},
+};
 use tracing_subscriber::field::debug;
 use zk_mpc::marlin::MFr;
 use zk_mpc_node::{
-    models::{CircuitIdentifier, ProofOutput, ProofOutputType, ProofRequest, ProofResponse},
+    models::{ProofOutput, ProofOutputType, ProofRequest, ProofResponse},
     ProofStatus,
 };
-use crate::utils::config::CONFIG;
+
+use crate::{
+    models::game::{BatchRequest, BatchStatus, ClientRequestType},
+    state::AppState,
+};
 
 const MAX_RETRY_ATTEMPTS: u32 = 30;
 const RETRY_DELAY_SECS: u64 = 1;
 
 /// Sends a request to generate a zero-knowledge proof for the given circuit identifier and inputs.
 pub async fn request_proof_with_output(
-    circuit_identifier: CircuitIdentifier<MFr>,
+    circuit_identifier: CircuitEncryptedInputIdentifier,
     output_type: ProofOutputType,
 ) -> Result<String, String> {
     let client = Client::new();
@@ -107,4 +121,72 @@ pub async fn check_status_with_retry(
         sleep(Duration::from_secs(1)).await;
     }
     Ok((false, None))
+}
+
+pub async fn batch_proof_handling(
+    state: AppState,
+    room_id: &str,
+    request: &ClientRequestType,
+) -> Result<String, String> {
+    let mut games = state.games.lock().await;
+    let game = match games.get_mut(room_id) {
+        Some(game) => game,
+        None => return Err("Game not found".to_string()),
+    };
+
+    // バッチリクエストに追加
+    let batch_id = game.batch_request.add_request(request.clone()).await;
+
+    Ok(batch_id)
+}
+
+#[derive(Clone)]
+pub struct BatchService {
+    current_batch: Arc<Mutex<Option<BatchRequest>>>,
+    batch_size_limit: usize,
+}
+
+impl BatchService {
+    pub fn new(batch_size_limit: usize) -> Self {
+        Self {
+            current_batch: Arc::new(Mutex::new(None)),
+            batch_size_limit,
+        }
+    }
+
+    pub async fn add_request(&self, request: ClientRequestType) -> String {
+        let mut batch_guard = self.current_batch.lock().await;
+
+        let batch = batch_guard.get_or_insert_with(BatchRequest::new);
+        batch.add_request(request);
+
+        // バッチが満杯になったら処理を開始
+        if batch.requests.len() >= self.batch_size_limit {
+            let completed_batch = batch_guard.take().unwrap();
+            let batch_id = completed_batch.batch_id.clone();
+
+            let service = self.clone();
+
+            // 非同期でバッチ処理を開始
+            tokio::spawn(async move {
+                service.process_batch(completed_batch).await;
+            });
+
+            // 新しいバッチを作成
+            *batch_guard = Some(BatchRequest::new());
+
+            batch_id
+        } else {
+            batch.batch_id.clone()
+        }
+    }
+
+    async fn process_batch(&self, mut batch: BatchRequest) {
+        batch.status = BatchStatus::Processing;
+
+        // ここでバッチ処理を実行
+        // 例: ZKプルーフの生成やノードへの送信など
+
+        batch.status = BatchStatus::Completed;
+    }
 }

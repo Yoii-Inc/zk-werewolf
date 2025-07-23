@@ -1,50 +1,62 @@
 use mpc_net::multi::MPCNetConnection;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use structopt::StructOpt;
-use tokio::net::TcpListener;
-
-use zk_mpc_node::{models::Opt, node::Node, proof::ProofManager, server::handle_client};
+use zk_mpc_node::{
+    models::Command, node::Node, proof::ProofManager, run_server, AppState, KeyManager,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let opt = Opt::from_args();
+    let command = Command::from_args();
 
-    // Initialize ProofManager
-    let proof_manager = Arc::new(ProofManager::new());
+    match command {
+        Command::KeyGen { id } => {
+            println!("Generating keypair for node {}", id);
+            let key_manager = KeyManager::new();
+            let keys = key_manager.generate_keypair(id).await?;
+            println!("Keypair generated and saved successfully");
+            println!("Public key: {}", keys.public_key);
+            Ok(())
+        }
+        Command::Start { id, input } => {
+            // Initialize ProofManager
+            let proof_manager = Arc::new(ProofManager::new());
 
-    // Create a listener for client connections
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", 9000 + opt.id)).await?;
+            // Initialize the MPC network
+            let mut net = MPCNetConnection::init_from_path(&input, id);
+            net.listen().await.expect("Failed to listen");
+            net.connect_to_all()
+                .await
+                .expect("Failed to connect to all");
 
-    // Initialize the MPC network
-    let mut net = MPCNetConnection::init_from_path(&opt.input, opt.id as u32);
-    net.listen().await.expect("Failed to listen");
-    net.connect_to_all()
-        .await
-        .expect("Failed to connect to all");
+            let server_url = "http://localhost:8080".to_string();
+            let key_manager = Arc::new(KeyManager::new());
 
-    println!("Listening on port {}", 9000 + opt.id);
+            // Initialize the node
+            let node = Arc::new(
+                Node::new(
+                    id,
+                    Arc::new(net),
+                    proof_manager.clone(),
+                    key_manager,
+                    server_url,
+                )
+                .await,
+            );
 
-    let server_url = "http://localhost:8080".to_string();
+            let state = AppState {
+                proof_manager: proof_manager.clone(),
+                node: node.clone(),
+            };
 
-    // Initialize the node
-    let node = Arc::new(
-        Node::new(
-            opt.id as u32,
-            Arc::new(net),
-            proof_manager.clone(),
-            server_url,
-        )
-        .await,
-    );
+            // Create a listener for client connections
+            let addr = SocketAddr::from(([127, 0, 0, 1], (9000 + id) as u16));
 
-    // Loop to accept requests from clients
-    while let Ok((socket, _)) = listener.accept().await {
-        let pm = proof_manager.clone();
-        let node = node.clone();
-        tokio::spawn(async move {
-            handle_client(socket, pm, node).await;
-        });
+            println!("Listening on port {}", 9000 + id);
+
+            run_server(&addr, state).await?;
+
+            Ok(())
+        }
     }
-
-    Ok(())
 }

@@ -8,6 +8,7 @@ use crypto_box::{
     PublicKey, SalsaBox, SecretKey,
 };
 use rand::rngs::OsRng;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use wasm_bindgen::JsValue;
 
@@ -16,7 +17,7 @@ use crate::{types::*, NodeKey, SecretSharingScheme};
 pub trait SplitAndEncrypt {
     type Input;
     type Output;
-    type ShareForNode: Serialize;
+    type ShareForNode: Serialize + DeserializeOwned;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode>;
 
@@ -39,6 +40,7 @@ pub trait SplitAndEncrypt {
 
         // エフェメラルキーペアの生成
         let ephemeral_secret = SecretKey::generate(&mut OsRng);
+        let ephemeral_public_key = ephemeral_secret.public_key();
         let box_ = SalsaBox::new(&recipient_key, &ephemeral_secret);
 
         // シェアデータのシリアライズ
@@ -55,20 +57,59 @@ pub trait SplitAndEncrypt {
         // Base64エンコード
         let encrypted_share = encode(&encrypted_data);
 
+        let encoded_nonce = encode(nonce);
+        let encoded_ephemeral_key = encode(ephemeral_public_key.to_bytes());
+
         Ok(NodeEncryptedShare {
             node_id: key.node_id.clone(),
             encrypted_share,
+            nonce: encoded_nonce,
+            ephemeral_key: encoded_ephemeral_key,
         })
+    }
+
+    fn decrypt(
+        encrypted_share: &NodeEncryptedShare,
+        secret_key: &str,
+    ) -> Result<Self::ShareForNode, anyhow::Error> {
+        // Base64デコードされた暗号化シェアをデコード
+        let encrypted_data = decode(&encrypted_share.encrypted_share)
+            .map_err(|e| anyhow::anyhow!("Base64 decode error: {}", e))?;
+
+        let secret_key_bytes = decode(secret_key)
+            .map_err(|e| anyhow::anyhow!("Base64 decode error for secret key: {}", e))?;
+
+        let secret_key = SecretKey::from_slice(&secret_key_bytes)
+            .map_err(|_| anyhow::anyhow!("Invalid secret key length"))?;
+
+        // エフェメラルキーのデコード
+        let ephemeral_public_key_bytes = decode(&encrypted_share.ephemeral_key).unwrap();
+        let ephemeral_public_key = PublicKey::from_slice(&ephemeral_public_key_bytes).unwrap();
+
+        // 暗号化されたデータの復号
+        let nonce = *crypto_box::Nonce::from_slice(
+            &decode(&encrypted_share.nonce)
+                .map_err(|e| anyhow::anyhow!("Base64 decode error for nonce: {}", e))?,
+        );
+
+        let box_ = SalsaBox::new(&ephemeral_public_key, &secret_key);
+        let decrypted_data = box_
+            .decrypt(&nonce, encrypted_data.as_slice())
+            .map_err(|e| anyhow::anyhow!("Decryption error: {}", e))?;
+
+        // シリアライズされたシェアデータをデシリアライズ
+        serde_json::from_slice(&decrypted_data)
+            .map_err(|e| anyhow::anyhow!("Deserialization error: {}", e))
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue>;
 }
 
-pub(crate) struct AnonymousVotingEncryption;
-pub(crate) struct KeyPublicizeEncryption;
-pub(crate) struct RoleAssignmentEncryption;
-pub(crate) struct DivinationEncryption;
-pub(crate) struct WinningJudgementEncryption;
+pub struct AnonymousVotingEncryption;
+pub struct KeyPublicizeEncryption;
+pub struct RoleAssignmentEncryption;
+pub struct DivinationEncryption;
+pub struct WinningJudgementEncryption;
 
 impl SplitAndEncrypt for AnonymousVotingEncryption {
     type Input = AnonymousVotingInput;
@@ -86,11 +127,31 @@ impl SplitAndEncrypt for AnonymousVotingEncryption {
         (0..scheme.total_shares)
             .map(|i| AnonymousVotingPrivateInput {
                 id: private_input.id,
-                is_target_id: is_target_share[i].clone(),
+                is_target_id: is_target_share.iter().map(|row| row[i]).collect(),
                 player_randomness: player_randomness_share[i],
             })
             .collect::<Vec<_>>()
     }
+
+    // fn combine(
+    //     share: Vec<Self::ShareForNode>,
+    //     public_input: &AnonymousVotingPublicInput,
+    //     node_keys: Vec<NodeKey>,
+    //     scheme: &SecretSharingScheme,
+    // ) -> Self::Input {
+    //     let private_input = AnonymousVotingPrivateInput {
+    //         id: share[0].id,
+    //         is_target_id: share.iter().map(|s| s.is_target_id.clone()).collect(),
+    //         player_randomness: share.iter().map(|s| s.player_randomness).sum(),
+    //     };
+
+    //     AnonymousVotingInput {
+    //         private_input,
+    //         public_input,
+    //         node_keys,
+    //         scheme: scheme.clone(),
+    //     }
+    // }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue> {
         let mut shares = Vec::new();
@@ -276,18 +337,46 @@ fn split_fr(x: Fr, scheme: &SecretSharingScheme) -> Vec<Fr> {
     shares
 }
 
-// fn combine(shares: Vec<MFr>) -> Fr {
-//     let mut sum = MFr::from_add_shared(Fr::zero());
-//     for share in shares {
-//         sum += share;
-//     }
-//     sum.unwrap_as_public()
-// }
+fn combine_anonymous_voting(
+    share: Vec<AnonymousVotingPrivateInput>,
+    public_input: &AnonymousVotingPublicInput,
+    node_keys: Vec<NodeKey>,
+    scheme: &SecretSharingScheme,
+) -> AnonymousVotingPrivateInput {
+    // let private_input = AnonymousVotingPrivateInput {
+    //     id: share[0].id,
+    //     is_target_id: share.iter().map(|s| s.is_target_id.clone()).collect(),
+    //     player_randomness: share.iter().map(|s| s.player_randomness).sum(),
+    // };
+
+    let is_target_id = share.iter().map(|s| s.is_target_id.clone()).fold(
+        vec![Fr::zero(); share[0].is_target_id.len()],
+        |mut acc, curr| {
+            for (a, c) in acc.iter_mut().zip(curr.iter()) {
+                *a += c;
+            }
+            acc
+        },
+    );
+
+    let player_randomness = share
+        .iter()
+        .fold(Fr::zero(), |acc, s| acc + s.player_randomness);
+
+    AnonymousVotingPrivateInput {
+        id: 33,
+        is_target_id,
+        player_randomness,
+    }
+}
 
 #[cfg(test)]
 mod tests {
 
     // use mpc_algebra::crh::pedersen;
+
+    use crate::{PedersenComScheme, PedersenCommitment, PedersenParam};
+    use ark_crypto_primitives::CommitmentScheme;
 
     use super::*;
 
@@ -310,39 +399,81 @@ mod tests {
         assert_eq!(combined, x);
     }
 
-    // #[test]
-    // fn test_split_combine_voting() {
-    //     let scheme = SecretSharingScheme {
-    //         total_shares: 3,
-    //         modulus: 100,
-    //     };
+    #[test]
+    fn encrypt_and_decrypt_anonymous_voting() {
+        let rng = &mut rand::thread_rng();
+        let x = Fr::pub_rand(rng);
 
-    //     let rng = &mut rand::thread_rng();
+        let private_input = AnonymousVotingPrivateInput {
+            id: 1,
+            is_target_id: vec![Fr::pub_rand(rng), Fr::pub_rand(rng), Fr::pub_rand(rng)],
+            player_randomness: x,
+        };
 
-    //     let x = Fr::pub_rand(rng);
+        let node_secret_key = SecretKey::generate(rng);
+        let node_public_key = node_secret_key.public_key();
 
-    //     let private_input = AnonymousVotingPrivateInput {
-    //         id: 1,
-    //         is_target_id: vec![Fr::pub_rand(rng)],
-    //         player_randomness: x,
-    //     };
+        let node_secret_key = encode(node_secret_key.to_bytes());
 
-    //     let pedersen_param = pedersen::PedersenHash::hash(&[private_input.player_randomness]);
+        let node_key = NodeKey {
+            node_id: "node1".to_string(),
+            public_key: encode(node_public_key.to_bytes()),
+        };
 
-    //     let input = AnonymousVotingInput {
-    //         private_input,
-    //         public_input: AnonymousVotingPublicInput {
-    //             pedersen_param: Fr::zero(),          // Dummy value
-    //             player_commitment: vec![Fr::zero()], // Dummy value
-    //         },
-    //         node_keys: vec![], // Dummy value, not used in this test
-    //         scheme,
-    //     };
+        let encrypted_share =
+            AnonymousVotingEncryption::encrypt(private_input.clone(), &node_key).unwrap();
+        let decrypted_share =
+            AnonymousVotingEncryption::decrypt(&encrypted_share, &node_secret_key).unwrap();
 
-    //     let shares = AnonymousVotingEncryption::split(&input);
-    //     assert_eq!(shares.len(), scheme.total_shares);
+        assert_eq!(decrypted_share.id, private_input.id);
+        assert_eq!(decrypted_share.is_target_id, private_input.is_target_id);
+        assert_eq!(
+            decrypted_share.player_randomness,
+            private_input.player_randomness
+        );
+    }
 
-    //     let combined = AnonymousVotingEncryption::combine(shares);
-    //     assert_eq!(combined, input);
-    // }
+    #[test]
+    fn test_split_combine_voting() {
+        let scheme = SecretSharingScheme {
+            total_shares: 3,
+            modulus: 100,
+        };
+
+        let rng = &mut rand::thread_rng();
+
+        let x = Fr::pub_rand(rng);
+
+        let private_input = AnonymousVotingPrivateInput {
+            id: 1,
+            is_target_id: vec![Fr::pub_rand(rng), Fr::pub_rand(rng), Fr::pub_rand(rng)],
+            player_randomness: x,
+        };
+
+        let pedersen_param = PedersenComScheme::setup(rng).unwrap();
+
+        let public_input = AnonymousVotingPublicInput {
+            pedersen_param: pedersen_param.clone(),
+            player_commitment: vec![PedersenCommitment::default(); 3],
+        };
+
+        let input = AnonymousVotingInput {
+            private_input,
+            public_input,
+            node_keys: vec![], // Dummy value, not used in this test
+            scheme,
+        };
+
+        let shares = AnonymousVotingEncryption::split(&input);
+        // assert_eq!(shares.len(), scheme.total_shares);
+
+        let combined =
+            combine_anonymous_voting(shares, &input.public_input, input.node_keys, &input.scheme);
+        assert_eq!(
+            combined.player_randomness,
+            input.private_input.player_randomness
+        );
+
+        assert_eq!(combined.is_target_id, input.private_input.is_target_id);
+    }
 }
