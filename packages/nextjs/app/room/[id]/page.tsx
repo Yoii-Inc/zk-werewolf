@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
 import type { ChatMessage, Player, WebSocketMessage } from "../../types";
+import { NightAction, NightActionRequest } from "../types";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 import { useAuth } from "~~/app/contexts/AuthContext";
 
@@ -304,19 +305,43 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const handleNightAction = async (targetPlayerId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/night-action`, {
+      // プレイヤーの役職に基づいてアクションタイプを決定
+      if (!gameInfo) {
+        throw new Error("ゲーム情報が取得できません");
+      }
+      const role = gameInfo.players.find(player => player.name === user?.username)?.role;
+
+      const action: NightAction = (() => {
+        switch (role) {
+          case "Werewolf":
+            return { Attack: { target_id: targetPlayerId } };
+          case "Seer":
+            return { Divine: { target_id: targetPlayerId } };
+          case "Guard":
+            return { Guard: { target_id: targetPlayerId } };
+          default:
+            throw new Error("夜の行動を実行できない役職です");
+        }
+      })();
+
+      const request: NightActionRequest = {
+        player_id: user?.id ?? "",
+        action: action,
+      };
+
+      const response = await fetch(`http://localhost:8080/api/game/${params.id}/actions/night-action`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          targetPlayerId: targetPlayerId,
-        }),
+        body: JSON.stringify(request),
       });
 
       if (!response.ok) {
         throw new Error("夜の行動の送信に失敗しました");
       }
+
+      console.log(response);
 
       setShowNightAction(false);
 
@@ -512,14 +537,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {isStarting ? "開始中..." : "ゲーム開始"}
                   </button>
                 )}
-                {gameInfo?.phase === "Night" && !gameInfo.hasActed && (
-                  <button
-                    onClick={() => setShowNightAction(true)}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-                  >
-                    夜の行動を実行
-                  </button>
-                )}
+                {gameInfo?.phase === "Night" &&
+                  !gameInfo.hasActed &&
+                  gameInfo.players.find(player => player.name === user?.username)?.role !== "Villager" && (
+                    <button
+                      onClick={() => setShowNightAction(true)}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                    >
+                      夜の行動を実行
+                    </button>
+                  )}
                 {gameInfo?.phase === "Voting" && (
                   <button
                     onClick={() => setShowVoteModal(true)}

@@ -14,6 +14,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
   const handleSubmit = () => {
     if (selectedPlayer) {
       onSubmit(selectedPlayer);
+      onClose();
     }
   };
 
