@@ -671,7 +671,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         const publicKey = await keyManager.generateAndSaveKeyPair(playerId);
                         console.log("Keys generated and saved, public key:", publicKey);
 
-                        const loadSuccess = await keyManager.loadKeyPairFromApi(playerId);
+                        const loadSuccess = await keyManager.loadKeyPairFromStorage(playerId);
                         if (loadSuccess) {
                           console.log("Keys loaded successfully");
                           console.log("Public key verified:", keyManager.getPublicKey());

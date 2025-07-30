@@ -65,36 +65,27 @@ export class TweetNaclKeyManager {
       secret_key: encodeBase64(this.keyPair.secretKey),
     };
 
-    const response = await fetch("/api/keys/save", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        playerId,
-        keyData,
-      }),
-    });
-
-    if (!response.ok) {
+    try {
+      localStorage.setItem(`keyPair_${playerId}`, JSON.stringify(keyData));
+      return keyData.public_key;
+    } catch (error) {
+      console.error("Error saving key pair to localStorage:", error);
       throw new Error("Failed to save key pair");
     }
-
-    return keyData.public_key;
   }
 
-  async loadKeyPairFromApi(playerId: string): Promise<boolean> {
+  async loadKeyPairFromStorage(playerId: string): Promise<boolean> {
     try {
-      const response = await fetch(`/api/keys/load?playerId=${playerId}`);
-      if (!response.ok) {
+      const storedData = localStorage.getItem(`keyPair_${playerId}`);
+      if (!storedData) {
         return false;
       }
 
-      const keyData = await response.json();
+      const keyData = JSON.parse(storedData);
       this.setKeyPair(keyData.public_key, keyData.secret_key);
       return true;
     } catch (error) {
-      console.error("Error loading key pair:", error);
+      console.error("Error loading key pair from localStorage:", error);
       return false;
     }
   }

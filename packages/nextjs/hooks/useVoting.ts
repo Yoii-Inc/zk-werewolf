@@ -10,16 +10,29 @@ export const useVoting = () => {
 
   const keyManager = new KeyManager();
 
+  // MPCノードの公開鍵を環境変数から取得
+  const mpcPublicKeys = [
+    process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY,
+    process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY,
+    process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY,
+  ].filter((key): key is string => key != null);
+
   const submitVote = useCallback(async (roomId: string, voteData: AnonymousVotingInput) => {
     setIsLoading(true);
     setError(null);
     try {
+      if (mpcPublicKeys.length !== 3) {
+        throw new Error("MPC node public keys are not properly configured");
+      }
+
       // キーペアの生成
       await keyManager.generateKeyPair();
       const publicKey = keyManager.getPublicKey();
       if (!publicKey) throw new Error("Failed to generate key pair");
 
-      // 投票データの暗号化
+      voteData.publicKey = mpcPublicKeys;
+
+      // 投票データの暗号化（MPCノードの公開鍵を使用）
       const encryptedVote = await MPCEncryption.encryptAnonymousVoting(voteData);
 
       // 署名の生成
