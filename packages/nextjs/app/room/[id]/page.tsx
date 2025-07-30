@@ -783,7 +783,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         />
       )}
       {showVoteModal && gameInfo?.phase === "Voting" && (
-        <VoteModal players={gameInfo.players} onSubmit={handleVote} onClose={() => setShowVoteModal(false)} />
+        <VoteModal
+          roomId={gameInfo.room_id}
+          players={gameInfo.players}
+          onSubmit={handleVote}
+          onClose={() => setShowVoteModal(false)}
+        />
       )}
       {gameInfo?.result && showGameResult && (
         <GameResultModal result={gameInfo.result} onClose={() => setShowGameResult(false)} />
