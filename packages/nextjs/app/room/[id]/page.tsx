@@ -7,6 +7,7 @@ import type { ChatMessage, Player, WebSocketMessage } from "../../types";
 import { NightAction, NightActionRequest } from "../types";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 import { useAuth } from "~~/app/contexts/AuthContext";
+import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
 
 interface RoomInfo {
   room_id: string;
@@ -648,6 +649,61 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 >
                   WebSocket切断
                 </button>
+
+                {/* 鍵生成デバッグ用 */}
+                <div className="p-4 border-b border-indigo-100">
+                  <h2 className="text-lg font-semibold text-indigo-900">鍵生成(デバッグ用)</h2>
+                  <button
+                    onClick={async () => {
+                      try {
+                        if (!gameInfo || !user) {
+                          console.error("ゲーム情報またはユーザー情報が利用できません");
+                          return;
+                        }
+                        const playerId = gameInfo.players.find(player => player.name === user?.username)?.id;
+                        if (!playerId) {
+                          console.error("ユーザーIDが利用できません");
+                          return;
+                        }
+                        console.log("Generating keys for player:", playerId);
+
+                        const keyManager = new TweetNaclKeyManager();
+                        const publicKey = await keyManager.generateAndSaveKeyPair(playerId);
+                        console.log("Keys generated and saved, public key:", publicKey);
+
+                        const loadSuccess = await keyManager.loadKeyPairFromApi(playerId);
+                        if (loadSuccess) {
+                          console.log("Keys loaded successfully");
+                          console.log("Public key verified:", keyManager.getPublicKey());
+                          // システムメッセージを追加
+                          const message: ChatMessage = {
+                            id: Date.now().toString(),
+                            sender: "システム",
+                            message: "鍵ペアが生成されました",
+                            timestamp: new Date().toISOString(),
+                            type: "system",
+                          };
+                          setMessages(prev => [...prev, message]);
+                        }
+                      } catch (error) {
+                        console.error("Error managing keys:", error);
+                        // エラーメッセージを追加
+                        const message: ChatMessage = {
+                          id: Date.now().toString(),
+                          sender: "システム",
+                          message: "鍵ペアの生成に失敗しました",
+                          timestamp: new Date().toISOString(),
+                          type: "system",
+                        };
+                        setMessages(prev => [...prev, message]);
+                      }
+                    }}
+                    disabled={!user?.id}
+                    className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mt-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    鍵生成と保存
+                  </button>
+                </div>
               </div>
             </div>
 
