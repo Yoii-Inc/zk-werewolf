@@ -64,36 +64,46 @@ pub fn voting_split_and_encrypt(input: JsValue) -> Result<JsValue, JsValue> {
     let input: AnonymousVotingInput = serde_wasm_bindgen::from_value(input)?;
     // Generate and encrypt shares
     let result = AnonymousVotingEncryption::create_encrypted_shares(&input)?;
-    // Serialize the result into JsValue
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    // Serialize the result into JsValue(String)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn key_publicize(input: JsValue) -> Result<JsValue, JsValue> {
     let input: KeyPublicizeInput = serde_wasm_bindgen::from_value(input)?;
     let result = KeyPublicizeEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn role_assignment(input: JsValue) -> Result<JsValue, JsValue> {
     let input: RoleAssignmentInput = serde_wasm_bindgen::from_value(input)?;
     let result = RoleAssignmentEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn divination(input: JsValue) -> Result<JsValue, JsValue> {
     let input: DivinationInput = serde_wasm_bindgen::from_value(input)?;
     let result = DivinationEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn winning_judgement(input: JsValue) -> Result<JsValue, JsValue> {
     let input: WinningJudgementInput = serde_wasm_bindgen::from_value(input)?;
     let result = WinningJudgementEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[cfg(test)]
