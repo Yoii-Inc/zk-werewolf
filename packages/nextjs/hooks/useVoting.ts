@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { KeyManager } from "../utils/crypto/keyManager";
-import { AnonymousVotingInput, MPCEncryption } from "~~/utils/crypto/InputEncryption";
+import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
+import { AnonymousVotingInput } from "~~/utils/crypto/type";
 
 export const useVoting = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -25,28 +26,28 @@ export const useVoting = () => {
         throw new Error("MPC node public keys are not properly configured");
       }
 
-      // キーペアの生成
-      await keyManager.generateKeyPair();
-      const publicKey = keyManager.getPublicKey();
-      if (!publicKey) throw new Error("Failed to generate key pair");
-
-      voteData.publicKey = mpcPublicKeys;
-
       // 投票データの暗号化（MPCノードの公開鍵を使用）
       const encryptedVote = await MPCEncryption.encryptAnonymousVoting(voteData);
 
-      // 署名の生成
-      const message = JSON.stringify({ encryptedVote, publicKey });
-      const signature = await keyManager.sign(message);
-
-      // 投票の送信
-      const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/actions/vote`, {
+      // 投票証明のリクエスト送信
+      const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(encryptedVote),
+        body: JSON.stringify({
+          //   prover_num: "3",
+          AnonymousVoting: encryptedVote,
+        }),
       });
+
+      if (!newProofId.ok) {
+        const errorData = await newProofId.json();
+        console.error("Error message:", errorData);
+        throw new Error("投票の送信に失敗しました");
+      }
+
+      console.log("proof request is accepted. batch_id is ", await newProofId.json());
 
       //   const response = await setProofId(newProofId);
       setProofStatus("pending");

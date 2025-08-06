@@ -2,6 +2,8 @@ import React from "react";
 import { useState } from "react";
 import type { Player } from "../../app/types";
 import { useVoting } from "../../hooks/useVoting";
+import JSONbig from "json-bigint";
+import { AnonymousVotingInput, AnonymousVotingPublicInput, NodeKey, SecretSharingScheme } from "~~/utils/crypto/type";
 
 interface VoteModalProps {
   players: Player[];
@@ -15,18 +17,71 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitVote, error, proofStatus } = useVoting();
 
+  const JSONbigNative = JSONbig({ useNativeBigInt: true });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlayerId) return;
 
+    const res = await fetch("/pedersen-params.json");
+    const params = await res.text();
+
+    const parsedParams = JSONbigNative.parse(params);
+
+    const randres = await fetch("/pedersen_randomness_0.json");
+    const randomness = await randres.text();
+    const parsedRandomness = JSONbigNative.parse(randomness);
+
+    const commitres = await fetch("/pedersen_commitment_0.json");
+    const commitment = await commitres.text();
+    const parsedCommitment = JSONbigNative.parse(commitment);
+
+    const privateInput = {
+      id: 0,
+      isTargetId: [
+        [[0, 0, 0, 1], null],
+        [[0, 0, 0, 0], null],
+        [[0, 0, 0, 0], null],
+      ], // 配列の長さはプレイヤー数に合わせて調整。
+      playerRandomness: parsedRandomness,
+    };
+    const publicInput: AnonymousVotingPublicInput = {
+      pedersenParam: parsedParams,
+      playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment], // 配列の長さはプレイヤー数に合わせて調整
+    };
+    const nodeKeys: NodeKey[] = [
+      {
+        nodeId: "0",
+        publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
+      },
+      {
+        nodeId: "1",
+        publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
+      },
+      {
+        nodeId: "2",
+        publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
+      },
+    ];
+
+    console.log(randomness);
+    const scheme: SecretSharingScheme = {
+      totalShares: 3, // dummy
+      modulus: 97, // dummy
+    };
+
+    const votingData: AnonymousVotingInput = {
+      privateInput,
+      publicInput,
+      nodeKeys,
+      scheme,
+    };
+
     setIsSubmitting(true);
     try {
       // データ型は要修正
-      await submitVote(roomId, {
-        targetId: selectedPlayerId,
-        timestamp: Date.now(),
-      });
-      await onSubmit(selectedPlayerId);
+      await submitVote(roomId, votingData);
+      //   await onSubmit(selectedPlayerId);
       onClose();
     } catch (err) {
       console.error("投票に失敗しました:", err);
