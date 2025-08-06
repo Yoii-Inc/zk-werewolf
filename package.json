@@ -46,6 +46,7 @@
     "verify": "yarn foundry:verify"
   },
   "devDependencies": {
+    "@types/json-bigint": "^1",
     "husky": "~8.0.3",
     "lint-staged": "~13.2.2"
   },
@@ -54,6 +55,7 @@
     "node": ">=18.18.0"
   },
   "dependencies": {
+    "json-bigint": "^1.0.0",
     "lucide-react": "^0.483.0"
   }
 }
