@@ -101,8 +101,8 @@ impl ConstraintSynthesizer<Fr> for AnonymousVotingCircuit<Fr> {
     ) -> Result<(), ark_relations::r1cs::SynthesisError> {
         // Implement constraint generation logic here
         // initialize
-        let player_num = self.private_input.len(); // Assuming all players join generation
-        let alive_player_num = player_num; // Assuming all players are alive for simplicity
+        let player_num = self.private_input[0].is_target_id.len();
+        let alive_player_num = self.private_input.len();
 
         // check player commitment
         // for i in 0..player_num {
@@ -182,8 +182,8 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for AnonymousVotingCircuit<mm::MpcF
         cs: ConstraintSystemRef<mm::MpcField<Fr>>,
     ) -> ark_relations::r1cs::Result<()> {
         // initialize
-        let player_num = self.private_input.len(); // Assuming all players join generation
-        let alive_player_num = player_num; // Assuming all players are alive for simplicity
+        let player_num = self.private_input[0].is_target_id.len();
+        let alive_player_num = self.private_input.len();
 
         // check player commitment
         // for i in 0..player_num {

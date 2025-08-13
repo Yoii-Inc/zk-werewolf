@@ -13,4 +13,5 @@ pub struct AnonymousVotingPrivateInput<F: PrimeField + LocalOrMPC<F> + ElGamalLo
 pub struct AnonymousVotingPublicInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> {
     pub pedersen_param: <F as LocalOrMPC<F>>::PedersenParam,
     pub player_commitment: Vec<<F as LocalOrMPC<F>>::PedersenCommitment>,
+    pub player_num: usize,
 }

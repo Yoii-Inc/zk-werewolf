@@ -28,10 +28,11 @@ impl CircuitFactory {
                 todo!()
             }
             CircuitEncryptedInputIdentifier::AnonymousVoting(c) => {
-                let player_num = c.len();
+                let player_num = c[0].public_input.player_num;
+                let alive_player_num = c.len();
 
                 BuiltinCircuit::AnonymousVoting(AnonymousVotingCircuit {
-                    private_input: (0..player_num)
+                    private_input: (0..alive_player_num)
                         .map(|_| AnonymousVotingPrivateInput::<Fr> {
                             id: 0,
                             is_target_id: vec![Fr::default(); player_num],
@@ -41,6 +42,7 @@ impl CircuitFactory {
                     public_input: AnonymousVotingPublicInput::<Fr> {
                         pedersen_param: c[0].public_input.pedersen_param.clone(),
                         player_commitment: c[0].public_input.player_commitment.clone(),
+                        player_num,
                     },
                 })
             }
@@ -162,6 +164,7 @@ impl CircuitFactory {
                             .iter()
                             .map(|c| <MFr as LocalOrMPC<MFr>>::PedersenCommitment::from_local(&c))
                             .collect::<Vec<_>>(),
+                        player_num: circuit[0].public_input.player_num,
                     },
                 })
             }
