@@ -87,6 +87,7 @@ export interface AnonymousVotingPrivateInput {
 export interface AnonymousVotingPublicInput {
   pedersenParam: PedersenParam;
   playerCommitment: PedersernCommitment[];
+  playerNum: number;
 }
 
 export interface KeyPublicizePrivateInput {

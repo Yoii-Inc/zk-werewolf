@@ -195,6 +195,32 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         const data = await response.json();
         console.log(data);
         setGameInfo(data);
+        // if (gameInfo?.chat_log?.messages) {
+        //   setMessages(data.chat_log.messages);
+        // }
+
+        // システムメッセージを追加
+        // const message: ChatMessage = {
+        //   id: Date.now().toString(),
+        //   sender: "システム",
+        //   message: "夜の行動を実行しました",
+        //   timestamp: new Date().toISOString(),
+        //   type: "system",
+        // };
+
+        const message_from_server = data.chat_log.messages;
+
+        // 各メッセージをChatMessage型に変換
+        const messages: ChatMessage[] = message_from_server.map(
+          (msg: { id: any; player_name: any; content: any; timestamp: any; message_type: string }) => ({
+            id: msg.id,
+            sender: msg.player_name,
+            message: msg.content,
+            timestamp: msg.timestamp,
+            type: msg.message_type === "System" ? "system" : "normal",
+          }),
+        );
+        setMessages(prev => [...messages]);
       } catch (error) {
         console.error("ゲーム情報の取得エラー:", error);
       } finally {
@@ -715,12 +741,19 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     key={msg.id}
                     className={`mb-4 rounded-lg p-3 ${
                       msg.type === "system"
-                        ? "bg-indigo-50 text-indigo-700 text-center"
+                        ? "bg-indigo-50 text-indigo-700 text-left"
                         : msg.type === "whisper"
                           ? "bg-purple-50 text-purple-700 italic"
                           : "bg-white"
                     }`}
                   >
+                    <span className="text-s text-gray-500">
+                      {new Date(msg.timestamp).toLocaleTimeString("ja-JP", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
+                    </span>{" "}
                     <span className="font-semibold">{msg.sender}: </span>
                     <span>{msg.message}</span>
                   </div>
@@ -784,6 +817,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       )}
       {showVoteModal && gameInfo?.phase === "Voting" && (
         <VoteModal
+          myId={gameInfo.players.find(player => player.name === user?.username)?.id ?? ""}
           roomId={gameInfo.room_id}
           players={gameInfo.players}
           onSubmit={handleVote}

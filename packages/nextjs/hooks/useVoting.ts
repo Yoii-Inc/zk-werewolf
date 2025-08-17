@@ -18,7 +18,7 @@ export const useVoting = () => {
     process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY,
   ].filter((key): key is string => key != null);
 
-  const submitVote = useCallback(async (roomId: string, voteData: AnonymousVotingInput) => {
+  const submitVote = useCallback(async (roomId: string, voteData: AnonymousVotingInput, alivePlayerCount: number) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -37,7 +37,11 @@ export const useVoting = () => {
         },
         body: JSON.stringify({
           //   prover_num: "3",
-          AnonymousVoting: encryptedVote,
+          proof_type: "AnonymousVoting",
+          data: {
+            prover_count: alivePlayerCount,
+            encrypted_data: encryptedVote,
+          },
         }),
       });
 

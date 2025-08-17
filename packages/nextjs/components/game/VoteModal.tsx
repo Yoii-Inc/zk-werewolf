@@ -6,13 +6,14 @@ import JSONbig from "json-bigint";
 import { AnonymousVotingInput, AnonymousVotingPublicInput, NodeKey, SecretSharingScheme } from "~~/utils/crypto/type";
 
 interface VoteModalProps {
+  myId: string;
   players: Player[];
   roomId: string;
   onSubmit: (targetId: string) => void;
   onClose: () => void;
 }
 
-const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClose }) => {
+const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClose, myId }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitVote, error, proofStatus } = useVoting();
@@ -37,17 +38,14 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
     const parsedCommitment = JSONbigNative.parse(commitment);
 
     const privateInput = {
-      id: 0,
-      isTargetId: [
-        [[0, 0, 0, 1], null],
-        [[0, 0, 0, 0], null],
-        [[0, 0, 0, 0], null],
-      ], // 配列の長さはプレイヤー数に合わせて調整。
+      id: players.findIndex(player => player.id === myId),
+      isTargetId: players.map(player => [player.id === selectedPlayerId ? [0, 0, 0, 1] : [0, 0, 0, 0], null]),
       playerRandomness: parsedRandomness,
     };
     const publicInput: AnonymousVotingPublicInput = {
       pedersenParam: parsedParams,
       playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment], // 配列の長さはプレイヤー数に合わせて調整
+      playerNum: players.length, // プレイヤー数を設定
     };
     const nodeKeys: NodeKey[] = [
       {
@@ -77,10 +75,12 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
       scheme,
     };
 
+    const alivePlayerCount = players.filter(player => !player.is_dead).length;
+
     setIsSubmitting(true);
     try {
       // データ型は要修正
-      await submitVote(roomId, votingData);
+      await submitVote(roomId, votingData, alivePlayerCount);
       //   await onSubmit(selectedPlayerId);
       onClose();
     } catch (err) {
