@@ -22,7 +22,7 @@ use crate::{
     state::AppState,
 };
 
-const MAX_RETRY_ATTEMPTS: u32 = 30;
+const MAX_RETRY_ATTEMPTS: u32 = 180;
 const RETRY_DELAY_SECS: u64 = 1;
 
 /// Sends a request to generate a zero-knowledge proof for the given circuit identifier and inputs.
@@ -113,13 +113,12 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
 pub async fn check_status_with_retry(
     proof_id: &str,
 ) -> Result<(bool, Option<ProofOutput>), String> {
-    for _ in 0..30 {
-        let (status, output) = check_proof_status(proof_id).await?;
-        if status {
-            return Ok((true, output));
-        }
-        sleep(Duration::from_secs(1)).await;
+    let (status, output) = check_proof_status(proof_id).await?;
+    if status {
+        return Ok((true, output));
     }
+    println!("Proof ID {} is failed", proof_id);
+
     Ok((false, None))
 }
 
@@ -134,59 +133,62 @@ pub async fn batch_proof_handling(
         None => return Err("Game not found".to_string()),
     };
 
+    game.chat_log
+        .add_system_message("証明リクエストを送信しました。".to_string());
+
     // バッチリクエストに追加
-    let batch_id = game.batch_request.add_request(request.clone()).await;
+    let batch_id = game.add_request(request.clone()).await;
 
     Ok(batch_id)
 }
 
-#[derive(Clone)]
-pub struct BatchService {
-    current_batch: Arc<Mutex<Option<BatchRequest>>>,
-    batch_size_limit: usize,
-}
+// #[derive(Clone)]
+// pub struct BatchService {
+//     current_batch: Arc<Mutex<Option<BatchRequest>>>,
+//     batch_size_limit: usize,
+// }
 
-impl BatchService {
-    pub fn new(batch_size_limit: usize) -> Self {
-        Self {
-            current_batch: Arc::new(Mutex::new(None)),
-            batch_size_limit,
-        }
-    }
+// impl BatchService {
+//     pub fn new(batch_size_limit: usize) -> Self {
+//         Self {
+//             current_batch: Arc::new(Mutex::new(None)),
+//             batch_size_limit,
+//         }
+//     }
 
-    pub async fn add_request(&self, request: ClientRequestType) -> String {
-        let mut batch_guard = self.current_batch.lock().await;
+//     pub async fn add_request(&self, request: ClientRequestType) -> String {
+//         let mut batch_guard = self.current_batch.lock().await;
 
-        let batch = batch_guard.get_or_insert_with(BatchRequest::new);
-        batch.add_request(request);
+//         let batch = batch_guard.get_or_insert_with(BatchRequest::new);
+//         batch.add_request(request);
 
-        // バッチが満杯になったら処理を開始
-        if batch.requests.len() >= self.batch_size_limit {
-            let completed_batch = batch_guard.take().unwrap();
-            let batch_id = completed_batch.batch_id.clone();
+//         // バッチが満杯になったら処理を開始
+//         if batch.requests.len() >= self.batch_size_limit {
+//             let completed_batch = batch_guard.take().unwrap();
+//             let batch_id = completed_batch.batch_id.clone();
 
-            let service = self.clone();
+//             let service = self.clone();
 
-            // 非同期でバッチ処理を開始
-            tokio::spawn(async move {
-                service.process_batch(completed_batch).await;
-            });
+//             // 非同期でバッチ処理を開始
+//             tokio::spawn(async move {
+//                 service.process_batch(completed_batch).await;
+//             });
 
-            // 新しいバッチを作成
-            *batch_guard = Some(BatchRequest::new());
+//             // 新しいバッチを作成
+//             *batch_guard = Some(BatchRequest::new());
 
-            batch_id
-        } else {
-            batch.batch_id.clone()
-        }
-    }
+//             batch_id
+//         } else {
+//             batch.batch_id.clone()
+//         }
+//     }
 
-    async fn process_batch(&self, mut batch: BatchRequest) {
-        batch.status = BatchStatus::Processing;
+//     async fn process_batch(&self, mut batch: BatchRequest) {
+//         batch.status = BatchStatus::Processing;
 
-        // ここでバッチ処理を実行
-        // 例: ZKプルーフの生成やノードへの送信など
+//         // ここでバッチ処理を実行
+//         // 例: ZKプルーフの生成やノードへの送信など
 
-        batch.status = BatchStatus::Completed;
-    }
-}
+//         batch.status = BatchStatus::Completed;
+//     }
+// }

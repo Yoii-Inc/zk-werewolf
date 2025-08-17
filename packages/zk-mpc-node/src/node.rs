@@ -124,6 +124,11 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                 false => (None, false),
             };
 
+        println!(
+            "output is {:?}",
+            CircuitFactory::get_circuit_outputs(&mpc_circuit)
+        );
+
         if is_valid {
             pm.update_proof_status_with_output(
                 &request.proof_id,

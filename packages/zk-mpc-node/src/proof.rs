@@ -50,6 +50,12 @@ impl ProofManager {
             status.state = state.to_string();
             status.message = message;
         }
+
+        println!(
+            "Proof status updated for ID {}: {:?}",
+            proof_id,
+            self.get_proof_status(proof_id).await
+        );
     }
 
     pub async fn update_proof_status_with_output(
@@ -64,5 +70,11 @@ impl ProofManager {
             status.message = message;
             status.output = output;
         }
+
+        println!(
+            "Proof status updated for ID {}: {:?}",
+            proof_id,
+            self.get_proof_status(proof_id).await
+        );
     }
 }

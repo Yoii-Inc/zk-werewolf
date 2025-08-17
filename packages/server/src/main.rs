@@ -80,7 +80,14 @@ async fn main() {
     init_logger(); // ロガーの初期化
 
     // 環境変数の存在確認
-    for var in &["SUPABASE_URL", "SUPABASE_KEY", "JWT_SECRET", "ZK_MPC_NODE_1", "ZK_MPC_NODE_2", "ZK_MPC_NODE_3"] {
+    for var in &[
+        "SUPABASE_URL",
+        "SUPABASE_KEY",
+        "JWT_SECRET",
+        "ZK_MPC_NODE_1",
+        "ZK_MPC_NODE_2",
+        "ZK_MPC_NODE_3",
+    ] {
         if std::env::var(var).is_err() {
             eprintln!("Error: 環境変数 {} が設定されていません", var);
         }

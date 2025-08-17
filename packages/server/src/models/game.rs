@@ -1,6 +1,10 @@
+use crate::services::zk_proof::check_status_with_retry;
+
 use super::player::Player;
 use ark_bls12_377::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
+use ark_ff::{BigInteger, PrimeField};
+use ark_serialize::CanonicalDeserialize;
 use derivative::Derivative;
 use mpc_algebra_wasm::*;
 use reqwest::Client;
@@ -77,12 +81,31 @@ pub struct ChangeRoleRequest {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ProverInfo {
+    pub prover_count: usize,
+    pub encrypted_data: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(tag = "proof_type", content = "data")]
 pub enum ClientRequestType {
-    Divination(DivinationOutput),
-    AnonymousVoting(AnonymousVotingOutput),
-    WinningJudge(WinningJudgementOutput),
-    RoleAssignment(RoleAssignmentOutput),
-    KeyPublicize(KeyPublicizeOutput),
+    Divination(ProverInfo),
+    AnonymousVoting(ProverInfo),
+    WinningJudge(ProverInfo),
+    RoleAssignment(ProverInfo),
+    KeyPublicize(ProverInfo),
+}
+
+impl ClientRequestType {
+    fn get_prover_count(&self) -> usize {
+        match self {
+            ClientRequestType::Divination(info)
+            | ClientRequestType::AnonymousVoting(info)
+            | ClientRequestType::WinningJudge(info)
+            | ClientRequestType::RoleAssignment(info)
+            | ClientRequestType::KeyPublicize(info) => info.prover_count,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -108,70 +131,6 @@ impl BatchRequest {
             created_at: chrono::Utc::now(),
         }
     }
-
-    pub async fn add_request(&mut self, request: ClientRequestType) -> String {
-        self.requests.push(request);
-
-        // バッチが満杯になったら処理を開始
-        if self.requests.len() >= /*self.batch_size_limit*/ 3 {
-            // let completed_batch = batch_guard.take().unwrap();
-            let batch_id = self.batch_id.clone();
-
-            let mut service = self.clone();
-
-            // 非同期でバッチ処理を開始
-            tokio::spawn(async move {
-                service.process_batch().await;
-            });
-
-            // 新しいバッチを作成
-            *self = BatchRequest::new();
-
-            batch_id
-        } else {
-            self.batch_id.clone()
-        }
-    }
-
-    async fn process_batch(&mut self) {
-        self.status = BatchStatus::Processing;
-
-        // requsets: Vec<ClientRequestType>をCircuitEncryptedInputIdentifierに変換
-        let identifier = try_convert_to_identifier(self.requests.clone())
-            .map_err(|e| {
-                self.status = BatchStatus::Failed;
-                e
-            })
-            .unwrap();
-
-        let client = Client::new();
-
-        let mut responses = Vec::new();
-
-        let req_to_node = ProofRequest {
-            proof_id: "test_proof_id".to_string(),
-            circuit_type: identifier.clone(),
-            output_type: ProofOutputType::Public,
-        };
-
-        // identifierをzk-mpc-nodeに送信するなどの処理を行う
-        for port in ZK_MPC_NODE_URL {
-            let response = client
-                .post(port)
-                .json(&req_to_node)
-                .send()
-                .await
-                .map_err(|e| e.to_string());
-            responses.push(response);
-        }
-
-        for (port, response) in ZK_MPC_NODE_URL.iter().zip(responses) {
-            let response_body: serde_json::Value = response.unwrap().json().await.unwrap();
-            println!("Response from port {}: {:?}", port, response_body);
-        }
-
-        self.status = BatchStatus::Completed;
-    }
 }
 
 fn try_convert_to_identifier(
@@ -185,7 +144,8 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let Divination(d) = r {
-                            d
+                            serde_json::from_str(&d.encrypted_data)
+                                .expect("Failed to deserialize DivinationOutput")
                         } else {
                             unreachable!()
                         }
@@ -198,7 +158,8 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let AnonymousVoting(d) = r {
-                            d
+                            serde_json::from_str(&d.encrypted_data)
+                                .expect("Failed to deserialize AnonymousVotingOutput")
                         } else {
                             unreachable!()
                         }
@@ -211,7 +172,8 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let WinningJudge(d) = r {
-                            d
+                            serde_json::from_str(&d.encrypted_data)
+                                .expect("Failed to deserialize WinningJudgeOutput")
                         } else {
                             unreachable!()
                         }
@@ -224,7 +186,8 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let RoleAssignment(d) = r {
-                            d
+                            serde_json::from_str(&d.encrypted_data)
+                                .expect("Failed to deserialize RoleAssignmentOutput")
                         } else {
                             unreachable!()
                         }
@@ -237,7 +200,8 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let KeyPublicize(d) = r {
-                            d
+                            serde_json::from_str(&d.encrypted_data)
+                                .expect("Failed to deserialize KeyPublicizeOutput")
                         } else {
                             unreachable!()
                         }
@@ -379,7 +343,6 @@ impl Game {
         }
         self.vote_results.clear();
     }
-
     pub fn add_phase_change_message(&mut self, from_phase: GamePhase, to_phase: GamePhase) {
         let message = match to_phase {
             GamePhase::Night => {
@@ -402,6 +365,174 @@ impl Game {
             message.to_string(),
             super::chat::ChatMessageType::System,
         ));
+    }
+
+    pub async fn add_request(&mut self, request: ClientRequestType) -> String {
+        // let mut batch_request = &self.batch_request;
+        let size_limit = request.get_prover_count();
+        self.batch_request.requests.push(request);
+
+        // バッチが満杯になったら処理を開始
+        if self.batch_request.requests.len() >= size_limit {
+            let batch_id = self.batch_request.batch_id.clone();
+
+            // let mut service = self.clone();
+
+            // TODO: 非同期でバッチ処理を開始
+            // tokio::spawn(async move {
+            // let mut games = game.lock().await;
+            // if let Some(game) = games.get_mut(room_id) {
+            //     // ゲームの状態を更新する処理
+            //     // ...
+            // }
+
+            self.process_batch().await;
+            // });
+
+            // 新しいバッチを作成
+            self.batch_request = BatchRequest::new();
+
+            batch_id
+        } else {
+            self.batch_request.batch_id.clone()
+        }
+    }
+
+    async fn process_batch(&mut self) {
+        self.batch_request.status = BatchStatus::Processing;
+
+        // requsets: Vec<ClientRequestType>をCircuitEncryptedInputIdentifierに変換
+        let identifier = try_convert_to_identifier(self.batch_request.requests.clone())
+            .map_err(|e| {
+                self.batch_request.status = BatchStatus::Failed;
+                e
+            })
+            .unwrap();
+
+        let client = Client::new();
+
+        let mut responses = Vec::new();
+
+        let req_to_node = ProofRequest {
+            proof_id: self.batch_request.batch_id.clone(),
+            circuit_type: identifier.clone(),
+            output_type: ProofOutputType::Public,
+        };
+
+        // identifierをzk-mpc-nodeに送信するなどの処理を行う
+        for port in ZK_MPC_NODE_URL {
+            let response = client
+                .post(port)
+                .json(&req_to_node)
+                .send()
+                .await
+                .map_err(|e| e.to_string());
+            responses.push(response);
+        }
+
+        for (port, response) in ZK_MPC_NODE_URL.iter().zip(responses) {
+            let response_body: serde_json::Value = response.unwrap().json().await.unwrap();
+            println!("Response from port {}: {:?}", port, response_body);
+        }
+
+        // 3. 結果の確認（非同期で実行）
+        // tokio::spawn(async move {
+        match check_status_with_retry(&self.batch_request.batch_id).await {
+            Ok((true, Some(output))) => {
+                println!(
+                    "Proof ID {:?} is ready with output: {:?}",
+                    self.batch_request.batch_id, output
+                );
+                // プルーフ生成成功時の処理
+                // 例: WebSocketで結果をクライアントに通知
+                match identifier {
+                    CircuitEncryptedInputIdentifier::Divination(items) => {
+                        // itemsを処理する
+                    }
+                    CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
+                        println!("AnonymousVoting process is starting...");
+                        // 1. outputのバイト列をFr型のtarget_idとして取得
+                        let target_id: Fr = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(id) => id,
+                                Err(e) => {
+                                    println!("Failed to deserialize target_id: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                return;
+                            }
+                        };
+
+                        println!("Deserialized target_id: {:?}", target_id);
+
+                        // 2. Fr型のtarget_idをusize型のインデックスとして解釈
+                        // Note: これはFr型の値がプレイヤーの配列のインデックスとして
+                        // 適切な範囲内であることを前提としています
+                        let target_index = {
+                            // Fr型からBigUintに変換し、usizeに変換
+                            let bytes = target_id.into_repr().to_bytes_le();
+                            let index = bytes[0] as usize; // 最初のバイトをインデックスとして使用
+                            if index >= self.players.len() {
+                                println!("Invalid player index: {}", index);
+                                return;
+                            }
+                            index
+                        };
+
+                        println!("Target index for voting: {}", target_index);
+
+                        // 3. 該当するプレイヤーを死亡させる
+                        self.players[target_index].is_dead = true;
+
+                        println!(
+                            "Player {} has been killed.",
+                            self.players[target_index].name
+                        );
+
+                        // 5. 投票結果をログに追加
+                        self.chat_log.add_system_message(format!(
+                            "投票結果: {}が処刑されました。",
+                            self.players[target_index].name
+                        ));
+
+                        println!(
+                            "AnonymousVoting processed successfully for target_id: {}",
+                            target_id
+                        );
+
+                        // フェーズを更新
+                        let from_phase = self.phase.clone();
+                        self.phase = GamePhase::Result;
+                        self.add_phase_change_message(from_phase, self.phase.clone());
+
+                        // 4. 投票結果をクリア
+                        self.vote_results.clear();
+
+                        println!("Vote results cleared after processing.");
+                    }
+                    CircuitEncryptedInputIdentifier::WinningJudge(items) => {
+                        // itemsを処理する
+                    }
+                    CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
+                        // itemsを処理する
+                    }
+                    CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
+                        // itemsを処理する
+                    }
+                }
+
+                self.batch_request.status = BatchStatus::Completed;
+            }
+            _ => {
+                // 失敗時の処理
+                println!("Proof ID {:?} is failed", self.batch_request.batch_id);
+                self.batch_request.status = BatchStatus::Failed;
+            }
+        }
+        // });
     }
 }
 

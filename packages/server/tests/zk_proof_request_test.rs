@@ -3,6 +3,7 @@ use ark_ff::{PrimeField, UniformRand};
 use ark_std::test_rng;
 use base64::decode;
 use crypto_box::{PublicKey, SecretKey};
+use dotenvy::dotenv;
 use mpc_algebra::{CommitmentScheme, FromLocal};
 use mpc_algebra_wasm::{
     types::AnonymousVotingInput, AnonymousVotingEncryption, AnonymousVotingOutput,
@@ -12,6 +13,16 @@ use mpc_algebra_wasm::{
 //     AnonymousVotingPrivateInput, AnonymousVotingPublicInput,
 // };
 use serde_json::json;
+use server::{
+    models::{
+        game::{Game, ProverInfo},
+        player::Player,
+        role::Role,
+        room::Room,
+    },
+    services::game_service,
+    state::AppState,
+};
 use tokio_tungstenite::tungstenite::client;
 use wiremock::{
     matchers::{method, path},
@@ -89,6 +100,7 @@ fn setup_voting() -> (CircuitEncryptedInputIdentifier, Vec<(SecretKey, PublicKey
     let public_input = AnonymousVotingPublicInput {
         pedersen_param: pedersen_param.clone(),
         player_commitment: vec![<Fr as LocalOrMPC<Fr>>::PedersenCommitment::default(); USER_NUM],
+        player_num: USER_NUM,
     };
 
     // let encrypted_inputs = private_inputs
@@ -190,84 +202,68 @@ fn setup_voting_dummy() -> ClientRequestType {
             pedersen_param: <Fr as LocalOrMPC<Fr>>::PedersenComScheme::setup(&mut test_rng())
                 .unwrap(),
             player_commitment: vec![],
+            player_num: USER_NUM,
         },
     };
-    ClientRequestType::AnonymousVoting(anon_voting_output)
+    let prover_info = ProverInfo {
+        prover_count: USER_NUM,
+        encrypted_data: serde_json::to_string(&anon_voting_output).unwrap(),
+    };
+    ClientRequestType::AnonymousVoting(prover_info)
+}
+async fn setup_test_room_with_players(state: &AppState) -> String {
+    let room_id = "test_room".to_string();
+    // プレイヤーを4人作成（村人2人、占い師1人、人狼1人）
+    let players = vec![
+        Player {
+            id: "1".to_string(),
+            name: "Player1".to_string(),
+            role: Some(Role::Villager),
+            is_dead: false,
+            is_ready: false,
+        },
+        Player {
+            id: "2".to_string(),
+            name: "Player2".to_string(),
+            role: Some(Role::Seer),
+            is_dead: false,
+            is_ready: false,
+        },
+        Player {
+            id: "3".to_string(),
+            name: "Player3".to_string(),
+            role: Some(Role::Werewolf),
+            is_dead: false,
+            is_ready: false,
+        },
+        Player {
+            id: "4".to_string(),
+            name: "Player4".to_string(),
+            role: Some(Role::Villager),
+            is_dead: false,
+            is_ready: false,
+        },
+    ];
+
+    let mut room = Room::new(room_id.clone(), Some("Test Room".to_string()), Some(4));
+    room.players = players;
+    state.rooms.lock().await.insert(room_id.clone(), room);
+
+    room_id
 }
 
 #[tokio::test]
-async fn test_batch_request() {
-    // // BatchServiceの初期化（バッチサイズ3で設定）
-    let mut batch_request = BatchRequest::new();
+async fn test_batch_request() -> Result<(), anyhow::Error> {
+    dotenv().ok();
 
-    // // 投票用の回路とインプットのセットアップ
-    // let rng = &mut test_rng();
-    // let pedersen_param = <Fr as LocalOrMPC<Fr>>::PedersenComScheme::setup(rng).unwrap();
+    let state = AppState::new();
+    let room_id = setup_test_room_with_players(&state).await;
 
-    // // 2つの異なる投票データを作成
-    // let private_input1 = AnonymousVotingPrivateInput {
-    //     id: 1,
-    //     is_target_id: vec![Fr::from(1), Fr::from(0), Fr::from(0)], // 1番目のプレイヤーに投票
-    //     player_randomness: Fr::rand(rng),
-    // };
-
-    // let private_input2 = AnonymousVotingPrivateInput {
-    //     id: 2,
-    //     is_target_id: vec![Fr::from(0), Fr::from(1), Fr::from(0)], // 2番目のプレイヤーに投票
-    //     player_randomness: Fr::rand(rng),
-    // };
-
-    // let public_input = AnonymousVotingPublicInput {
-    //     pedersen_param: pedersen_param.clone(),
-    //     player_commitment: vec![
-    //         <Fr as LocalOrMPC<Fr>>::PedersenCommitment::default();
-    //         3  // プレイヤー数
-    //     ],
-    // };
-
-    // let circuit1 = AnonymousVotingCircuit {
-    //     is_target_id: vec![private_input1.is_target_id.clone()],
-    //     pedersen_param: public_input.pedersen_param.clone(),
-    //     player_randomness: vec![private_input1.player_randomness],
-    //     player_commitment: public_input.player_commitment.clone(),
-    // };
-
-    // let circuit2 = AnonymousVotingCircuit {
-    //     is_target_id: vec![private_input2.is_target_id.clone()],
-    //     pedersen_param: public_input.pedersen_param.clone(),
-    //     player_randomness: vec![private_input2.player_randomness],
-    //     player_commitment: public_input.player_commitment.clone(),
-    // };
-
-    // 1つ目のリクエストを追加
-    let request1 = setup_voting_dummy();
-    let batch_id1 = batch_request.add_request(request1).await;
-
-    // 2つ目のリクエストを追加
-    let request2 = setup_voting_dummy();
-    let batch_id2 = batch_request.add_request(request2).await;
-
-    // 3つ目のリクエストを追加（これでバッチサイズに達する）
-    let request3 = setup_voting_dummy();
-    let batch_id3 = batch_request.add_request(request3).await;
-
-    // 同じバッチIDであることを確認
-    assert_eq!(batch_id1, batch_id2);
-    assert_eq!(batch_id2, batch_id3);
-
-    // バッチ処理が開始されるのを少し待つ
-    sleep(Duration::from_millis(100)).await;
-
-    // 新しいリクエストは新しいバッチIDを取得することを確認
-    let request4 = setup_voting_dummy();
-    let batch_id4 = batch_request.add_request(request4).await;
-    assert_ne!(batch_id1, batch_id4);
-}
-
-#[tokio::test]
-async fn test_real_batch_request() -> Result<(), anyhow::Error> {
-    // BatchServiceの初期化（バッチサイズ3で設定）
-    let mut batch_request = BatchRequest::new();
+    // ゲーム開始
+    println!("Starting game in room: {}", room_id);
+    let start_result = game_service::start_game(state.clone(), &room_id).await;
+    let mut games = state.games.lock().await;
+    let game = games.get_mut(&room_id).unwrap();
 
     let (circuit_encrypted_input, _user_keys) = setup_voting();
 
@@ -279,16 +275,28 @@ async fn test_real_batch_request() -> Result<(), anyhow::Error> {
 
     // 1つ目のリクエストを追加
     // let request1 = setup_voting_dummy();
-    let request1 = ClientRequestType::AnonymousVoting(input_vec[0].clone());
-    let batch_id1 = batch_request.add_request(request1).await;
+    let prover_info_1 = ProverInfo {
+        prover_count: USER_NUM,
+        encrypted_data: serde_json::to_string(&input_vec[0]).unwrap(),
+    };
+    let request1 = ClientRequestType::AnonymousVoting(prover_info_1);
+    let batch_id1 = game.add_request(request1).await;
 
     // 2つ目のリクエストを追加
-    let request2 = ClientRequestType::AnonymousVoting(input_vec[1].clone());
-    let batch_id2 = batch_request.add_request(request2).await;
+    let prover_info_2 = ProverInfo {
+        prover_count: USER_NUM,
+        encrypted_data: serde_json::to_string(&input_vec[1]).unwrap(),
+    };
+    let request2 = ClientRequestType::AnonymousVoting(prover_info_2);
+    let batch_id2 = game.add_request(request2).await;
 
     // 3つ目のリクエストを追加（これでバッチサイズに達する）
-    let request3 = ClientRequestType::AnonymousVoting(input_vec[2].clone());
-    let batch_id3 = batch_request.add_request(request3).await;
+    let prover_info_3 = ProverInfo {
+        prover_count: USER_NUM,
+        encrypted_data: serde_json::to_string(&input_vec[2]).unwrap(),
+    };
+    let request3 = ClientRequestType::AnonymousVoting(prover_info_3);
+    let batch_id3 = game.add_request(request3).await;
 
     // 同じバッチIDであることを確認
     assert_eq!(batch_id1, batch_id2);
@@ -299,7 +307,7 @@ async fn test_real_batch_request() -> Result<(), anyhow::Error> {
 
     // 新しいリクエストは新しいバッチIDを取得することを確認
     let request4 = setup_voting_dummy();
-    let batch_id4 = batch_request.add_request(request4).await;
+    let batch_id4 = game.add_request(request4).await;
     assert_ne!(batch_id1, batch_id4);
 
     sleep(Duration::from_secs(30)).await; // バッチ処理が完了するのを待つ
@@ -321,10 +329,7 @@ async fn test_real_batch_request() -> Result<(), anyhow::Error> {
 
         loop {
             let response = client
-                .get(format!(
-                    "http://localhost:{}/proof/{}",
-                    port, "test_proof_id",
-                ))
+                .get(format!("http://localhost:{}/proof/{}", port, batch_id1,))
                 .send()
                 .await?;
 
