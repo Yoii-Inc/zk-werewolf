@@ -32,6 +32,28 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+        
+      # ---- Rust / wasm-pack を用意 ----
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./packages/mpc-algebra-wasm
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      # ---- Rust → WASM を先にビルド（型定義 .d.ts もここで生成）----
+      - name: Build wasm (wasm-pack)
+        working-directory: ./packages/mpc-algebra-wasm
+        run: |
+          wasm-pack build \
+            --release \
+            --target web \
+            --out-dir pkg-node
+            
       - name: Install foundry-toolchain
         uses: foundry-rs/foundry-toolchain@v1
         with:
