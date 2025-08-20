@@ -2,7 +2,6 @@ use crate::*;
 
 use ark_bls12_377::Fr;
 use ark_ff::PrimeField;
-use ark_ff::Zero;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
@@ -11,15 +10,18 @@ use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::ConstraintSystemRef;
 use ark_relations::{lc, r1cs::ConstraintSynthesizer};
 use ark_std::test_rng;
+use ark_std::{One, Zero};
 use mpc_algebra::malicious_majority as mm;
 use mpc_algebra::mpc_fields::MpcFieldVar;
 use mpc_algebra::BooleanWire;
+use mpc_algebra::EqualityZero;
 use mpc_algebra::LessThan;
 use mpc_algebra::MpcCondSelectGadget;
 use mpc_algebra::MpcEqGadget;
 use mpc_algebra::MpcFpVar;
 use mpc_algebra::MpcToBitsGadget;
 use mpc_algebra::Reveal;
+use zk_mpc::circuits::serialize::werewolf;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 
 impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> MpcCircuit<F>
@@ -308,6 +310,58 @@ impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer
     ) -> Result<(), ark_relations::r1cs::SynthesisError> {
         // Implement constraint generation logic here
         Ok(())
+    }
+}
+
+impl WinningJudgementCircuit<Fr> {
+    pub fn calculate_output(&self) -> Fr {
+        let werewolf_count = self
+            .private_input
+            .iter()
+            .filter(|input| input.am_werewolf.is_one())
+            .count();
+
+        let villagers_count = self
+            .private_input
+            .iter()
+            .filter(|input| input.am_werewolf.is_zero())
+            .count();
+
+        let game_state = if werewolf_count == 0 {
+            Fr::from(2u32)
+        } else if werewolf_count >= villagers_count {
+            Fr::from(1u32)
+        } else {
+            Fr::from(3u32)
+        };
+        game_state
+    }
+}
+
+impl WinningJudgementCircuit<mm::MpcField<Fr>> {
+    pub fn calculate_output(&self) -> mm::MpcField<Fr> {
+        let alive_player_num = self.private_input.len();
+
+        let villagers_count: mm::MpcField<Fr> = self
+            .private_input
+            .iter()
+            .map(|input| input.am_werewolf.sync_is_zero_shared().field())
+            .sum();
+
+        let werewolf_count = mm::MpcField::<Fr>::from(alive_player_num as u32) - villagers_count;
+
+        let exists_werewolf = werewolf_count.sync_is_zero_shared();
+
+        let game_state = exists_werewolf.field() * mm::MpcField::<Fr>::from(2_u32)
+            + (!exists_werewolf).field()
+                * (werewolf_count
+                    .sync_is_smaller_than(&villagers_count)
+                    .field()
+                    * mm::MpcField::<Fr>::from(3_u32)
+                    + (mm::MpcField::<Fr>::one()
+                        - (werewolf_count.sync_is_smaller_than(&villagers_count)).field())
+                        * mm::MpcField::<Fr>::from(1_u32));
+        game_state
     }
 }
 

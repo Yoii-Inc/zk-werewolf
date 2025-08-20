@@ -5,7 +5,7 @@ use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct WinningJudgementPrivateInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> {
     pub id: usize,
-    pub is_target_id: Vec<F>,
+    pub am_werewolf: F,
     pub player_randomness: F,
 }
 
