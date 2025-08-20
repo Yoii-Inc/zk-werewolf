@@ -5,6 +5,7 @@ use ark_ff::PrimeField;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
+use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::select::CondSelectGadget;
 use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::ConstraintSystemRef;
@@ -342,18 +343,19 @@ impl WinningJudgementCircuit<mm::MpcField<Fr>> {
     pub fn calculate_output(&self) -> mm::MpcField<Fr> {
         let alive_player_num = self.private_input.len();
 
-        let villagers_count: mm::MpcField<Fr> = self
+        let werewolf_count = self
             .private_input
             .iter()
-            .map(|input| input.am_werewolf.sync_is_zero_shared().field())
-            .sum();
+            .fold(mm::MpcField::<Fr>::zero(), |acc, input| {
+                acc + input.am_werewolf
+            });
 
-        let werewolf_count = mm::MpcField::<Fr>::from(alive_player_num as u32) - villagers_count;
+        let villagers_count = mm::MpcField::<Fr>::from(alive_player_num as u32) - werewolf_count;
 
-        let exists_werewolf = werewolf_count.sync_is_zero_shared();
+        let no_werewolf = werewolf_count.sync_is_zero_shared();
 
-        let game_state = exists_werewolf.field() * mm::MpcField::<Fr>::from(2_u32)
-            + (!exists_werewolf).field()
+        let game_state = no_werewolf.field() * mm::MpcField::<Fr>::from(2_u32)
+            + (!no_werewolf).field()
                 * (werewolf_count
                     .sync_is_smaller_than(&villagers_count)
                     .field()
@@ -365,14 +367,197 @@ impl WinningJudgementCircuit<mm::MpcField<Fr>> {
     }
 }
 
-impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer<F>
-    for WinningJudgementCircuit<F>
-{
+impl DivinationCircuit<Fr> {
+    pub fn calculate_output(&self) -> Fr {
+        todo!()
+    }
+}
+
+impl DivinationCircuit<mm::MpcField<Fr>> {
+    pub fn calculate_output(&self) -> mm::MpcField<Fr> {
+        // let peculiar = circuit.mpc_input.peculiar.clone().unwrap();
+        // let is_target_vec = peculiar.is_target;
+        // let is_werewolf_vec = peculiar.is_werewolf;
+
+        // let mut sum = MFr::default();
+        // for (t, w) in is_target_vec.iter().zip(is_werewolf_vec.iter()) {
+        //     sum += t.input * w.input;
+        // }
+        todo!()
+    }
+}
+
+impl KeyPublicizeCircuit<mm::MpcField<Fr>> {
+    pub fn calculate_output(&self) -> mm::MpcField<Fr> {
+        todo!()
+    }
+}
+
+impl RoleAssignmentCircuit<mm::MpcField<Fr>> {
+    pub fn calculate_output(&self) -> mm::MpcField<Fr> {
+        // let num_players = circuit.num_players;
+        // let max_group_size = circuit.max_group_size;
+        // let pedersen_param = circuit.pedersen_param.clone();
+        // let tau_matrix = circuit.tau_matrix.clone();
+        // let role_commitment = circuit.role_commitment.clone();
+        // let player_commitment = circuit.player_commitment.clone();
+        // let shuffle_matrices = circuit.shuffle_matrices.clone();
+        // let randomness = circuit.randomness.clone();
+        // let player_randomness = circuit.player_randomness.clone();
+        // let mut buffer = Vec::new();
+        // // CanonicalSerialize::serialize(&num_players, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&max_group_size, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&pedersen_param, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&tau_matrix, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&role_commitment, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&player_commitment, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&shuffle_matrices, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&randomness, &mut buffer).unwrap();
+        // // CanonicalSerialize::serialize(&player_randomness, &mut buffer).unwrap();
+        // buffer
+        todo!()
+    }
+}
+
+impl ConstraintSynthesizer<Fr> for WinningJudgementCircuit<Fr> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> ark_relations::r1cs::Result<()> {
+        // check player commitment
+        // let player_num = self.player_randomness.len();
+        let alive_player_num = self.private_input.len();
+        // for i in 0..alive_player_num {
+        //     let pedersen_circuit = PedersenComCircuit {
+        //         param: Some(self.pedersen_param.clone()),
+        //         input: self.player_randomness[i],
+        //         open: <Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
+        //         commit: self.player_commitment[i],
+        //     };
+        //     pedersen_circuit.generate_constraints(cs.clone())?;
+        // }
+
+        // initialize
+        let num_alive_var = FpVar::new_input(cs.clone(), || Ok(Fr::from(alive_player_num as u32)))?;
+
+        let am_werewolf_var = self
+            .private_input
+            .iter()
+            .map(|input| input.am_werewolf)
+            .collect::<Vec<_>>();
+
+        let game_state_var = FpVar::new_input(cs.clone(), || Ok(self.calculate_output()))?;
+
+        // calculate
+        let num_werewolf_var =
+            am_werewolf_var
+                .iter()
+                .fold(<FpVar<Fr> as Zero>::zero(), |mut acc, x| {
+                    acc += *x;
+                    acc
+                });
+
+        let num_citizen_var = num_alive_var - &num_werewolf_var;
+
+        let calced_game_state_var = FpVar::conditionally_select(
+            &FieldVar::is_zero(&num_werewolf_var)?,
+            &FpVar::constant(Fr::from(2)), // villager win
+            &FpVar::conditionally_select(
+                &num_werewolf_var.is_cmp(&num_citizen_var, std::cmp::Ordering::Less, false)?,
+                &FpVar::constant(Fr::from(3)), // game continues
+                &FpVar::constant(Fr::from(1)), // werewolf win
+            )?,
+        )?;
+
+        // // check commitment
+        // for am_werewolf_with_commit in self.am_werewolf.iter() {
+        //     let am_werewolf_com_circuit = PedersenComCircuit {
+        //         param: Some(self.pedersen_param.clone()),
+        //         input: am_werewolf_with_commit.input,
+        //         open: am_werewolf_with_commit.randomness.clone(),
+        //         commit: am_werewolf_with_commit.commitment.clone(),
+        //     };
+
+        //     am_werewolf_com_circuit.generate_constraints(cs.clone())?;
+        // }
+
+        // enforce equal
+        game_state_var.enforce_equal(&calced_game_state_var)?;
+
+        println!("total number of constraints: {}", cs.num_constraints());
+
+        Ok(())
+    }
+}
+
+impl ConstraintSynthesizer<mm::MpcField<Fr>> for WinningJudgementCircuit<mm::MpcField<Fr>> {
     fn generate_constraints(
         self,
-        cs: ark_relations::r1cs::ConstraintSystemRef<F>,
-    ) -> Result<(), ark_relations::r1cs::SynthesisError> {
-        // Implement constraint generation logic here
+        cs: ConstraintSystemRef<mm::MpcField<Fr>>,
+    ) -> ark_relations::r1cs::Result<()> {
+        // check player commitment
+        // let player_num = self.player_randomness.len();
+        let alive_player_num = self.private_input.len();
+        // for i in 0..alive_player_num {
+        //     let pedersen_circuit = PedersenComCircuit {
+        //         param: Some(self.pedersen_param.clone()),
+        //         input: self.player_randomness[i],
+        //         open: <Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
+        //         commit: self.player_commitment[i],
+        //     };
+        //     pedersen_circuit.generate_constraints(cs.clone())?;
+        // }
+
+        // initialize
+        let num_alive_var = MpcFpVar::new_input(cs.clone(), || {
+            Ok(mm::MpcField::<Fr>::from(alive_player_num as u32))
+        })?;
+
+        let am_werewolf_var = self
+            .private_input
+            .iter()
+            .map(|input| input.am_werewolf)
+            .collect::<Vec<_>>();
+
+        // let game_state_var = MpcFpVar::new_input(cs.clone(), || Ok(self.calculate_output()))?;
+        // let game_state_var =
+        //     MpcFpVar::new_input(cs.clone(), || Ok(mm::MpcField::<Fr>::from(0_u32)))?;
+
+        // calculate
+        let num_werewolf_var = am_werewolf_var.iter().fold(
+            <MpcFpVar<mm::MpcField<Fr>> as Zero>::zero(),
+            |mut acc, x| {
+                acc += *x;
+                acc
+            },
+        );
+
+        let num_citizen_var = num_alive_var - &num_werewolf_var;
+
+        let calced_game_state_var = MpcFpVar::conditionally_select(
+            &MpcFieldVar::is_zero(&num_werewolf_var)?,
+            &MpcFpVar::constant(mm::MpcField::<Fr>::from(2_u32)), // villager win
+            &MpcFpVar::conditionally_select(
+                &num_werewolf_var.is_cmp(&num_citizen_var, std::cmp::Ordering::Less, false)?,
+                &MpcFpVar::constant(mm::MpcField::<Fr>::from(3_u32)), // game continues
+                &MpcFpVar::constant(mm::MpcField::<Fr>::from(1_u32)), // werewolf win
+            )?,
+        )?;
+
+        // // check commitment
+        // for am_werewolf_with_commit in self.am_werewolf.iter() {
+        //     let am_werewolf_com_circuit = PedersenComCircuit {
+        //         param: Some(self.pedersen_param.clone()),
+        //         input: am_werewolf_with_commit.input,
+        //         open: am_werewolf_with_commit.randomness.clone(),
+        //         commit: am_werewolf_with_commit.commitment.clone(),
+        //     };
+
+        //     am_werewolf_com_circuit.generate_constraints(cs.clone())?;
+        // }
+
+        // enforce equal
+        // game_state_var.enforce_equal(&calced_game_state_var)?;
+
+        println!("total number of constraints: {}", cs.num_constraints());
+
         Ok(())
     }
 }

@@ -125,10 +125,9 @@ export interface DivinationPublicInput {
   playerCommitment: PedersernCommitment[];
 }
 
-// TODO: modify.
 export interface WinningJudgementPrivateInput {
   id: number;
-  isTargetId: (number[] | null)[][];
+  amWerewolf: (number[] | null)[];
   playerRandomness: (number[] | null)[];
 }
 export interface WinningJudgementPublicInput {

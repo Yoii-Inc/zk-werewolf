@@ -3,13 +3,15 @@ use ark_bls12_377::Fr;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct WinningJudgementPrivateInput {
     pub id: usize,
-    pub is_target_id: Vec<Fr>,
+    pub am_werewolf: Fr,
     pub player_randomness: Fr,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct WinningJudgementPublicInput {
     pub pedersen_param: PedersenParam,
     pub player_commitment: Vec<PedersenCommitment>,

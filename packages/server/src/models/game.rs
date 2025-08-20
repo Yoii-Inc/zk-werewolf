@@ -1,4 +1,7 @@
-use crate::services::zk_proof::check_status_with_retry;
+use crate::{
+    models::chat::{ChatMessage, ChatMessageType},
+    services::zk_proof::check_status_with_retry,
+};
 
 use super::player::Player;
 use ark_bls12_377::Fr;
@@ -515,6 +518,51 @@ impl Game {
                     }
                     CircuitEncryptedInputIdentifier::WinningJudge(items) => {
                         // itemsを処理する
+
+                        let game_state: Fr = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(state) => state,
+                                Err(e) => {
+                                    println!("Failed to deserialize game_state: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                return;
+                            }
+                        };
+
+                        // 状態をゲームの結果に反映
+
+                        let result = if game_state == Fr::from(1u32) {
+                            GameResult::VillagerWin
+                        } else if game_state == Fr::from(2u32) {
+                            GameResult::WerewolfWin
+                        } else {
+                            self.chat_log
+                                .add_system_message("ゲームはまだ続くようです。".to_string());
+                            GameResult::InProgress
+                        };
+
+                        if result != GameResult::InProgress {
+                            let winner_message = match result {
+                                GameResult::VillagerWin => "村人陣営の勝利です！",
+                                GameResult::WerewolfWin => "人狼陣営の勝利です！",
+                                GameResult::InProgress => unreachable!(),
+                            };
+
+                            self.chat_log.add_message(ChatMessage::new(
+                                "system".to_string(),
+                                "システム".to_string(),
+                                format!("{}", winner_message),
+                                ChatMessageType::System,
+                            ));
+
+                            self.phase = GamePhase::Finished;
+                        }
+
+                        self.result = result.clone();
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
                         // itemsを処理する

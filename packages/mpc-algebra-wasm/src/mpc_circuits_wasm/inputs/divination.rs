@@ -3,6 +3,7 @@ use ark_bls12_377::Fr;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DivinationPrivateInput {
     pub id: usize,
     pub is_werewolf: Fr,
@@ -12,6 +13,7 @@ pub struct DivinationPrivateInput {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DivinationPublicInput {
     pub pedersen_param: PedersenParam,
     pub elgamal_param: ElGamalParam,

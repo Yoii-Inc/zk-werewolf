@@ -1,13 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
 import type { ChatMessage, Player, WebSocketMessage } from "../../types";
 import { NightAction, NightActionRequest } from "../types";
+import JSONbig from "json-bigint";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 import { useAuth } from "~~/app/contexts/AuthContext";
+import { useWinningJudge } from "~~/hooks/useWinningJudge";
 import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
+import { NodeKey, SecretSharingScheme, WinningJudgementInput, WinningJudgementPublicInput } from "~~/utils/crypto/type";
 
 interface RoomInfo {
   room_id: string;
@@ -248,6 +251,10 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     };
   }, [roomInfo?.status, params.id]);
 
+  const { submitWinningJudge } = useWinningJudge();
+
+  const JSONbigNative = JSONbig({ useNativeBigInt: true });
+
   useEffect(() => {
     if (!gameInfo) return;
 
@@ -259,18 +266,84 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         (prevPhase === "Night" && gameInfo.phase === "Discussion") ||
         (prevPhase === "Voting" && gameInfo.phase === "Result")
       ) {
-        try {
-          const response = await fetch(`http://localhost:8080/api/game/${params.id}/check-winner`);
-          if (!response.ok) {
-            throw new Error("ゲーム結果の取得に失敗しました");
-          }
-          const result = await response.json();
-          if (result !== "ゲーム進行中") {
-            setGameInfo(prev => ({ ...prev!, result: result }));
-            setShowGameResult(true);
-          }
-        } catch (error) {
-          console.error("ゲーム結果の取得エラー:", error);
+        console.log("Phase changed from", prevPhase, "to", gameInfo.phase);
+        //   {
+        //     try {
+        //       const response = await fetch(`http://localhost:8080/api/game/${params.id}/check-winner`);
+        //       if (!response.ok) {
+        //         throw new Error("ゲーム結果の取得に失敗しました");
+        //       }
+        //       const result = await response.json();
+        //       if (result !== "ゲーム進行中") {
+        //         setGameInfo(prev => ({ ...prev!, result: result }));
+        //         setShowGameResult(true);
+        //       }
+        //     } catch (error) {
+        //       console.error("ゲーム結果の取得エラー:", error);
+        //     }
+        //   }
+        const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
+
+        const res = await fetch("/pedersen-params.json");
+        const params = await res.text();
+
+        const parsedParams = JSONbigNative.parse(params);
+
+        const randres = await fetch("/pedersen_randomness_0.json");
+        const randomness = await randres.text();
+        const parsedRandomness = JSONbigNative.parse(randomness);
+
+        const commitres = await fetch("/pedersen_commitment_0.json");
+        const commitment = await commitres.text();
+        const parsedCommitment = JSONbigNative.parse(commitment);
+
+        const players = gameInfo.players;
+
+        const myId = gameInfo.players.find(player => player.name === user?.username)?.id ?? "";
+
+        const privateInput = {
+          id: players.findIndex(player => player.id === myId),
+          amWerewolf:
+            gameInfo.players.find(player => player.name === user?.username)?.role === "Werewolf"
+              ? [[0, 0, 0, 1], null]
+              : [[0, 0, 0, 0], null],
+          playerRandomness: parsedRandomness,
+        };
+
+        const publicInput: WinningJudgementPublicInput = {
+          pedersenParam: parsedParams,
+          playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment], // 配列の長さはプレイヤー数に合わせて調整
+        };
+
+        const nodeKeys: NodeKey[] = [
+          {
+            nodeId: "0",
+            publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
+          },
+          {
+            nodeId: "1",
+            publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
+          },
+          {
+            nodeId: "2",
+            publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
+          },
+        ];
+
+        const scheme: SecretSharingScheme = {
+          totalShares: 3, // dummy
+          modulus: 97, // dummy
+        };
+
+        const winningJudgeData: WinningJudgementInput = {
+          privateInput,
+          publicInput,
+          nodeKeys,
+          scheme,
+        };
+        if (roomInfo?.room_id) {
+          console.log(`Player ${myId} is sending winning judgement proof request`);
+          await submitWinningJudge(roomInfo.room_id, winningJudgeData, alivePlayersCount);
         }
       }
     };

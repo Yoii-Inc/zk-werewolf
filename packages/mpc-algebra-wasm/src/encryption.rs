@@ -278,7 +278,19 @@ impl SplitAndEncrypt for WinningJudgementEncryption {
     type ShareForNode = WinningJudgementPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
-        todo!()
+        let scheme = &input.scheme;
+        let private_input = &input.private_input;
+
+        let am_werewolf_share = split_fr(private_input.am_werewolf, scheme);
+        let player_randomness_share = split_fr(private_input.player_randomness, scheme);
+
+        (0..scheme.total_shares)
+            .map(|i| WinningJudgementPrivateInput {
+                id: private_input.id,
+                am_werewolf: am_werewolf_share[i],
+                player_randomness: player_randomness_share[i],
+            })
+            .collect::<Vec<_>>()
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue> {
