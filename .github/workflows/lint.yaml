@@ -11,26 +11,17 @@ on:
       - "packages/**"
 
 jobs:
-  ci:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        node: [lts/*]
+  lint:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
 
-      - name: Setup node env
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
         with:
-          node-version: ${{ matrix.node }}
-          cache: yarn
-
-      - name: Install dependencies
-        run: yarn install --immutable
+          node-version: lts/*
 
       - name: Install foundry-toolchain
         uses: foundry-rs/foundry-toolchain@v1

@@ -1,0 +1,19 @@
+name: 'Setup Node'
+description: 'Setup Node.js with Yarn caching'
+inputs:
+  node-version:
+    description: 'Node version to use'
+    required: false
+    default: 'lts/*'
+runs:
+  using: "composite"
+  steps:
+    - name: Setup node env
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: yarn
+    
+    - name: Install dependencies
+      shell: bash
+      run: yarn install --immutable
