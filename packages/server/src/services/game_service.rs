@@ -154,7 +154,7 @@ pub async fn process_night_action(
         (Role::Werewolf, NightAction::Attack { target_id }) => {
             if state.debug_config.create_proof {
                 // request proof of werewolf attack validity
-                let attack_inputs = json!({
+                let _attack_inputs = json!({
                     "attacker_id": action_req.player_id,
                     "target_id": target_id,
                     "is_attacker_werewolf": true,
