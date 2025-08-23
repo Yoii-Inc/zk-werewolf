@@ -42,7 +42,7 @@ anyhow = "1.0.98"
 
 [dev-dependencies]
 tokio-tungstenite = "0.19"
-hyper = { version = "1.0" }
+hyper = { version = "1.7" }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 wiremock = "0.5"
