@@ -4,8 +4,10 @@ import React, { useEffect, useRef, useState } from "react";
 import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
 import type { ChatMessage, Player, WebSocketMessage } from "../../types";
+import { NightAction, NightActionRequest } from "../types";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 import { useAuth } from "~~/app/contexts/AuthContext";
+import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
 
 interface RoomInfo {
   room_id: string;
@@ -140,6 +142,22 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     }
   };
 
+  // 新しい部屋が作成されたときのチャットログリセット
+  useEffect(() => {
+    if (roomInfo?.status === "Open") {
+      localStorage.removeItem(`chat_messages_${params.id}`);
+      setMessages([
+        {
+          id: Date.now().toString(),
+          sender: "システム",
+          message: "新しい部屋が作成されました",
+          timestamp: new Date().toISOString(),
+          type: "system",
+        },
+      ]);
+    }
+  }, [roomInfo?.status, params.id]);
+
   useEffect(() => {
     if (!hasConnectedRef.current) {
       hasConnectedRef.current = true;
@@ -177,6 +195,32 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         const data = await response.json();
         console.log(data);
         setGameInfo(data);
+        // if (gameInfo?.chat_log?.messages) {
+        //   setMessages(data.chat_log.messages);
+        // }
+
+        // システムメッセージを追加
+        // const message: ChatMessage = {
+        //   id: Date.now().toString(),
+        //   sender: "システム",
+        //   message: "夜の行動を実行しました",
+        //   timestamp: new Date().toISOString(),
+        //   type: "system",
+        // };
+
+        const message_from_server = data.chat_log.messages;
+
+        // 各メッセージをChatMessage型に変換
+        const messages: ChatMessage[] = message_from_server.map(
+          (msg: { id: any; player_name: any; content: any; timestamp: any; message_type: string }) => ({
+            id: msg.id,
+            sender: msg.player_name,
+            message: msg.content,
+            timestamp: msg.timestamp,
+            type: msg.message_type === "System" ? "system" : "normal",
+          }),
+        );
+        setMessages(prev => [...messages]);
       } catch (error) {
         console.error("ゲーム情報の取得エラー:", error);
       } finally {
@@ -268,15 +312,17 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       if (!response.ok) {
         throw new Error("ゲームの開始に失敗しました");
       }
-      // ゲーム開始成功時の処理
-      const message: ChatMessage = {
-        id: Date.now().toString(),
-        sender: "システム",
-        message: "ゲームが開始されました",
-        timestamp: new Date().toISOString(),
-        type: "system",
-      };
-      setMessages(prev => [...prev, message]);
+      // ゲーム開始時にチャットログをリセット
+      localStorage.removeItem(`chat_messages_${params.id}`);
+      setMessages([
+        {
+          id: Date.now().toString(),
+          sender: "システム",
+          message: "ゲームが開始されました",
+          timestamp: new Date().toISOString(),
+          type: "system",
+        },
+      ]);
     } catch (error) {
       console.error("ゲーム開始エラー:", error);
     } finally {
@@ -286,19 +332,43 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const handleNightAction = async (targetPlayerId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/night-action`, {
+      // プレイヤーの役職に基づいてアクションタイプを決定
+      if (!gameInfo) {
+        throw new Error("ゲーム情報が取得できません");
+      }
+      const role = gameInfo.players.find(player => player.name === user?.username)?.role;
+
+      const action: NightAction = (() => {
+        switch (role) {
+          case "Werewolf":
+            return { Attack: { target_id: targetPlayerId } };
+          case "Seer":
+            return { Divine: { target_id: targetPlayerId } };
+          case "Guard":
+            return { Guard: { target_id: targetPlayerId } };
+          default:
+            throw new Error("夜の行動を実行できない役職です");
+        }
+      })();
+
+      const request: NightActionRequest = {
+        player_id: user?.id ?? "",
+        action: action,
+      };
+
+      const response = await fetch(`http://localhost:8080/api/game/${params.id}/actions/night-action`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          targetPlayerId: targetPlayerId,
-        }),
+        body: JSON.stringify(request),
       });
 
       if (!response.ok) {
         throw new Error("夜の行動の送信に失敗しました");
       }
+
+      console.log(response);
 
       setShowNightAction(false);
 
@@ -494,14 +564,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {isStarting ? "開始中..." : "ゲーム開始"}
                   </button>
                 )}
-                {gameInfo?.phase === "Night" && !gameInfo.hasActed && (
-                  <button
-                    onClick={() => setShowNightAction(true)}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-                  >
-                    夜の行動を実行
-                  </button>
-                )}
+                {gameInfo?.phase === "Night" &&
+                  !gameInfo.hasActed &&
+                  gameInfo.players.find(player => player.name === user?.username)?.role !== "Villager" && (
+                    <button
+                      onClick={() => setShowNightAction(true)}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                    >
+                      夜の行動を実行
+                    </button>
+                  )}
                 {gameInfo?.phase === "Voting" && (
                   <button
                     onClick={() => setShowVoteModal(true)}
@@ -603,6 +675,61 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 >
                   WebSocket切断
                 </button>
+
+                {/* 鍵生成デバッグ用 */}
+                <div className="p-4 border-b border-indigo-100">
+                  <h2 className="text-lg font-semibold text-indigo-900">鍵生成(デバッグ用)</h2>
+                  <button
+                    onClick={async () => {
+                      try {
+                        if (!gameInfo || !user) {
+                          console.error("ゲーム情報またはユーザー情報が利用できません");
+                          return;
+                        }
+                        const playerId = gameInfo.players.find(player => player.name === user?.username)?.id;
+                        if (!playerId) {
+                          console.error("ユーザーIDが利用できません");
+                          return;
+                        }
+                        console.log("Generating keys for player:", playerId);
+
+                        const keyManager = new TweetNaclKeyManager();
+                        const publicKey = await keyManager.generateAndSaveKeyPair(playerId);
+                        console.log("Keys generated and saved, public key:", publicKey);
+
+                        const loadSuccess = await keyManager.loadKeyPairFromStorage(playerId);
+                        if (loadSuccess) {
+                          console.log("Keys loaded successfully");
+                          console.log("Public key verified:", keyManager.getPublicKey());
+                          // システムメッセージを追加
+                          const message: ChatMessage = {
+                            id: Date.now().toString(),
+                            sender: "システム",
+                            message: "鍵ペアが生成されました",
+                            timestamp: new Date().toISOString(),
+                            type: "system",
+                          };
+                          setMessages(prev => [...prev, message]);
+                        }
+                      } catch (error) {
+                        console.error("Error managing keys:", error);
+                        // エラーメッセージを追加
+                        const message: ChatMessage = {
+                          id: Date.now().toString(),
+                          sender: "システム",
+                          message: "鍵ペアの生成に失敗しました",
+                          timestamp: new Date().toISOString(),
+                          type: "system",
+                        };
+                        setMessages(prev => [...prev, message]);
+                      }
+                    }}
+                    disabled={!user?.id}
+                    className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mt-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    鍵生成と保存
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -614,12 +741,19 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     key={msg.id}
                     className={`mb-4 rounded-lg p-3 ${
                       msg.type === "system"
-                        ? "bg-indigo-50 text-indigo-700 text-center"
+                        ? "bg-indigo-50 text-indigo-700 text-left"
                         : msg.type === "whisper"
                           ? "bg-purple-50 text-purple-700 italic"
                           : "bg-white"
                     }`}
                   >
+                    <span className="text-s text-gray-500">
+                      {new Date(msg.timestamp).toLocaleTimeString("ja-JP", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
+                    </span>{" "}
                     <span className="font-semibold">{msg.sender}: </span>
                     <span>{msg.message}</span>
                   </div>
@@ -682,7 +816,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         />
       )}
       {showVoteModal && gameInfo?.phase === "Voting" && (
-        <VoteModal players={gameInfo.players} onSubmit={handleVote} onClose={() => setShowVoteModal(false)} />
+        <VoteModal
+          myId={gameInfo.players.find(player => player.name === user?.username)?.id ?? ""}
+          roomId={gameInfo.room_id}
+          players={gameInfo.players}
+          onSubmit={handleVote}
+          onClose={() => setShowVoteModal(false)}
+        />
       )}
       {gameInfo?.result && showGameResult && (
         <GameResultModal result={gameInfo.result} onClose={() => setShowGameResult(false)} />

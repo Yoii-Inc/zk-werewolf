@@ -455,6 +455,7 @@ mod tests {
         let public_input = AnonymousVotingPublicInput {
             pedersen_param: pedersen_param.clone(),
             player_commitment: vec![PedersenCommitment::default(); 3],
+            player_num: 3, // Assuming 3 players for this test
         };
 
         let input = AnonymousVotingInput {

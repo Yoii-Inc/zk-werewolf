@@ -58,7 +58,11 @@ impl KeyManager {
         }
     }
 
-    pub async fn generate_keypair(&self, id: u32) -> Result<NodeKeys, CryptoError> {
+    pub async fn generate_keypair(
+        &self,
+        id: u32,
+        file_path: Option<String>,
+    ) -> Result<NodeKeys, CryptoError> {
         let secret_key = SecretKey::generate(&mut OsRng);
         let public_key = PublicKey::from(&secret_key);
 
@@ -67,7 +71,7 @@ impl KeyManager {
             secret_key: encode(secret_key.to_bytes()),
         };
 
-        Self::write_keys_to_file(id, keys.clone());
+        Self::write_keys_to_file(id, keys.clone(), file_path);
 
         *self.keys.write().await = Some(keys.clone());
         Ok(keys)
@@ -90,13 +94,13 @@ impl KeyManager {
         Ok(keys)
     }
 
-    pub fn write_keys_to_file(id: u32, keys: crate::NodeKeys) {
+    pub fn write_keys_to_file(id: u32, keys: crate::NodeKeys, file_path: Option<String>) {
         // NodeKeysをjsonにシリアライズしてファイルに保存する
         let keys_json = serde_json::to_string(&keys).expect("Failed to serialize keys");
         let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
         // ディレクトリが存在しない場合は作成
         std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
-        let file_path = format!("{}/node_keys_{}.json", data_dir, id);
+        let file_path = file_path.unwrap_or_else(|| format!("{}/node_keys_{}.json", data_dir, id));
         std::fs::write(file_path, keys_json).expect("Failed to write keys to file");
     }
 
@@ -194,7 +198,10 @@ mod tests {
     #[tokio::test]
     async fn test_key_generation() {
         let key_manager = KeyManager::new();
-        let keys = key_manager.generate_keypair(1).await.unwrap();
+        let keys = key_manager
+            .generate_keypair(1, Some("data/test_node_keys_1.json".to_string()))
+            .await
+            .unwrap();
 
         assert!(!keys.public_key.is_empty());
         assert!(!keys.secret_key.is_empty());
@@ -203,7 +210,10 @@ mod tests {
     #[tokio::test]
     async fn test_get_public_key() {
         let key_manager = KeyManager::new();
-        let keys = key_manager.generate_keypair(1).await.unwrap();
+        let keys = key_manager
+            .generate_keypair(1, Some("data/test_node_keys_1.json".to_string()))
+            .await
+            .unwrap();
         let public_key = key_manager.get_public_key().await.unwrap();
 
         assert_eq!(keys.public_key, public_key);
@@ -212,7 +222,10 @@ mod tests {
     #[tokio::test]
     async fn test_encrypt_decrypt_share() {
         let key_manager = KeyManager::new();
-        key_manager.generate_keypair(1).await.unwrap();
+        key_manager
+            .generate_keypair(1, Some("data/test_node_keys_1.json".to_string()))
+            .await
+            .unwrap();
         let public_key = key_manager.get_public_key().await.unwrap();
 
         let test_share = b"test share data";
@@ -228,12 +241,19 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read_keys() {
         let key_manager = KeyManager::new();
-        let keys = key_manager.generate_keypair(1).await.unwrap();
+        let keys = key_manager
+            .generate_keypair(1, Some("data/test_node_keys_1.json".to_string()))
+            .await
+            .unwrap();
 
-        KeyManager::write_keys_to_file(1, keys.clone());
+        KeyManager::write_keys_to_file(
+            1,
+            keys.clone(),
+            Some("data/test_node_keys_1.json".to_string()),
+        );
 
         let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
-        let file_path = format!("{}/node_keys_{}.json", data_dir, 1);
+        let file_path = format!("{}/test_node_keys_{}.json", data_dir, 1);
         let file = std::fs::File::open(file_path).unwrap();
         let reader = std::io::BufReader::new(file);
         let key_file: KeyFile = serde_json::from_reader(reader).unwrap();

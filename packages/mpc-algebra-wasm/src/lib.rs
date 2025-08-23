@@ -64,36 +64,46 @@ pub fn voting_split_and_encrypt(input: JsValue) -> Result<JsValue, JsValue> {
     let input: AnonymousVotingInput = serde_wasm_bindgen::from_value(input)?;
     // Generate and encrypt shares
     let result = AnonymousVotingEncryption::create_encrypted_shares(&input)?;
-    // Serialize the result into JsValue
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    // Serialize the result into JsValue(String)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn key_publicize(input: JsValue) -> Result<JsValue, JsValue> {
     let input: KeyPublicizeInput = serde_wasm_bindgen::from_value(input)?;
     let result = KeyPublicizeEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn role_assignment(input: JsValue) -> Result<JsValue, JsValue> {
     let input: RoleAssignmentInput = serde_wasm_bindgen::from_value(input)?;
     let result = RoleAssignmentEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn divination(input: JsValue) -> Result<JsValue, JsValue> {
     let input: DivinationInput = serde_wasm_bindgen::from_value(input)?;
     let result = DivinationEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[wasm_bindgen]
 pub fn winning_judgement(input: JsValue) -> Result<JsValue, JsValue> {
     let input: WinningJudgementInput = serde_wasm_bindgen::from_value(input)?;
     let result = WinningJudgementEncryption::create_encrypted_shares(&input)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
+    let json_str = serde_json::to_string(&result)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
 }
 
 #[cfg(test)]
@@ -103,10 +113,11 @@ mod tests {
     use crate::types::*;
     use ark_bls12_377::Fr;
     use ark_crypto_primitives::CommitmentScheme;
-    use ark_ff::Zero;
+    use ark_ff::{BigInteger, PrimeField, Zero};
+    use ark_std::UniformRand;
     use base64::encode;
     use crypto_box::SecretKey;
-    use rand::rngs::OsRng;
+    use rand::{rngs::OsRng, thread_rng};
 
     #[test]
     fn test_anonymous_voting_input_serialize() {
@@ -128,6 +139,7 @@ mod tests {
                     PedersenCommitment::default(),
                     PedersenCommitment::default(),
                 ],
+                player_num: 3, // Assuming 3 players for this test
             },
             node_keys: vec![
                 NodeKey {
@@ -176,5 +188,70 @@ mod tests {
         //     read_input.public_input.pedersen_param,
         //     input.public_input.pedersen_param
         // );
+    }
+
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    #[ignore]
+    fn test_pedersen_param_serialization() {
+        // Create pedersen parameters
+        let mut rng = thread_rng();
+        let pedersen_params = PedersenComScheme::setup(&mut rng).unwrap();
+
+        // Convert to JSON
+        let json = serde_json::to_string_pretty(&pedersen_params).unwrap();
+
+        // Write to file
+        let path = "test_pedersen_params.json";
+        fs::write(path, json).unwrap();
+
+        // Verify file exists
+        assert!(Path::new(path).exists());
+
+        // Read from file and deserialize
+        let json_from_file = fs::read_to_string(path).unwrap();
+        let loaded_params: PedersenParam = serde_json::from_str(&json_from_file).unwrap();
+
+        // Verify parameters match
+        assert_eq!(pedersen_params.generators, loaded_params.generators);
+        assert_eq!(
+            pedersen_params.randomness_generator,
+            loaded_params.randomness_generator
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn test_randomness_commitment_serialization() {
+        // user num
+        let n = 3;
+
+        let mut rng = thread_rng();
+
+        for i in 0..n {
+            let randomness = PedersenRandomness::rand(&mut rng);
+
+            let path = "test_pedersen_params.json";
+
+            let json_from_file = fs::read_to_string(path).unwrap();
+            let loaded_params: PedersenParam = serde_json::from_str(&json_from_file).unwrap();
+
+            let message = Fr::default().into_repr().to_bytes_le();
+            let commitment =
+                PedersenComScheme::commit(&loaded_params, &message, &randomness).unwrap();
+
+            // serialize
+            let json = serde_json::to_string_pretty(&randomness).unwrap();
+
+            let path = format!("pedersen_randomness_{}.json", i);
+            fs::write(path, json).unwrap();
+
+            let json = serde_json::to_string_pretty(&commitment).unwrap();
+
+            let path = format!("pedersen_commitment_{}.json", i);
+            fs::write(path, json).unwrap();
+        }
     }
 }

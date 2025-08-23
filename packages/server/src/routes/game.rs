@@ -20,8 +20,10 @@ use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VoteAction {
-    voter_id: String,
-    target_id: String,
+    // voter_id: String,
+    // target_id: String,
+    prover_num: String,
+    encrypted_proof_input: String,
 }
 
 pub fn routes(state: AppState) -> Router {
@@ -104,8 +106,10 @@ async fn cast_vote_handler(
     match game_service::handle_vote(
         state,
         &room_id,
-        &vote_action.voter_id,
-        &vote_action.target_id,
+        // &vote_action.voter_id,
+        // &vote_action.target_id,
+        &String::from("1"), // voter_idは未使用のため空文字列を渡す
+        &String::from("1"), // target_idは未使用のため空文字列を渡す
     )
     .await
     {

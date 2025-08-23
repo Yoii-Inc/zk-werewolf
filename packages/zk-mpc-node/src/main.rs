@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::KeyGen { id } => {
             println!("Generating keypair for node {}", id);
             let key_manager = KeyManager::new();
-            let keys = key_manager.generate_keypair(id).await?;
+            let keys = key_manager.generate_keypair(id, None).await?;
             println!("Keypair generated and saved successfully");
             println!("Public key: {}", keys.public_key);
             Ok(())

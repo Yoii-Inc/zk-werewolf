@@ -110,6 +110,7 @@ fn setup_voting() -> (CircuitEncryptedInputIdentifier, Vec<(SecretKey, PublicKey
     let public_input = AnonymousVotingPublicInput {
         pedersen_param: pedersen_param.clone(),
         player_commitment: vec![<Fr as LocalOrMPC<Fr>>::PedersenCommitment::default(); USER_NUM],
+        player_num: USER_NUM,
     };
 
     // let encrypted_inputs = private_inputs

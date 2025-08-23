@@ -15,4 +15,5 @@ pub struct AnonymousVotingPrivateInput {
 pub struct AnonymousVotingPublicInput {
     pub pedersen_param: PedersenParam,
     pub player_commitment: Vec<PedersenCommitment>,
+    pub player_num: usize,
 }
