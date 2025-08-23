@@ -1078,6 +1078,7 @@ dependencies = [
  "anyhow",
  "ark-bls12-377",
  "ark-crypto-primitives",
+ "ark-ec",
  "ark-ed-on-bls12-377",
  "ark-ff",
  "ark-std",
@@ -1099,6 +1100,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ark-bls12-377",
+ "ark-crypto-primitives",
+ "ark-ec",
  "ark-ff",
  "ark-r1cs-std",
  "ark-relations",

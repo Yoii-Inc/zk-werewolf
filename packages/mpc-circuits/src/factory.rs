@@ -1,7 +1,8 @@
 use ark_bls12_377::Fr;
 use ark_serialize::CanonicalSerialize;
-use mpc_algebra::FromLocal;
+use ark_std::{test_rng, UniformRand};
 use mpc_algebra::{crh::pedersen, reveal::Reveal};
+use mpc_algebra::{reveal, FromLocal};
 use zk_mpc::circuits::{circuit, ElGamalLocalOrMPC};
 use zk_mpc::{
     circuits::{circuit::MySimpleCircuit, LocalOrMPC},
@@ -9,8 +10,8 @@ use zk_mpc::{
 };
 
 use mpc_algebra_wasm::{
-    AnonymousVotingEncryption, CircuitEncryptedInputIdentifier, NodeEncryptedShare,
-    SplitAndEncrypt, WinningJudgementEncryption,
+    AnonymousVotingEncryption, CircuitEncryptedInputIdentifier, DivinationEncryption,
+    NodeEncryptedShare, SplitAndEncrypt, WinningJudgementEncryption,
 };
 
 use crate::*;
@@ -26,25 +27,29 @@ impl CircuitFactory {
                 // BuiltinCircuit::Divination(DivinationCircuit {
                 //     mpc_input: c.clone(),
                 // })
-                todo!()
-                // let player_num = c[0].public_input.player_num;
-                // let alive_player_num = c.len();
+                let player_num = c[0].public_input.player_num;
+                let alive_player_num = c.len();
+                let rng = &mut test_rng();
 
-                // BuiltinCircuit::Divination(DivinationCircuit {
-                //     private_input: (0..alive_player_num)
-                //         .map(|_| DivinationPrivateInput::<Fr> {
-                //             id: 0,
-                //             is_werewolf: Fr::default(),
-                //             is_target: vec![Fr::default(); player_num],
-                //             randomness: <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalRandomness::default(),
-                //         })
-                //         .collect::<Vec<_>>(),
-                //     public_input: DivinationPublicInput::<Fr> {
-                //         pedersen_param: c[0].public_input.pedersen_param.clone(),
-                //         player_commitment: c[0].public_input.player_commitment.clone(),
-                //         player_num,
-                //     },
-                // })
+                let elgamal_randomness =
+                    <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalRandomness::rand(rng);
+
+                BuiltinCircuit::Divination(DivinationCircuit {
+                    private_input: (0..alive_player_num)
+                        .map(|_| DivinationPrivateInput::<Fr> {
+                            id: 0,
+                            is_werewolf: Fr::default(),
+                            is_target: vec![Fr::default(); player_num],
+                            randomness: elgamal_randomness.clone(),
+                        })
+                        .collect::<Vec<_>>(),
+                    public_input: DivinationPublicInput::<Fr> {
+                        pedersen_param: c[0].public_input.pedersen_param.clone(),
+                        elgamal_param: c[0].public_input.elgamal_param.clone(),
+                        pub_key: c[0].public_input.pub_key.clone(),
+                        player_num,
+                    },
+                })
             }
             CircuitEncryptedInputIdentifier::AnonymousVoting(c) => {
                 let player_num = c[0].public_input.player_num;
@@ -140,12 +145,51 @@ impl CircuitFactory {
         secret_key: &str,
     ) -> BuiltinCircuit<MFr> {
         match circuit_type {
-            // CircuitIdentifier::Built(circuit) => circuit.clone(),
             CircuitEncryptedInputIdentifier::Divination(circuit) => {
-                // BuiltinCircuit::Divination(DivinationCircuit {
-                //     mpc_input: circuit.clone(),
-                // })
-                todo!()
+                let mut private_input = Vec::new();
+
+                for i in 0..circuit.len() {
+                    let private_encrypted_input = circuit[i]
+                        .shares
+                        .iter()
+                        .find(|share| share.node_id == my_node_id)
+                        .expect("No share found for this node");
+
+                    // mpc-algebra-wasmにおけるcreate_encrypted_sharesの反転が必要。
+                    let decrypted_input =
+                        DivinationEncryption::decrypt(private_encrypted_input, secret_key)
+                            .expect("Failed to decrypt input");
+
+                    private_input.push(DivinationPrivateInput::<MFr> {
+                        id: decrypted_input.id,
+                        is_target: decrypted_input
+                            .is_target
+                            .iter()
+                            .map(|&x| MFr::from_add_shared(x))
+                            .collect(),
+                        is_werewolf: MFr::from_add_shared(decrypted_input.is_werewolf),
+                        randomness:
+                            <MFr as ElGamalLocalOrMPC<MFr>>::ElGamalRandomness::from_add_shared(
+                                decrypted_input.randomness,
+                            ),
+                    });
+                }
+
+                BuiltinCircuit::Divination(DivinationCircuit {
+                    private_input,
+                    public_input: DivinationPublicInput::<MFr> {
+                        pedersen_param: <MFr as LocalOrMPC<MFr>>::PedersenParam::from_local(
+                            &circuit[0].public_input.pedersen_param,
+                        ),
+                        elgamal_param: <MFr as ElGamalLocalOrMPC<MFr>>::ElGamalParam::from_public(
+                            circuit[0].public_input.elgamal_param.clone(),
+                        ),
+                        pub_key: <MFr as ElGamalLocalOrMPC<MFr>>::ElGamalPubKey::from_public(
+                            circuit[0].public_input.pub_key,
+                        ),
+                        player_num: circuit[0].public_input.player_num,
+                    },
+                })
             }
             CircuitEncryptedInputIdentifier::AnonymousVoting(circuit) => {
                 // private_input部分は復号化してそのまま入れるイメージ。
@@ -243,6 +287,18 @@ impl CircuitFactory {
             // CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit)) => {
             //     vec![circuit.a.unwrap().sync_reveal() * circuit.b.unwrap().sync_reveal()]
             // }
+            BuiltinCircuit::Divination(circuit) => {
+                let mut inputs = Vec::new();
+                let is_target_werewolf = circuit.calculate_output();
+
+                let revealed_is_target_werewolf = is_target_werewolf.sync_reveal();
+
+                inputs.push(revealed_is_target_werewolf.0.x);
+                inputs.push(revealed_is_target_werewolf.0.y);
+                inputs.push(revealed_is_target_werewolf.1.x);
+                inputs.push(revealed_is_target_werewolf.1.y);
+                inputs
+            }
             BuiltinCircuit::AnonymousVoting(circuit) => {
                 let mut inputs = Vec::new();
                 // let mut inputs = circuit

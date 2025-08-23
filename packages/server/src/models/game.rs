@@ -32,6 +32,13 @@ pub struct Game {
     pub chat_log: super::chat::ChatLog,
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
+    pub divination_result: Option<DivinationResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DivinationResult {
+    pub ciphertext:
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -241,6 +248,7 @@ impl Game {
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
             batch_request: BatchRequest::new(),
+            divination_result: None,
         }
     }
 
@@ -451,6 +459,30 @@ impl Game {
                 match identifier {
                     CircuitEncryptedInputIdentifier::Divination(items) => {
                         // itemsを処理する
+                        let divination_result: DivinationResult = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(result) => DivinationResult { ciphertext: result },
+                                Err(e) => {
+                                    println!("Failed to deserialize divination result: {}", e);
+                                    self.chat_log.add_system_message(
+                                        "占い結果の処理に失敗しました。".to_string(),
+                                    );
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                self.chat_log.add_system_message(
+                                    "占い結果が見つかりませんでした。".to_string(),
+                                );
+                                return;
+                            }
+                        };
+
+                        self.divination_result = Some(divination_result);
+                        println!("占い結果が正常に処理されました。");
+                        self.chat_log
+                            .add_system_message("占い結果が生成されました。".to_string());
                     }
                     CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
                         println!("AnonymousVoting process is starting...");
@@ -569,6 +601,25 @@ impl Game {
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
                         // itemsを処理する
+                        let public_key: <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey =
+                            match output.value {
+                                Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                    Ok(key) => key,
+                                    Err(e) => {
+                                        println!("Failed to deserialize public key: {}", e);
+                                        return;
+                                    }
+                                },
+                                None => {
+                                    println!("No output value found");
+                                    return;
+                                }
+                            };
+
+                        self.crypto_parameters = Some(CryptoParameters {
+                            fortune_teller_public_key: public_key,
+                            ..self.crypto_parameters.clone().unwrap()
+                        });
                     }
                 }
 

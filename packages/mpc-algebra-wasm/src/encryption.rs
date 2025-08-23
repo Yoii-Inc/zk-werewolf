@@ -1,6 +1,10 @@
 use crate::mpc_circuits_wasm::*;
 use ark_bls12_377::Fr;
+use ark_crypto_primitives::encryption::elgamal::Randomness;
+use ark_ec::ProjectiveCurve;
+use ark_ed_on_bls12_377::EdwardsProjective;
 use ark_ff::PubUniformRand;
+use ark_ff::UniformRand;
 use ark_ff::Zero;
 use base64::{decode, encode};
 use crypto_box::{
@@ -250,7 +254,23 @@ impl SplitAndEncrypt for DivinationEncryption {
     type ShareForNode = DivinationPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
-        todo!()
+        let scheme = &input.scheme;
+        let private_input = &input.private_input;
+
+        let is_werewolf_share = split_fr(private_input.is_werewolf, scheme);
+
+        let is_target_share = split_vec_fr(private_input.is_target.clone(), scheme);
+
+        let randomness_share = split_elgamal_randomness(private_input.randomness.clone(), scheme);
+
+        (0..scheme.total_shares)
+            .map(|i| DivinationPrivateInput {
+                id: private_input.id,
+                is_werewolf: is_werewolf_share[i],
+                is_target: is_target_share.iter().map(|row| row[i]).collect(),
+                randomness: randomness_share[i].clone(),
+            })
+            .collect::<Vec<_>>()
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue> {
@@ -344,6 +364,27 @@ fn split_fr(x: Fr, scheme: &SecretSharingScheme) -> Vec<Fr> {
         sum += share;
     }
     let last_share = x - sum;
+    shares.push(last_share);
+
+    shares
+}
+
+fn split_elgamal_randomness(
+    x: Randomness<EdwardsProjective>,
+    scheme: &SecretSharingScheme,
+) -> Vec<Randomness<EdwardsProjective>> {
+    let mut shares = Vec::new();
+    let mut sum: Randomness<EdwardsProjective> =
+        Randomness(<EdwardsProjective as ProjectiveCurve>::ScalarField::zero());
+
+    let rng = &mut rand::thread_rng();
+
+    for _i in 0..(scheme.total_shares - 1) {
+        let share = Randomness::rand(rng);
+        sum.0 += share.0;
+        shares.push(share);
+    }
+    let last_share = Randomness(x.0 - sum.0);
     shares.push(last_share);
 
     shares

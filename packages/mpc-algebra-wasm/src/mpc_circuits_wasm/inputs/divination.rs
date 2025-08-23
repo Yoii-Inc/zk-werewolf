@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 pub struct DivinationPrivateInput {
     pub id: usize,
     pub is_werewolf: Fr,
-    pub is_target: Fr,
+    pub is_target: Vec<Fr>,
     pub randomness: ElGamalRandomness,
-    pub randomness_bits: Vec<Fr>,
+    // pub randomness_bits: Vec<Fr>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -18,4 +18,5 @@ pub struct DivinationPublicInput {
     pub pedersen_param: PedersenParam,
     pub elgamal_param: ElGamalParam,
     pub pub_key: ElGamalPubKey,
+    pub player_num: usize,
 }

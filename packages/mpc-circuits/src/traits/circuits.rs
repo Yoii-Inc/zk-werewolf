@@ -1,6 +1,8 @@
 use crate::*;
 
 use ark_bls12_377::Fr;
+use ark_crypto_primitives::encryption::AsymmetricEncryptionScheme;
+use ark_ec::AffineCurve;
 use ark_ff::PrimeField;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
@@ -374,16 +376,45 @@ impl DivinationCircuit<Fr> {
 }
 
 impl DivinationCircuit<mm::MpcField<Fr>> {
-    pub fn calculate_output(&self) -> mm::MpcField<Fr> {
-        // let peculiar = circuit.mpc_input.peculiar.clone().unwrap();
-        // let is_target_vec = peculiar.is_target;
-        // let is_werewolf_vec = peculiar.is_werewolf;
+    pub fn calculate_output(
+        &self,
+    ) -> <mm::MpcField<Fr> as ElGamalLocalOrMPC<mm::MpcField<Fr>>>::ElGamalCiphertext {
+        let is_target_vec = self
+            .private_input
+            .iter()
+            .map(|input| input.is_target.clone())
+            .collect::<Vec<_>>();
+        let is_werewolf_vec = self
+            .private_input
+            .iter()
+            .map(|input| input.is_werewolf)
+            .collect::<Vec<_>>();
 
-        // let mut sum = MFr::default();
-        // for (t, w) in is_target_vec.iter().zip(is_werewolf_vec.iter()) {
-        //     sum += t.input * w.input;
-        // }
-        todo!()
+        let mut sum = mm::MpcField::<Fr>::default();
+        for (t, w) in is_target_vec.iter().zip(is_werewolf_vec.iter()) {
+            sum += t.iter().fold(mm::MpcField::<Fr>::zero(), |acc, x| acc + x) * w;
+        }
+
+        let pub_key = self.public_input.pub_key;
+
+        let base = <mm::MpcField<Fr> as ElGamalLocalOrMPC<mm::MpcField<Fr>>>::ElGamalPlaintext::prime_subgroup_generator();
+
+        // TODO: implement correctly. (without reveal)
+        let message = if sum.sync_reveal().is_one() {
+            base
+        } else {
+            <mm::MpcField<Fr> as ElGamalLocalOrMPC<mm::MpcField<Fr>>>::ElGamalPlaintext::default()
+        };
+
+        let ciphertext =
+            <mm::MpcField<Fr> as ElGamalLocalOrMPC<mm::MpcField<Fr>>>::ElGamalScheme::encrypt(
+                &self.public_input.elgamal_param,
+                &pub_key,
+                &message,
+                &self.private_input[0].randomness,
+            )
+            .unwrap();
+        ciphertext
     }
 }
 
