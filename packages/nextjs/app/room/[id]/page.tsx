@@ -1,523 +1,105 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
+import { GameResultModal } from "../../../components/game/GameResultModal";
 import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
-import type { ChatMessage, Player, WebSocketMessage } from "../../types";
-import { NightAction, NightActionRequest } from "../types";
-import JSONbig from "json-bigint";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 import { useAuth } from "~~/app/contexts/AuthContext";
-import { useWinningJudge } from "~~/hooks/useWinningJudge";
+import { useGameActions } from "~~/hooks/useGameActions";
+import { useGameChat } from "~~/hooks/useGameChat";
+import { useGameInfo } from "~~/hooks/useGameInfo";
+import { useGamePhase } from "~~/hooks/useGamePhase";
+import { useGameWebSocket } from "~~/hooks/useGameWebSocket";
+import type { ChatMessage } from "~~/types/game";
 import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
-import { NodeKey, SecretSharingScheme, WinningJudgementInput, WinningJudgementPublicInput } from "~~/utils/crypto/type";
-
-interface RoomInfo {
-  room_id: string;
-  name: string;
-  status: "Open" | "InProgress" | "Closed"; // statusを追加
-  max_players: number;
-  currentPlayers: number;
-  remainingTime: number;
-  players: Player[];
-}
-
-interface GameInfo {
-  room_id: string;
-  phase: "Waiting" | "Night" | "Discussion" | "Voting" | "Result" | "Finished";
-  players: Player[];
-  playerRole: "占い師" | "人狼" | "村人"; // 自分の役職
-  hasActed: boolean; // その夜にアクションを実行済みかどうか
-  result: "InProgress" | "VillagerWin" | "WerewolfWin";
-}
-
-interface GameResultModalProps {
-  result: "VillagerWin" | "WerewolfWin" | "InProgress";
-  onClose: () => void;
-}
-
-const GameResultModal = ({ result, onClose }: GameResultModalProps) => {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-lg w-full mx-4 text-center">
-        <h2 className="text-3xl font-bold mb-4 text-indigo-900">
-          {result === "VillagerWin" ? "村人陣営の勝利！" : "人狼陣営の勝利！"}
-        </h2>
-        {/* <p className="text-xl mb-6 text-gray-700">{result}</p> */}
-        <button
-          onClick={onClose}
-          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          閉じる
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const mockMessages: ChatMessage[] = [
-  {
-    id: "1",
-    sender: "システム",
-    message: "これはデフォルトメッセージです。",
-    timestamp: new Date().toISOString(),
-    type: "system",
-  },
-];
 
 export default function RoomPage({ params }: { params: { id: string } }) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    // ページ読み込み時にローカルストレージからメッセージを復元
-    if (typeof window !== "undefined") {
-      const savedMessages = localStorage.getItem(`chat_messages_${params.id}`);
-      return savedMessages ? JSON.parse(savedMessages) : mockMessages;
-    }
-    return mockMessages;
-  });
+  const { isAuthenticated, user, logout } = useAuth();
 
-  // メッセージが更新されたときにローカルストレージに保存
-  useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem(`chat_messages_${params.id}`, JSON.stringify(messages));
-    }
-  }, [messages, params.id]);
-
+  // State for UI components
   const [newMessage, setNewMessage] = useState("");
   const [notes, setNotes] = useState("");
-  const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
-  const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isStarting, setIsStarting] = useState(false);
   const [showNightAction, setShowNightAction] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
-  const { isAuthenticated, user, logout } = useAuth();
   const [showGameResult, setShowGameResult] = useState(false);
-  const prevPhaseRef = useRef(gameInfo?.phase);
 
-  const websocketRef = useRef<WebSocket | null>(null);
-  const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected"); // WebSocket接続状態
-  const hasConnectedRef = useRef(false);
+  // Custom hooks
+  const { messages, setMessages, addMessage, resetMessages } = useGameChat(params.id, null);
+  const { roomInfo, gameInfo, isLoading } = useGameInfo(params.id, setMessages);
+  const { websocketRef, websocketStatus, connectWebSocket, disconnectWebSocket, sendMessage } = useGameWebSocket(
+    params.id,
+    setMessages,
+  );
+  const { isStarting, startGame, handleNightAction, handleVote, handleChangeRole, nextPhase } = useGameActions(
+    params.id,
+    addMessage,
+    gameInfo,
+    user?.id,
+  );
 
-  const connectWebSocket = () => {
-    setWebsocketStatus("connecting");
-    const ws = new WebSocket(`ws://localhost:8080/api/room/${params.id}/ws`);
+  // Phase monitoring
+  useGamePhase(gameInfo, params.id, addMessage, user?.username);
 
-    ws.onopen = () => {
-      console.log("WebSocket接続が確立されました");
-      setWebsocketStatus("connected");
-    };
+  // Update chat hook with room info
+  const chatHook = useGameChat(params.id, roomInfo);
 
-    ws.onmessage = event => {
-      console.log("メッセージを受信しました:", event.data);
-
-      const fullMessage: WebSocketMessage = JSON.parse(event.data);
-      // サーバーからの応答を処理する
-      setMessages(prevMessages => [
-        ...prevMessages,
-        {
-          id: "Server",
-          sender: fullMessage.player_name,
-          message: fullMessage.content,
-          timestamp: new Date().toISOString(),
-          type: "normal",
-        },
-      ]);
-    };
-
-    ws.onclose = event => {
-      console.log("WebSocket接続が閉じられました", event);
-      setWebsocketStatus("disconnected");
-      websocketRef.current = null;
-    };
-
-    ws.onerror = error => {
-      console.error("WebSocketエラーが発生しました:", error);
-      setWebsocketStatus("error");
-      websocketRef.current = null;
-    };
-
-    websocketRef.current = ws;
-  };
-
-  const disconnectWebSocket = () => {
-    if (websocketRef.current && websocketRef.current.readyState !== WebSocket.CLOSED) {
-      websocketRef.current.close();
+  const handleSendMessage = () => {
+    if (newMessage.trim() !== "") {
+      const success = sendMessage(newMessage);
+      if (success) {
+        setNewMessage("");
+      } else {
+        console.error("メッセージの送信に失敗しました");
+      }
     }
   };
 
-  // 新しい部屋が作成されたときのチャットログリセット
-  useEffect(() => {
-    if (roomInfo?.status === "Open") {
-      localStorage.removeItem(`chat_messages_${params.id}`);
-      setMessages([
-        {
+  const handleStartGame = async () => {
+    const success = await startGame();
+    if (success) {
+      resetMessages();
+    }
+  };
+
+  const handleKeyGeneration = async () => {
+    try {
+      if (!gameInfo || !user) {
+        console.error("ゲーム情報またはユーザー情報が利用できません");
+        return;
+      }
+      const playerId = gameInfo.players.find(player => player.name === user?.username)?.id;
+      if (!playerId) {
+        console.error("ユーザーIDが利用できません");
+        return;
+      }
+      console.log("Generating keys for player:", playerId);
+
+      const keyManager = new TweetNaclKeyManager();
+      const publicKey = await keyManager.generateAndSaveKeyPair(playerId);
+      console.log("Keys generated and saved, public key:", publicKey);
+
+      const loadSuccess = await keyManager.loadKeyPairFromStorage(playerId);
+      if (loadSuccess) {
+        console.log("Keys loaded successfully");
+        console.log("Public key verified:", keyManager.getPublicKey());
+        addMessage({
           id: Date.now().toString(),
           sender: "システム",
-          message: "新しい部屋が作成されました",
+          message: "鍵ペアが生成されました",
           timestamp: new Date().toISOString(),
           type: "system",
-        },
-      ]);
-    }
-  }, [roomInfo?.status, params.id]);
-
-  useEffect(() => {
-    if (!hasConnectedRef.current) {
-      hasConnectedRef.current = true;
-      connectWebSocket();
-    }
-    // クリーンアップ関数
-    return () => {
-      // disconnectWebSocket();
-    };
-  }, [params.id]);
-
-  useEffect(() => {
-    const fetchRoomInfo = async () => {
-      try {
-        const response = await fetch(`http://localhost:8080/api/room/${params.id}`);
-        if (!response.ok) {
-          throw new Error("ルーム情報の取得に失敗しました");
-        }
-        const data = await response.json();
-        // console.log(data);
-        setRoomInfo(data);
-      } catch (error) {
-        console.error("ルーム情報の取得エラー:", error);
-      } finally {
-        setIsLoading(false);
+        });
       }
-    };
-
-    const fetchGameInfo = async () => {
-      try {
-        const response = await fetch(`http://localhost:8080/api/game/${params.id}/state`);
-        if (!response.ok) {
-          throw new Error("ゲーム情報の取得に失敗しました");
-        }
-        const data = await response.json();
-        console.log(data);
-        setGameInfo(data);
-        // if (gameInfo?.chat_log?.messages) {
-        //   setMessages(data.chat_log.messages);
-        // }
-
-        // システムメッセージを追加
-        // const message: ChatMessage = {
-        //   id: Date.now().toString(),
-        //   sender: "システム",
-        //   message: "夜の行動を実行しました",
-        //   timestamp: new Date().toISOString(),
-        //   type: "system",
-        // };
-
-        const message_from_server = data.chat_log.messages;
-
-        // 各メッセージをChatMessage型に変換
-        const messages: ChatMessage[] = message_from_server.map(
-          (msg: { id: any; player_name: any; content: any; timestamp: any; message_type: string }) => ({
-            id: msg.id,
-            sender: msg.player_name,
-            message: msg.content,
-            timestamp: msg.timestamp,
-            type: msg.message_type === "System" ? "system" : "normal",
-          }),
-        );
-        setMessages(prev => [...messages]);
-      } catch (error) {
-        console.error("ゲーム情報の取得エラー:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    console.log("isStarting:", isStarting);
-
-    fetchRoomInfo();
-    // 定期的にルーム情報を更新
-    const interval = setInterval(fetchRoomInfo, 5000);
-
-    let gameInterval: NodeJS.Timeout | null = null;
-    if (roomInfo?.status === "InProgress") {
-      fetchGameInfo();
-      gameInterval = setInterval(fetchGameInfo, 5000);
-    }
-
-    return () => {
-      clearInterval(interval);
-      if (gameInterval) {
-        clearInterval(gameInterval);
-      }
-    };
-  }, [roomInfo?.status, params.id]);
-
-  const { submitWinningJudge } = useWinningJudge();
-
-  const JSONbigNative = JSONbig({ useNativeBigInt: true });
-
-  useEffect(() => {
-    if (!gameInfo) return;
-
-    const prevPhase = prevPhaseRef.current;
-    prevPhaseRef.current = gameInfo.phase;
-
-    const checkGameResult = async () => {
-      if (
-        (prevPhase === "Night" && gameInfo.phase === "Discussion") ||
-        (prevPhase === "Voting" && gameInfo.phase === "Result")
-      ) {
-        console.log("Phase changed from", prevPhase, "to", gameInfo.phase);
-        //   {
-        //     try {
-        //       const response = await fetch(`http://localhost:8080/api/game/${params.id}/check-winner`);
-        //       if (!response.ok) {
-        //         throw new Error("ゲーム結果の取得に失敗しました");
-        //       }
-        //       const result = await response.json();
-        //       if (result !== "ゲーム進行中") {
-        //         setGameInfo(prev => ({ ...prev!, result: result }));
-        //         setShowGameResult(true);
-        //       }
-        //     } catch (error) {
-        //       console.error("ゲーム結果の取得エラー:", error);
-        //     }
-        //   }
-        const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
-
-        const res = await fetch("/pedersen-params.json");
-        const params = await res.text();
-
-        const parsedParams = JSONbigNative.parse(params);
-
-        const randres = await fetch("/pedersen_randomness_0.json");
-        const randomness = await randres.text();
-        const parsedRandomness = JSONbigNative.parse(randomness);
-
-        const commitres = await fetch("/pedersen_commitment_0.json");
-        const commitment = await commitres.text();
-        const parsedCommitment = JSONbigNative.parse(commitment);
-
-        const players = gameInfo.players;
-
-        const myId = gameInfo.players.find(player => player.name === user?.username)?.id ?? "";
-
-        const privateInput = {
-          id: players.findIndex(player => player.id === myId),
-          amWerewolf:
-            gameInfo.players.find(player => player.name === user?.username)?.role === "Werewolf"
-              ? [[0, 0, 0, 1], null]
-              : [[0, 0, 0, 0], null],
-          playerRandomness: parsedRandomness,
-        };
-
-        const publicInput: WinningJudgementPublicInput = {
-          pedersenParam: parsedParams,
-          playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment], // 配列の長さはプレイヤー数に合わせて調整
-        };
-
-        const nodeKeys: NodeKey[] = [
-          {
-            nodeId: "0",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "1",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "2",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
-          },
-        ];
-
-        const scheme: SecretSharingScheme = {
-          totalShares: 3, // dummy
-          modulus: 97, // dummy
-        };
-
-        const winningJudgeData: WinningJudgementInput = {
-          privateInput,
-          publicInput,
-          nodeKeys,
-          scheme,
-        };
-        if (roomInfo?.room_id) {
-          console.log(`Player ${myId} is sending winning judgement proof request`);
-          await submitWinningJudge(roomInfo.room_id, winningJudgeData, alivePlayersCount);
-        }
-      }
-    };
-
-    checkGameResult();
-  }, [gameInfo?.phase, params.id]);
-
-  const sendMessage = () => {
-    console.log(websocketRef.current);
-    if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN && newMessage.trim() !== "") {
-      // websocketRef.current.send(newMessage);
-      const message: WebSocketMessage = {
-        message_type: "normal",
-        player_id: Date.now().toString(),
-        player_name: "プレイヤー",
-        content: newMessage,
-        timestamp: new Date().toISOString(),
-        room_id: params.id,
-      };
-      websocketRef.current.send(JSON.stringify(message));
-      setNewMessage(""); // 送信後にinputをクリア
-    } else {
-      if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
-        console.error("WebSocket接続が確立されていません。");
-      }
-      if (newMessage.trim() === "") {
-        console.error("メッセージが空です。");
-      }
-    }
-  };
-
-  const startGame = async () => {
-    if (!roomInfo) return;
-    setIsStarting(true);
-    try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/start`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new Error("ゲームの開始に失敗しました");
-      }
-      // ゲーム開始時にチャットログをリセット
-      localStorage.removeItem(`chat_messages_${params.id}`);
-      setMessages([
-        {
-          id: Date.now().toString(),
-          sender: "システム",
-          message: "ゲームが開始されました",
-          timestamp: new Date().toISOString(),
-          type: "system",
-        },
-      ]);
     } catch (error) {
-      console.error("ゲーム開始エラー:", error);
-    } finally {
-      setIsStarting(false);
-    }
-  };
-
-  const handleNightAction = async (targetPlayerId: string) => {
-    try {
-      // プレイヤーの役職に基づいてアクションタイプを決定
-      if (!gameInfo) {
-        throw new Error("ゲーム情報が取得できません");
-      }
-      const role = gameInfo.players.find(player => player.name === user?.username)?.role;
-
-      const action: NightAction = (() => {
-        switch (role) {
-          case "Werewolf":
-            return { Attack: { target_id: targetPlayerId } };
-          case "Seer":
-            return { Divine: { target_id: targetPlayerId } };
-          case "Guard":
-            return { Guard: { target_id: targetPlayerId } };
-          default:
-            throw new Error("夜の行動を実行できない役職です");
-        }
-      })();
-
-      const request: NightActionRequest = {
-        player_id: user?.id ?? "",
-        action: action,
-      };
-
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/actions/night-action`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) {
-        throw new Error("夜の行動の送信に失敗しました");
-      }
-
-      console.log(response);
-
-      setShowNightAction(false);
-
-      // システムメッセージを追加
-      const message: ChatMessage = {
+      console.error("Error managing keys:", error);
+      addMessage({
         id: Date.now().toString(),
         sender: "システム",
-        message: "夜の行動を実行しました",
+        message: "鍵ペアの生成に失敗しました",
         timestamp: new Date().toISOString(),
         type: "system",
-      };
-      setMessages(prev => [...prev, message]);
-    } catch (error) {
-      console.error("夜の行動エラー:", error);
-    }
-  };
-
-  const handleChangeRole = async (playerId: string, newRole: string) => {
-    try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/debug/change-role`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          player_id: playerId,
-          new_role: newRole,
-        }),
       });
-
-      if (!response.ok) {
-        throw new Error("役職の変更に失敗しました");
-      }
-
-      // システムメッセージを追加
-      const message: ChatMessage = {
-        id: Date.now().toString(),
-        sender: "システム",
-        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}の役職が${newRole}に変更されました`,
-        timestamp: new Date().toISOString(),
-        type: "system",
-      };
-      setMessages(prev => [...prev, message]);
-    } catch (error) {
-      console.error("役職変更エラー:", error);
-    }
-  };
-
-  const handleVote = async (targetId: string) => {
-    try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/actions/vote`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          voter_id: user?.id,
-          target_id: targetId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("投票の送信に失敗しました");
-      }
-
-      // システムメッセージを追加
-      const message: ChatMessage = {
-        id: Date.now().toString(),
-        sender: "システム",
-        message: "投票を実行しました",
-        timestamp: new Date().toISOString(),
-        type: "system" as const,
-      };
-      setMessages(prev => [...prev, message]);
-    } catch (error) {
-      console.error("投票エラー:", error);
     }
   };
 
@@ -581,24 +163,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         {/* デバッグ用のフェーズ進行ボタン */}
                         <button
                           onClick={async () => {
-                            try {
-                              const response = await fetch(`http://localhost:8080/api/game/${params.id}/phase/next`, {
-                                method: "POST",
-                              });
-                              if (!response.ok) {
-                                throw new Error("フェーズの進行に失敗しました");
-                              }
-                              // システムメッセージを追加
-                              const message: ChatMessage = {
-                                id: Date.now().toString(),
-                                sender: "システム",
-                                message: "フェーズが進行しました",
-                                timestamp: new Date().toISOString(),
-                                type: "system" as const,
-                              };
-                              setMessages(prev => [...prev, message]);
-                            } catch (error) {
-                              console.error("フェーズ進行エラー:", error);
+                            const success = await nextPhase();
+                            if (!success) {
+                              console.error("フェーズの進行に失敗しました");
                             }
                           }}
                           className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm border border-gray-300 transition-colors"
@@ -844,7 +411,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     className="flex-1 border border-indigo-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm"
                   />
                   <button
-                    onClick={sendMessage}
+                    onClick={handleSendMessage}
                     className="bg-indigo-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
                   >
                     <Send size={20} />
@@ -884,7 +451,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         <NightActionModal
           players={gameInfo.players}
           role={gameInfo.players.find(player => player.name === user?.username)?.role ?? "Villager"}
-          onSubmit={handleNightAction}
+          onSubmit={(targetPlayerId: string) => {
+            const userRole = gameInfo.players.find(player => player.name === user?.username)?.role;
+            handleNightAction(targetPlayerId, userRole);
+            setShowNightAction(false);
+          }}
           onClose={() => setShowNightAction(false)}
         />
       )}
@@ -893,7 +464,10 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           myId={gameInfo.players.find(player => player.name === user?.username)?.id ?? ""}
           roomId={gameInfo.room_id}
           players={gameInfo.players}
-          onSubmit={handleVote}
+          onSubmit={(targetId: string) => {
+            handleVote(targetId);
+            setShowVoteModal(false);
+          }}
           onClose={() => setShowVoteModal(false)}
         />
       )}
