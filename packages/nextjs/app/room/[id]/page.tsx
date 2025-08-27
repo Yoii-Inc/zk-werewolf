@@ -31,12 +31,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     params.id,
     setMessages,
   );
-  const { isStarting, startGame, handleNightAction, handleVote, handleChangeRole, nextPhase } = useGameActions(
-    params.id,
-    addMessage,
-    gameInfo,
-    user?.id,
-  );
+  const { isStarting, startGame, handleNightAction, handleVote, handleChangeRole, nextPhase, resetGame } =
+    useGameActions(params.id, addMessage, gameInfo, user?.id);
 
   // Phase monitoring
   useGamePhase(gameInfo, params.id, addMessage, user?.username);
@@ -368,6 +364,28 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mt-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     鍵生成と保存
+                  </button>
+                </div>
+
+                {/* ゲームリセット(デバッグ用) */}
+                <div className="p-4 border-b border-indigo-100">
+                  <h2 className="text-lg font-semibold text-indigo-900">ゲームリセット(デバッグ用)</h2>
+                  <button
+                    onClick={async () => {
+                      const success = await resetGame();
+                      if (success) {
+                        addMessage({
+                          id: Date.now().toString(),
+                          sender: "システム",
+                          message: "ゲームがリセットされました",
+                          timestamp: new Date().toISOString(),
+                          type: "system",
+                        });
+                      }
+                    }}
+                    className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mt-2"
+                  >
+                    ゲームをリセット
                   </button>
                 </div>
               </div>

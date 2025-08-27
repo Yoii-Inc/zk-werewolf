@@ -168,6 +168,30 @@ export const useGameActions = (
     }
   };
 
+  const resetGame = async () => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/game/${roomId}/debug/reset`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("ゲームのリセットに失敗しました");
+      }
+
+      addMessage({
+        id: Date.now().toString(),
+        sender: "システム",
+        message: "ゲームがリセットされました",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+
+      return true;
+    } catch (error) {
+      console.error("ゲームリセットエラー:", error);
+      return false;
+    }
+  };
+
   return {
     isStarting,
     startGame,
@@ -175,5 +199,6 @@ export const useGameActions = (
     handleVote,
     handleChangeRole,
     nextPhase,
+    resetGame,
   };
 };

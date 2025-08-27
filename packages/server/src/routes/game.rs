@@ -1,7 +1,8 @@
 use crate::models::game::{
-    BatchRequest, ChangeRoleRequest, ClientRequestType, GameResult, NightActionRequest,
+    BatchRequest, ChangeRoleRequest, ClientRequestType, GamePhase, GameResult, NightActionRequest,
 };
 use crate::models::role::Role;
+use crate::models::room::RoomStatus;
 use crate::services::zk_proof;
 use crate::{
     models::chat::{ChatMessage, ChatMessageType},
@@ -46,6 +47,7 @@ pub fn routes(state: AppState) -> Router {
                 .route("/proof", post(proof_handler))
                 // デバッグ用エンドポイント
                 .route("/debug/change-role", post(change_player_role))
+                .route("/debug/reset", post(reset_game_handler))
                 // ゲーム進行の管理
                 .route("/phase/next", post(advance_phase_handler))
                 .route("/check-winner", get(check_winner_handler))
@@ -247,6 +249,65 @@ pub async fn get_messages(
     (StatusCode::NOT_FOUND, Json(Vec::<ChatMessage>::new()))
 }
 
+/// デバッグ用：ゲームをリセットして初期状態に戻す
+async fn reset_game_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> impl IntoResponse {
+    let mut games = state.games.lock().await;
+    let mut rooms = state.rooms.lock().await;
+
+    // ゲームが存在する場合、プレイヤー情報を保持したまま初期状態に戻す
+    if let Some(game) = games.get_mut(&room_id) {
+        let players = game.players.clone();
+
+        // ゲームを初期状態に戻す
+        let mut reset_game = game.clone();
+        reset_game.phase = GamePhase::Waiting;
+        reset_game.chat_log.messages.clear();
+        // reset_game.has_acted.clear();
+
+        // プレイヤーの状態をリセット
+        for mut player in reset_game.players.iter_mut() {
+            player.role = None;
+            player.is_dead = false;
+            // player.has_voted = false;
+            // player.vote_count = 0;
+        }
+
+        // システムメッセージを追加
+        reset_game
+            .chat_log
+            .add_system_message("ゲームがリセットされました".to_string());
+
+        // ゲームを更新
+        *game = reset_game;
+
+        // ルームも更新
+        if let Some(room) = rooms.get_mut(&room_id) {
+            room.status = RoomStatus::Open;
+            room.chat_log.messages.clear();
+            room.chat_log
+                .add_system_message("ルームがリセットされました".to_string());
+        }
+
+        (
+            StatusCode::OK,
+            Json(json!({
+                "success": true,
+                "message": "ゲームをリセットしました"
+            })),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "ゲームが見つかりません"
+            })),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,5 +372,53 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_reset_game() {
+        setup_test_env();
+        let state = AppState::new();
+        let app = routes(state.clone());
+        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+
+        // プレイヤーを追加
+        for i in 0..4 {
+            crate::services::room_service::join_room(
+                state.clone(),
+                &room_id.to_string(),
+                &format!("test_id_{}", i),
+                &format!("test_player_{}", i),
+            )
+            .await;
+        }
+
+        // ゲームを開始
+        game_service::start_game(state.clone(), &room_id.to_string())
+            .await
+            .unwrap();
+
+        // ゲームをリセット
+        let request = Request::builder()
+            .method("POST")
+            .uri(&format!("/{}/debug/reset", room_id))
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // ゲームの状態を確認
+        let games = state.games.lock().await;
+        let game = games.get(&room_id.to_string()).unwrap();
+        assert_eq!(game.phase, GamePhase::Waiting);
+        assert!(game.chat_log.messages.len() == 1); // リセットメッセージのみ
+
+        // プレイヤーの状態を確認
+        for player in &game.players {
+            assert!(player.role.is_none());
+            assert!(!player.is_dead);
+            // assert!(!player.has_voted);
+            // assert_eq!(player.vote_count, 0);
+        }
     }
 }
