@@ -26,13 +26,21 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   // Custom hooks
   const { messages, setMessages, addMessage, resetMessages } = useGameChat(params.id, null);
-  const { roomInfo, gameInfo, isLoading } = useGameInfo(params.id, setMessages);
+  const { roomInfo, gameInfo, isLoading, privateGameInfo } = useGameInfo(params.id, user?.id, setMessages);
   const { websocketRef, websocketStatus, connectWebSocket, disconnectWebSocket, sendMessage } = useGameWebSocket(
     params.id,
     setMessages,
   );
-  const { isStarting, startGame, handleNightAction, handleVote, handleChangeRole, nextPhase, resetGame } =
-    useGameActions(params.id, addMessage, gameInfo, user?.id);
+  const {
+    isStarting,
+    startGame,
+    handleNightAction,
+    handleVote,
+    handleChangeRole,
+    nextPhase,
+    resetGame,
+    resetBatchRequest,
+  } = useGameActions(params.id, addMessage, gameInfo, user?.id);
 
   // Phase monitoring
   useGamePhase(gameInfo, params.id, addMessage, user?.username);
@@ -52,9 +60,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   };
 
   const handleStartGame = async () => {
+    console.log("Starting game...");
     const success = await startGame();
     if (success) {
+      console.log("Game started successfully"); // デバッグログ
       resetMessages();
+    } else {
+      console.error("Failed to start game"); // デバッグログ
     }
   };
 
@@ -189,7 +201,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 </div>
                 {roomInfo.status === "Open" && (
                   <button
-                    onClick={startGame}
+                    onClick={handleStartGame}
                     disabled={isStarting || roomInfo.players.length < 2}
                     className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
                       isStarting || roomInfo.players.length < 2
@@ -388,6 +400,28 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     ゲームをリセット
                   </button>
                 </div>
+
+                {/* バッチリクエストリセット(デバッグ用) */}
+                <div className="p-4 border-b border-indigo-100">
+                  <h2 className="text-lg font-semibold text-indigo-900">バッチリクエストリセット(デバッグ用)</h2>
+                  <button
+                    onClick={async () => {
+                      const success = await resetBatchRequest();
+                      if (!success) {
+                        addMessage({
+                          id: Date.now().toString(),
+                          sender: "システム",
+                          message: "バッチリクエストのリセットに失敗しました",
+                          timestamp: new Date().toISOString(),
+                          type: "system",
+                        });
+                      }
+                    }}
+                    className="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded mt-2"
+                  >
+                    バッチリクエストをリセット
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -461,7 +495,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         <div className="p-4 border-t border-indigo-100">
           <h2 className="text-lg font-semibold text-indigo-900">デバッグ情報</h2>
           <pre className="text-sm text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto">
+            username = {user?.username}
+          </pre>
+          <pre className="text-sm text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto">
+            privateGameInfo = {JSON.stringify(privateGameInfo, null, 2)}
+          </pre>
+          <pre className="text-sm text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto">
             gameInfo = {JSON.stringify(gameInfo, null, 2)}
+          </pre>
+          <pre className="text-sm text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto">
+            roomInfo = {JSON.stringify(roomInfo, null, 2)}
           </pre>
         </div>
       </div>

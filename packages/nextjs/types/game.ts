@@ -26,6 +26,12 @@ export interface GameInfo {
   };
 }
 
+export interface PrivateGameInfo {
+  playerId: string;
+  playerRole: "占い師" | "人狼" | "村人";
+  hasActed: boolean; // アクションを実行済みか
+}
+
 export interface Player {
   id: string;
   name: string;

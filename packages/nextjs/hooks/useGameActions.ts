@@ -11,7 +11,6 @@ export const useGameActions = (
   const [isStarting, setIsStarting] = useState(false);
 
   const startGame = async () => {
-    if (!gameInfo) return;
     setIsStarting(true);
     try {
       const response = await fetch(`http://localhost:8080/api/game/${roomId}/start`, {
@@ -192,6 +191,32 @@ export const useGameActions = (
     }
   };
 
+  const resetBatchRequest = async () => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/game/${roomId}/debug/reset-batch`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("バッチリクエストのリセットに失敗しました");
+      }
+
+      const result = await response.json();
+
+      addMessage({
+        id: Date.now().toString(),
+        sender: "システム",
+        message: `バッチリクエストがリセットされました (新しいバッチID: ${result.batch_id})`,
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+
+      return true;
+    } catch (error) {
+      console.error("バッチリクエストリセットエラー:", error);
+      return false;
+    }
+  };
+
   return {
     isStarting,
     startGame,
@@ -200,5 +225,6 @@ export const useGameActions = (
     handleChangeRole,
     nextPhase,
     resetGame,
+    resetBatchRequest,
   };
 };

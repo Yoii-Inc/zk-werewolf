@@ -48,6 +48,7 @@ pub fn routes(state: AppState) -> Router {
                 // デバッグ用エンドポイント
                 .route("/debug/change-role", post(change_player_role))
                 .route("/debug/reset", post(reset_game_handler))
+                .route("/debug/reset-batch", post(reset_batch_request_handler))
                 // ゲーム進行の管理
                 .route("/phase/next", post(advance_phase_handler))
                 .route("/check-winner", get(check_winner_handler))
@@ -308,10 +309,43 @@ async fn reset_game_handler(
     }
 }
 
+/// デバッグ用：バッチリクエストをリセットする
+async fn reset_batch_request_handler(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> impl IntoResponse {
+    let mut games = state.games.lock().await;
+
+    if let Some(game) = games.get_mut(&room_id) {
+        // バッチリクエストを新しいものに置き換え
+        game.batch_request = BatchRequest::new();
+
+        // システムメッセージを追加
+        game.chat_log
+            .add_system_message("バッチリクエストがリセットされました".to_string());
+
+        (
+            StatusCode::OK,
+            Json(json!({
+                "success": true,
+                "message": "バッチリクエストをリセットしました",
+                "batch_id": game.batch_request.batch_id
+            })),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "ゲームが見つかりません"
+            })),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::test_setup::setup_test_env;
+    use crate::{models::game::BatchStatus, utils::test_setup::setup_test_env};
     use axum::{body::Body, http::Request};
     use chrono::format;
     use tower::ServiceExt;
@@ -420,5 +454,47 @@ mod tests {
             // assert!(!player.has_voted);
             // assert_eq!(player.vote_count, 0);
         }
+    }
+
+    #[tokio::test]
+    async fn test_reset_batch_request() {
+        setup_test_env();
+        let state = AppState::new();
+        let app = routes(state.clone());
+        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+
+        // プレイヤーを追加
+        for i in 0..4 {
+            crate::services::room_service::join_room(
+                state.clone(),
+                &room_id.to_string(),
+                &format!("test_id_{}", i),
+                &format!("test_player_{}", i),
+            )
+            .await;
+        }
+
+        // ゲームを開始
+        game_service::start_game(state.clone(), &room_id.to_string())
+            .await
+            .unwrap();
+
+        // バッチリクエストをリセット
+        let request = Request::builder()
+            .method("POST")
+            .uri(&format!("/{}/debug/reset-batch", room_id))
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // ゲームの状態を確認
+        let games = state.games.lock().await;
+        let game = games.get(&room_id.to_string()).unwrap();
+
+        // バッチリクエストが新しく作成されていることを確認
+        assert!(game.batch_request.requests.is_empty());
+        assert_eq!(game.batch_request.status, BatchStatus::Collecting);
     }
 }

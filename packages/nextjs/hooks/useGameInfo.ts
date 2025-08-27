@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react";
-import type { ChatMessage, GameInfo, RoomInfo } from "~~/types/game";
+import type { ChatMessage, GameInfo, PrivateGameInfo, RoomInfo } from "~~/types/game";
 
-export const useGameInfo = (roomId: string, setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
+export const useGameInfo = (
+  roomId: string,
+  userId: string | undefined,
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+) => {
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [privateGameInfo, setPrivateGameInfo] = useState<PrivateGameInfo | null>(() => {
+    // ページ読み込み時にセッションストレージからプライベート情報を復元
+    if (typeof window !== "undefined" && userId) {
+      const savedInfo = sessionStorage.getItem(`private_game_info`);
+      return savedInfo ? JSON.parse(savedInfo) : null;
+    }
+    return null;
+  });
 
   useEffect(() => {
     const fetchRoomInfo = async () => {
@@ -68,5 +81,5 @@ export const useGameInfo = (roomId: string, setMessages: React.Dispatch<React.Se
     };
   }, [roomInfo?.status, roomId, setMessages]);
 
-  return { roomInfo, gameInfo, isLoading, setGameInfo };
+  return { roomInfo, gameInfo, privateGameInfo, isLoading, setGameInfo };
 };
