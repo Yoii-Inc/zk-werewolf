@@ -225,8 +225,24 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
 
     type ShareForNode = RoleAssignmentPrivateInput;
 
+    // TODO: fix. complete implementation.
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
-        todo!()
+        let scheme = &input.scheme;
+        let private_input = &input.private_input;
+
+        // let randomness_share = split_vec_fr(private_input.randomness.clone(), scheme);
+        let player_randomness_share = split_vec_fr(private_input.player_randomness.clone(), scheme);
+        // let player_randomness_share = split_fr(private_input.player_randomness, scheme);
+
+        (0..scheme.total_shares)
+            .map(|i| RoleAssignmentPrivateInput {
+                id: private_input.id,
+                shuffle_matrices: private_input.shuffle_matrices.clone(),
+                // is_target_id: is_target_share.iter().map(|row| row[i]).collect(),
+                player_randomness: player_randomness_share.iter().map(|row| row[i]).collect(),
+                randomness: private_input.randomness.clone(),
+            })
+            .collect::<Vec<_>>()
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue> {

@@ -425,28 +425,41 @@ impl KeyPublicizeCircuit<mm::MpcField<Fr>> {
 }
 
 impl RoleAssignmentCircuit<mm::MpcField<Fr>> {
-    pub fn calculate_output(&self) -> mm::MpcField<Fr> {
-        // let num_players = circuit.num_players;
-        // let max_group_size = circuit.max_group_size;
-        // let pedersen_param = circuit.pedersen_param.clone();
-        // let tau_matrix = circuit.tau_matrix.clone();
-        // let role_commitment = circuit.role_commitment.clone();
-        // let player_commitment = circuit.player_commitment.clone();
-        // let shuffle_matrices = circuit.shuffle_matrices.clone();
-        // let randomness = circuit.randomness.clone();
-        // let player_randomness = circuit.player_randomness.clone();
-        // let mut buffer = Vec::new();
-        // // CanonicalSerialize::serialize(&num_players, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&max_group_size, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&pedersen_param, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&tau_matrix, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&role_commitment, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&player_commitment, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&shuffle_matrices, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&randomness, &mut buffer).unwrap();
-        // // CanonicalSerialize::serialize(&player_randomness, &mut buffer).unwrap();
-        // buffer
-        todo!()
+    // Vec<mm::MpcField<Fr>> は各プレイヤーの役職IDを表す。0が村人、1が占い師、2が人狼など。
+    pub fn calculate_output(&self) -> Vec<mm::MpcField<Fr>> {
+        let num_players = self.private_input.len();
+
+        let grouping_parameter = GroupingParameter::new(
+            vec![
+                (Role::Villager, (2, false)),
+                (Role::FortuneTeller, (1, false)),
+                (Role::Werewolf, (1, false)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
+        // let grouping_parameter = self.public_input.grouping_parameter;
+
+        // let grouping_parameter = sgrouping_parameter.clone();
+        let shuffle_matrix = self
+            .private_input
+            .iter()
+            .map(|input| input.shuffle_matrices.clone())
+            .collect::<Vec<_>>();
+
+        //  TODO: matrixにrevealを実装し、下の式を使う。
+
+        // let revealed_shuffle_matrix = shuffle_matrix
+        //     .iter()
+        //     .map(|row| row.iter().map(|x| x.sync_reveal()).collect::<Vec<_>>())
+        //     .collect::<Vec<_>>();
+
+        // for id in 0..num_players {
+        //     let (role, role_val, player_ids) =
+        //         calc_shuffle_matrix(&grouping_parameter, &revealed_shuffle_matrix, id).unwrap();
+        // }
+        vec![mm::MpcField::<Fr>::one(); num_players]
     }
 }
 

@@ -1,5 +1,8 @@
 use crate::{
-    models::chat::{ChatMessage, ChatMessageType},
+    models::{
+        chat::{ChatMessage, ChatMessageType},
+        role::Role,
+    },
     services::zk_proof::check_status_with_retry,
 };
 
@@ -598,6 +601,41 @@ impl Game {
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
                         // itemsを処理する
+                        let role_result: Vec<Fr> = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(state) => state,
+                                Err(e) => {
+                                    println!("Failed to deserialize role_result: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                return;
+                            }
+                        };
+
+                        // role_resultをゲームの結果に反映
+                        for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
+                            player.role = if *role == Fr::from(0u32) {
+                                Some(Role::Villager)
+                            } else if *role == Fr::from(1u32) {
+                                Some(Role::Seer)
+                            } else if *role == Fr::from(2u32) {
+                                Some(Role::Werewolf)
+                            } else {
+                                None
+                            };
+                        }
+
+                        self.chat_log.add_system_message(format!(
+                            "役職が割り当てられました: {}。ゲームを開始します。",
+                            self.players
+                                .iter()
+                                .map(|p| format!("{}: {}", p.name, p.role.as_ref().unwrap()))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
                         // itemsを処理する

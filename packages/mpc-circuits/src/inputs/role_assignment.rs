@@ -1,7 +1,10 @@
 use ark_ff::PrimeField;
 use nalgebra as na;
 use serde::{Deserialize, Serialize};
-use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
+use zk_mpc::{
+    circuits::{ElGamalLocalOrMPC, LocalOrMPC},
+    werewolf::types::GroupingParameter,
+};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RoleAssignmentPrivateInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> {
@@ -17,6 +20,7 @@ pub struct RoleAssignmentPublicInput<F: PrimeField + LocalOrMPC<F> + ElGamalLoca
     pub num_players: usize,
     pub max_group_size: usize,
     pub pedersen_param: <F as LocalOrMPC<F>>::PedersenParam,
+    // pub grouping_parameter: GroupingParameter,
 
     // instance
     pub tau_matrix: na::DMatrix<F>,

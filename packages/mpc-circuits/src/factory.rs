@@ -11,7 +11,7 @@ use zk_mpc::{
 
 use mpc_algebra_wasm::{
     AnonymousVotingEncryption, CircuitEncryptedInputIdentifier, DivinationEncryption,
-    NodeEncryptedShare, SplitAndEncrypt, WinningJudgementEncryption,
+    NodeEncryptedShare, RoleAssignmentEncryption, SplitAndEncrypt, WinningJudgementEncryption,
 };
 
 use crate::*;
@@ -117,18 +117,37 @@ impl CircuitFactory {
                 })
             }
             CircuitEncryptedInputIdentifier::RoleAssignment(ref c) => {
-                // BuiltinCircuit::RoleAssignment(RoleAssignmentCircuit {
-                //     num_players: todo!(),
-                //     max_group_size: todo!(),
-                //     pedersen_param: todo!(),
-                //     tau_matrix: todo!(),
-                //     role_commitment: todo!(),
-                //     player_commitment: todo!(),
-                //     shuffle_matrices: todo!(),
-                //     randomness: todo!(),
-                //     player_randomness: todo!(),
-                // })
-                todo!()
+                let player_num = c.len();
+
+                let mut rng = ark_std::test_rng();
+
+                let public_input = c[0].public_input.clone();
+                BuiltinCircuit::RoleAssignment(RoleAssignmentCircuit {
+                    private_input: (0..player_num)
+                        .map(|_| RoleAssignmentPrivateInput::<Fr> {
+                            id: 0,
+                            shuffle_matrices: vec![nalgebra::DMatrix::<Fr>::zeros(8, 8); 2],
+                            player_randomness: vec![Fr::default(); player_num],
+                            randomness: vec![
+                                    ark_crypto_primitives::commitment::pedersen::Randomness::rand(
+                                        &mut rng
+                                    );
+                                    player_num
+                                ],
+                            // is_werewolf: Fr::default(),
+                            // is_target: vec![Fr::default(); player_num],
+                            // randomness: elgamal_randomness.clone(),
+                        })
+                        .collect::<Vec<_>>(),
+                    public_input: RoleAssignmentPublicInput::<Fr> {
+                        num_players: public_input.num_players,
+                        max_group_size: public_input.num_players,
+                        tau_matrix: public_input.tau_matrix,
+                        role_commitment: public_input.role_commitment,
+                        player_commitment: public_input.player_commitment,
+                        pedersen_param: public_input.pedersen_param,
+                    },
+                })
             }
             CircuitEncryptedInputIdentifier::KeyPublicize(ref c) => {
                 // BuiltinCircuit::KeyPublicize(KeyPublicizeCircuit { mpc_input: todo!() })
@@ -275,6 +294,69 @@ impl CircuitFactory {
                             .iter()
                             .map(|c| <MFr as LocalOrMPC<MFr>>::PedersenCommitment::from_local(&c))
                             .collect::<Vec<_>>(),
+                    },
+                })
+            }
+            CircuitEncryptedInputIdentifier::RoleAssignment(circuit) => {
+                let mut private_input: Vec<RoleAssignmentPrivateInput<MFr>> = Vec::new();
+
+                for i in 0..circuit.len() {
+                    let private_encrypted_input = circuit[i]
+                        .shares
+                        .iter()
+                        .find(|share| share.node_id == my_node_id)
+                        .expect("No share found for this node");
+
+                    // mpc-algebra-wasmにおけるcreate_encrypted_sharesの反転が必要。
+                    let decrypted_input =
+                        RoleAssignmentEncryption::decrypt(private_encrypted_input, secret_key)
+                            .expect("Failed to decrypt input");
+
+                    // TODO: fix hardcoding.
+                    private_input.push(RoleAssignmentPrivateInput::<MFr> {
+                        id: decrypted_input.id,
+                        shuffle_matrices: vec![nalgebra::DMatrix::<MFr>::zeros(8, 8); 2],
+                        player_randomness: decrypted_input
+                            .player_randomness
+                            .iter()
+                            .map(|&x| MFr::from_add_shared(x))
+                            .collect(),
+                        randomness: decrypted_input
+                            .randomness
+                            .iter()
+                            .map(|randomness| {
+                                <MFr as LocalOrMPC<MFr>>::PedersenRandomness::from_public(
+                                    // 本当はfrom_add_shared
+                                    randomness.clone(),
+                                )
+                            })
+                            .collect(),
+                    });
+                }
+
+                // todo!()
+                BuiltinCircuit::RoleAssignment(RoleAssignmentCircuit {
+                    private_input,
+                    public_input: RoleAssignmentPublicInput::<MFr> {
+                        num_players: circuit[0].public_input.num_players,
+                        max_group_size: circuit[0].public_input.max_group_size,
+                        tau_matrix: nalgebra::DMatrix::<MFr>::zeros(1, 1), // TODO: fix.
+                        role_commitment: circuit[0]
+                            .public_input
+                            .role_commitment
+                            .iter()
+                            .map(|c| <MFr as LocalOrMPC<MFr>>::PedersenCommitment::from_local(&c))
+                            .collect::<Vec<_>>(),
+
+                        player_commitment: circuit[0]
+                            .public_input
+                            .player_commitment
+                            .iter()
+                            .map(|c| <MFr as LocalOrMPC<MFr>>::PedersenCommitment::from_local(&c))
+                            .collect::<Vec<_>>(),
+                        pedersen_param: <MFr as LocalOrMPC<MFr>>::PedersenParam::from_local(
+                            &circuit[0].public_input.pedersen_param,
+                        ),
                     },
                 })
             }
