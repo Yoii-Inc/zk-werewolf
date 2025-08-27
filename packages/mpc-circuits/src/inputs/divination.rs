@@ -8,7 +8,6 @@ pub struct DivinationPrivateInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOr
     pub is_werewolf: F,
     pub is_target: Vec<F>,
     pub randomness: F::ElGamalRandomness,
-    // pub randomness_bits: Vec<F>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

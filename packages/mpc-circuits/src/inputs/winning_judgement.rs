@@ -14,15 +14,3 @@ pub struct WinningJudgementPublicInput<F: PrimeField + LocalOrMPC<F> + ElGamalLo
     pub pedersen_param: <F as LocalOrMPC<F>>::PedersenParam,
     pub player_commitment: Vec<<F as LocalOrMPC<F>>::PedersenCommitment>,
 }
-
-// #[derive(Serialize, Deserialize)]
-// pub struct IndividualWinningJudgementCircuit<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> {
-//     pub id: usize,
-//     pub total: usize,
-//     pub num_alive: F,
-//     pub am_werewolf: InputWithCommit<F>,
-//     pub game_state: F, // TODO: remove.
-//     pub pedersen_param: <F as LocalOrMPC<F>>::PedersenParam,
-//     pub player_randomness: F,
-//     pub player_commitment: <F as LocalOrMPC<F>>::PedersenCommitment,
-// }

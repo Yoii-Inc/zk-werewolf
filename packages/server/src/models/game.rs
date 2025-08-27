@@ -571,9 +571,9 @@ impl Game {
                         // 状態をゲームの結果に反映
 
                         let result = if game_state == Fr::from(1u32) {
-                            GameResult::VillagerWin
-                        } else if game_state == Fr::from(2u32) {
                             GameResult::WerewolfWin
+                        } else if game_state == Fr::from(2u32) {
+                            GameResult::VillagerWin
                         } else {
                             self.chat_log
                                 .add_system_message("ゲームはまだ続くようです。".to_string());

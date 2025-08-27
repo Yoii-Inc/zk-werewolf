@@ -72,7 +72,7 @@ export interface PedersenParam {
   }[][];
 }
 
-export interface PedersernCommitment {
+export interface PedersenCommitment {
   x: (number[] | null)[];
   y: (number[] | null)[];
   _params: null;
@@ -86,7 +86,7 @@ export interface AnonymousVotingPrivateInput {
 }
 export interface AnonymousVotingPublicInput {
   pedersenParam: PedersenParam;
-  playerCommitment: PedersernCommitment[];
+  playerCommitment: PedersenCommitment[];
   playerNum: number;
 }
 
@@ -103,13 +103,20 @@ export interface KeyPublicizePublicInput {
 // TODO: modify.
 export interface RoleAssignmentPrivateInput {
   id: number;
-  //   isTargetId: string[];
-  isTargetId: (number[] | null)[][];
+  shuffleMatrices: any;
+  randomness: any;
   playerRandomness: (number[] | null)[];
 }
 export interface RoleAssignmentPublicInput {
+  // parameter
+  numPlayers: number;
+  maxGroupSize: number;
   pedersenParam: PedersenParam;
-  playerCommitment: PedersernCommitment[];
+
+  // instance
+  tauMatrix: any;
+  roleCommitment: PedersenCommitment[];
+  playerCommitment: PedersenCommitment[];
 }
 
 // TODO: modify.
@@ -122,7 +129,9 @@ export interface DivinationPrivateInput {
 export interface DivinationPublicInput {
   pedersenParam: PedersenParam;
   elgamalParam: any;
-  playerCommitment: PedersernCommitment[];
+  pubKey: any;
+  playerNum: any;
+  playerCommitment: PedersenCommitment[];
 }
 
 export interface WinningJudgementPrivateInput {
@@ -132,5 +141,5 @@ export interface WinningJudgementPrivateInput {
 }
 export interface WinningJudgementPublicInput {
   pedersenParam: PedersenParam;
-  playerCommitment: PedersernCommitment[];
+  playerCommitment: PedersenCommitment[];
 }

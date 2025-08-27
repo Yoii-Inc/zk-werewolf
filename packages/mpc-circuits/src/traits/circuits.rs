@@ -2,7 +2,7 @@ use crate::*;
 
 use ark_bls12_377::Fr;
 use ark_crypto_primitives::encryption::AsymmetricEncryptionScheme;
-use ark_ec::AffineCurve;
+use ark_ec::{group, AffineCurve};
 use ark_ff::PrimeField;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
@@ -26,6 +26,9 @@ use mpc_algebra::MpcToBitsGadget;
 use mpc_algebra::Reveal;
 use zk_mpc::circuits::serialize::werewolf;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
+
+use zk_mpc::werewolf::types::{GroupingParameter, Role};
+use zk_mpc::werewolf::utils::*;
 
 impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> MpcCircuit<F>
     for AnonymousVotingCircuit<F>
@@ -330,14 +333,14 @@ impl WinningJudgementCircuit<Fr> {
             .filter(|input| input.am_werewolf.is_zero())
             .count();
 
-        let game_state = if werewolf_count == 0 {
+        // game_state
+        if werewolf_count == 0 {
             Fr::from(2u32)
         } else if werewolf_count >= villagers_count {
             Fr::from(1u32)
         } else {
             Fr::from(3u32)
-        };
-        game_state
+        }
     }
 }
 
@@ -356,16 +359,18 @@ impl WinningJudgementCircuit<mm::MpcField<Fr>> {
 
         let no_werewolf = werewolf_count.sync_is_zero_shared();
 
-        let game_state = no_werewolf.field() * mm::MpcField::<Fr>::from(2_u32)
+        // game_state
+        no_werewolf.field() * mm::MpcField::<Fr>::from(2_u32)
             + (!no_werewolf).field()
-                * (werewolf_count
+                * ((werewolf_count + mm::MpcField::<Fr>::one())
                     .sync_is_smaller_than(&villagers_count)
                     .field()
                     * mm::MpcField::<Fr>::from(3_u32)
                     + (mm::MpcField::<Fr>::one()
-                        - (werewolf_count.sync_is_smaller_than(&villagers_count)).field())
-                        * mm::MpcField::<Fr>::from(1_u32));
-        game_state
+                        - ((werewolf_count + mm::MpcField::<Fr>::one())
+                            .sync_is_smaller_than(&villagers_count))
+                        .field())
+                        * mm::MpcField::<Fr>::from(1_u32))
     }
 }
 
