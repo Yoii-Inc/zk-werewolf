@@ -3,6 +3,14 @@ name = "zk-mpc-node"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "zk-mpc-node"
+path = "src/main.rs"
+
+[lib]
+name = "zk_mpc_node"
+path = "src/lib.rs"
+
 [dependencies]
 zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git" }
 ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }

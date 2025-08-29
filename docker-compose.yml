@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile.dev
+    ports:
+      - "8080:8080"
+    environment:
+      - SUPABASE_URL=http://localhost:5432
+      - SUPABASE_KEY=dev_secret_key
+      - JWT_SECRET=dev_secret_key
+      - ZK_MPC_NODE_1=http://zk-mpc-node-0:9000
+      - ZK_MPC_NODE_2=http://zk-mpc-node-1:9001
+      - ZK_MPC_NODE_3=http://zk-mpc-node-2:9002
+      - RUST_LOG=debug
+    volumes:
+      - .:/usr/src/workspace
+      - backend_target:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/server
+
+  zk-mpc-node-0:
+    build:
+      context: .
+      dockerfile: packages/zk-mpc-node/Dockerfile
+    ports:
+      - "9000:9000"
+      - "8000:8000"
+    environment:
+      - RUST_LOG=debug
+    volumes:
+      - .:/usr/src/workspace
+      - mpc_target_0:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/zk-mpc-node
+    command: sh -c "cargo run -- start --id 0 --input ./address/3"
+
+  zk-mpc-node-1:
+    build:
+      context: .
+      dockerfile: packages/zk-mpc-node/Dockerfile
+    ports:
+      - "9001:9001"
+      - "8001:8001"
+    environment:
+      - RUST_LOG=debug
+    volumes:
+      - .:/usr/src/workspace
+      - mpc_target_1:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/zk-mpc-node
+    command: sh -c "cargo run -- start --id 1 --input ./address/3"
+
+  zk-mpc-node-2:
+    build:
+      context: .
+      dockerfile: packages/zk-mpc-node/Dockerfile
+    ports:
+      - "9002:9002"
+      - "8002:8002"
+    environment:
+      - RUST_LOG=debug
+    volumes:
+      - .:/usr/src/workspace
+      - mpc_target_2:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/zk-mpc-node
+    command: sh -c "cargo run -- start --id 2 --input ./address/3"
+
+  blockchain:
+    build:
+      context: .
+      dockerfile: packages/foundry/Dockerfile
+    ports:
+      - "8545:8545"
+    volumes:
+      - ./packages/foundry:/app
+
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/nextjs/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8080
+        - NEXT_PUBLIC_WS_URL=ws://localhost:8080
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8080
+    volumes:
+      - ./packages/nextjs:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  backend_target:
+  mpc_target_0:
+  mpc_target_1:
+  mpc_target_2:

@@ -97,7 +97,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const connectWebSocket = () => {
     setWebsocketStatus("connecting");
-    const ws = new WebSocket(`ws://localhost:8080/api/room/${params.id}/ws`);
+    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/api/room/${params.id}/ws`);
 
     ws.onopen = () => {
       console.log("WebSocket接続が確立されました");
@@ -172,7 +172,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchRoomInfo = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/api/room/${params.id}`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/room/${params.id}`);
         if (!response.ok) {
           throw new Error("ルーム情報の取得に失敗しました");
         }
@@ -188,7 +188,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
     const fetchGameInfo = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/api/game/${params.id}/state`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/game/${params.id}/state`);
         if (!response.ok) {
           throw new Error("ゲーム情報の取得に失敗しました");
         }
@@ -260,7 +260,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         (prevPhase === "Voting" && gameInfo.phase === "Result")
       ) {
         try {
-          const response = await fetch(`http://localhost:8080/api/game/${params.id}/check-winner`);
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/game/${params.id}/check-winner`);
           if (!response.ok) {
             throw new Error("ゲーム結果の取得に失敗しました");
           }
@@ -306,7 +306,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     if (!roomInfo) return;
     setIsStarting(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/start`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/game/${params.id}/start`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -356,13 +356,14 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         action: action,
       };
 
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/actions/night-action`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request),
-      });
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/game/${params.id}/night-action`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request),
+        });
 
       if (!response.ok) {
         throw new Error("夜の行動の送信に失敗しました");
@@ -388,7 +389,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const handleChangeRole = async (playerId: string, newRole: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/debug/change-role`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/game/${params.id}/debug/change-role`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -419,7 +420,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const handleVote = async (targetId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${params.id}/actions/vote`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/game/${params.id}/actions/vote`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -509,9 +510,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         <button
                           onClick={async () => {
                             try {
-                              const response = await fetch(`http://localhost:8080/api/game/${params.id}/phase/next`, {
-                                method: "POST",
-                              });
+                              const response = await fetch(
+                                `${process.env.NEXT_PUBLIC_API_URL}/api/game/${params.id}/phase/next`,
+                                {
+                                  method: "POST",
+                                },
+                              );
                               if (!response.ok) {
                                 throw new Error("フェーズの進行に失敗しました");
                               }
@@ -555,11 +559,10 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   <button
                     onClick={startGame}
                     disabled={isStarting || roomInfo.players.length < 2}
-                    className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
-                      isStarting || roomInfo.players.length < 2
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-green-600 hover:bg-green-700"
-                    }`}
+                    className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${isStarting || roomInfo.players.length < 2
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                      }`}
                   >
                     {isStarting ? "開始中..." : "ゲーム開始"}
                   </button>
@@ -596,9 +599,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 {(gameInfo ? gameInfo.players : roomInfo.players).map(player => (
                   <div
                     key={player.id}
-                    className={`flex flex-col p-2 rounded-lg ${
-                      player.is_dead === true ? "bg-gray-100 text-gray-500" : "bg-white text-indigo-900"
-                    }`}
+                    className={`flex flex-col p-2 rounded-lg ${player.is_dead === true ? "bg-gray-100 text-gray-500" : "bg-white text-indigo-900"
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -619,31 +621,28 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                       <div className="mt-2 flex gap-1 text-xs">
                         <button
                           onClick={() => handleChangeRole(player.id, "村人")}
-                          className={`px-2 py-1 rounded transition-colors ${
-                            player.role === "Villager"
-                              ? "bg-gray-300 text-gray-800 font-medium border-gray-500 border-2"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          }`}
+                          className={`px-2 py-1 rounded transition-colors ${player.role === "Villager"
+                            ? "bg-gray-300 text-gray-800 font-medium border-gray-500 border-2"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
                         >
                           村人
                         </button>
                         <button
                           onClick={() => handleChangeRole(player.id, "人狼")}
-                          className={`px-2 py-1 rounded transition-colors ${
-                            player.role === "Werewolf"
-                              ? "bg-red-300 text-red-800 font-medium border-red-500 border-2"
-                              : "bg-red-100 text-red-600 hover:bg-red-200"
-                          }`}
+                          className={`px-2 py-1 rounded transition-colors ${player.role === "Werewolf"
+                            ? "bg-red-300 text-red-800 font-medium border-red-500 border-2"
+                            : "bg-red-100 text-red-600 hover:bg-red-200"
+                            }`}
                         >
                           人狼
                         </button>
                         <button
                           onClick={() => handleChangeRole(player.id, "占い師")}
-                          className={`px-2 py-1 rounded transition-colors ${
-                            player.role === "Seer"
-                              ? "bg-blue-300 text-blue-800 font-medium border-blue-500 border-2"
-                              : "bg-blue-100 text-blue-600 hover:bg-blue-200"
-                          }`}
+                          className={`px-2 py-1 rounded transition-colors ${player.role === "Seer"
+                            ? "bg-blue-300 text-blue-800 font-medium border-blue-500 border-2"
+                            : "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                            }`}
                         >
                           占い師
                         </button>
@@ -739,13 +738,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 {messages.map(msg => (
                   <div
                     key={msg.id}
-                    className={`mb-4 rounded-lg p-3 ${
-                      msg.type === "system"
-                        ? "bg-indigo-50 text-indigo-700 text-left"
-                        : msg.type === "whisper"
-                          ? "bg-purple-50 text-purple-700 italic"
-                          : "bg-white"
-                    }`}
+                    className={`mb-4 rounded-lg p-3 ${msg.type === "system"
+                      ? "bg-indigo-50 text-indigo-700 text-left"
+                      : msg.type === "whisper"
+                        ? "bg-purple-50 text-purple-700 italic"
+                        : "bg-white"
+                      }`}
                   >
                     <span className="text-s text-gray-500">
                       {new Date(msg.timestamp).toLocaleTimeString("ja-JP", {

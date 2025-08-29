@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+*.pid
+*.seed
+*.pid.lock
+
+# Build artifacts - these are the big ones
+**/target/
+**/dist/
+**/build/
+**/.next/
+**/node_modules/
+**/.yarn/
+**/yarn.lock
+**/.yarnrc.yml
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+**/coverage/
+
+# Temporary files
+tmp/
+temp/
+
+# Additional large directories
+**/data/
+**/tests/
+**/*.wasm
