@@ -5,9 +5,9 @@ use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct KeyPublicizePrivateInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> {
     pub id: usize,
-    pub pub_key_or_dummy_x: Vec<F>,
-    pub pub_key_or_dummy_y: Vec<F>,
-    pub is_fortune_teller: Vec<F>,
+    pub pub_key_or_dummy_x: F,
+    pub pub_key_or_dummy_y: F,
+    pub is_fortune_teller: F,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

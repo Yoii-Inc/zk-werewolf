@@ -9,9 +9,9 @@ use zk_mpc::{
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RoleAssignmentPrivateInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> {
     pub id: usize,
-    pub shuffle_matrices: Vec<na::DMatrix<F>>,
-    pub randomness: Vec<F::PedersenRandomness>,
-    pub player_randomness: Vec<F>,
+    pub shuffle_matrices: na::DMatrix<F>,
+    pub randomness: F::PedersenRandomness,
+    pub player_randomness: F,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

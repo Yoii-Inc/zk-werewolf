@@ -423,9 +423,39 @@ impl DivinationCircuit<mm::MpcField<Fr>> {
     }
 }
 
+impl KeyPublicizeCircuit<Fr> {
+    fn calculate_output(&self) -> (Fr, Fr) {
+        let pub_key_x = self
+            .private_input
+            .iter()
+            .map(|input| input.pub_key_or_dummy_x)
+            .fold(Fr::zero(), |acc, x| acc + x);
+
+        let pub_key_y = self
+            .private_input
+            .iter()
+            .map(|input| input.pub_key_or_dummy_y)
+            .fold(Fr::zero(), |acc, y| acc + y);
+
+        (pub_key_x, pub_key_y)
+    }
+}
+
 impl KeyPublicizeCircuit<mm::MpcField<Fr>> {
-    pub fn calculate_output(&self) -> mm::MpcField<Fr> {
-        todo!()
+    pub fn calculate_output(&self) -> (mm::MpcField<Fr>, mm::MpcField<Fr>) {
+        let pub_key_x = self
+            .private_input
+            .iter()
+            .map(|input| input.pub_key_or_dummy_x)
+            .fold(mm::MpcField::<Fr>::zero(), |acc, x| acc + x);
+
+        let pub_key_y = self
+            .private_input
+            .iter()
+            .map(|input| input.pub_key_or_dummy_y)
+            .fold(mm::MpcField::<Fr>::zero(), |acc, y| acc + y);
+
+        (pub_key_x, pub_key_y)
     }
 }
 
@@ -453,18 +483,31 @@ impl RoleAssignmentCircuit<mm::MpcField<Fr>> {
             .map(|input| input.shuffle_matrices.clone())
             .collect::<Vec<_>>();
 
-        //  TODO: matrixにrevealを実装し、下の式を使う。
+        let revealed_shuffle_matrix = shuffle_matrix
+            .iter()
+            .map(|row| row.map(|x| x.sync_reveal()))
+            .collect::<Vec<_>>();
 
-        // let revealed_shuffle_matrix = shuffle_matrix
-        //     .iter()
-        //     .map(|row| row.iter().map(|x| x.sync_reveal()).collect::<Vec<_>>())
-        //     .collect::<Vec<_>>();
+        let mut output_vec = Vec::new();
 
-        // for id in 0..num_players {
-        //     let (role, role_val, player_ids) =
-        //         calc_shuffle_matrix(&grouping_parameter, &revealed_shuffle_matrix, id).unwrap();
-        // }
-        vec![mm::MpcField::<Fr>::one(); num_players]
+        for id in 0..num_players {
+            let (role, role_val, player_ids) =
+                calc_shuffle_matrix(&grouping_parameter, &revealed_shuffle_matrix, id).unwrap();
+
+            match role {
+                Role::Villager => {
+                    output_vec.push(mm::MpcField::<Fr>::from(0u32));
+                }
+                Role::FortuneTeller => {
+                    output_vec.push(mm::MpcField::<Fr>::from(1u32));
+                }
+                Role::Werewolf => {
+                    output_vec.push(mm::MpcField::<Fr>::from(2u32));
+                }
+            }
+        }
+
+        output_vec
     }
 }
 

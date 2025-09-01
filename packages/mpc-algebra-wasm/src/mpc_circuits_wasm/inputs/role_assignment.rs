@@ -8,9 +8,9 @@ use ark_bls12_377::Fr;
 #[serde(rename_all = "camelCase")]
 pub struct RoleAssignmentPrivateInput {
     pub id: usize,
-    pub shuffle_matrices: Vec<na::DMatrix<Fr>>,
-    pub randomness: Vec<PedersenRandomness>,
-    pub player_randomness: Vec<Fr>,
+    pub shuffle_matrices: na::DMatrix<Fr>,
+    pub randomness: PedersenRandomness,
+    pub player_randomness: Fr,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

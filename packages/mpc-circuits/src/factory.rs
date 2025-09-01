@@ -126,14 +126,12 @@ impl CircuitFactory {
                     private_input: (0..player_num)
                         .map(|_| RoleAssignmentPrivateInput::<Fr> {
                             id: 0,
-                            shuffle_matrices: vec![nalgebra::DMatrix::<Fr>::zeros(8, 8); 2],
-                            player_randomness: vec![Fr::default(); player_num],
-                            randomness: vec![
-                                    ark_crypto_primitives::commitment::pedersen::Randomness::rand(
-                                        &mut rng
-                                    );
-                                    player_num
-                                ],
+                            shuffle_matrices: nalgebra::DMatrix::<Fr>::zeros(8, 8),
+                            player_randomness: Fr::default(),
+                            randomness:
+                                ark_crypto_primitives::commitment::pedersen::Randomness::rand(
+                                    &mut rng,
+                                ),
                             // is_werewolf: Fr::default(),
                             // is_target: vec![Fr::default(); player_num],
                             // randomness: elgamal_randomness.clone(),
@@ -312,35 +310,36 @@ impl CircuitFactory {
                         RoleAssignmentEncryption::decrypt(private_encrypted_input, secret_key)
                             .expect("Failed to decrypt input");
 
-                    // TODO: fix hardcoding.
                     private_input.push(RoleAssignmentPrivateInput::<MFr> {
                         id: decrypted_input.id,
-                        shuffle_matrices: vec![nalgebra::DMatrix::<MFr>::zeros(8, 8); 2],
-                        player_randomness: decrypted_input
-                            .player_randomness
-                            .iter()
-                            .map(|&x| MFr::from_add_shared(x))
-                            .collect(),
-                        randomness: decrypted_input
-                            .randomness
-                            .iter()
-                            .map(|randomness| {
-                                <MFr as LocalOrMPC<MFr>>::PedersenRandomness::from_public(
-                                    // 本当はfrom_add_shared
-                                    randomness.clone(),
-                                )
-                            })
-                            .collect(),
+                        shuffle_matrices: decrypted_input
+                            .shuffle_matrices
+                            .map(MFr::from_add_shared),
+                        player_randomness: MFr::from_add_shared(decrypted_input.player_randomness),
+                        randomness: <MFr as LocalOrMPC<MFr>>::PedersenRandomness::from_public(
+                            // TODO: 本当はfrom_add_shared
+                            decrypted_input.randomness,
+                        ),
                     });
                 }
 
-                // todo!()
+                // TODO: fix hardcoding.
+                let grouping_parameter = zk_mpc::werewolf::types::GroupingParameter::new(
+                    vec![
+                        (zk_mpc::werewolf::types::Role::Villager, (2, false)),
+                        (zk_mpc::werewolf::types::Role::FortuneTeller, (1, false)),
+                        (zk_mpc::werewolf::types::Role::Werewolf, (1, false)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                );
+
                 BuiltinCircuit::RoleAssignment(RoleAssignmentCircuit {
                     private_input,
                     public_input: RoleAssignmentPublicInput::<MFr> {
                         num_players: circuit[0].public_input.num_players,
                         max_group_size: circuit[0].public_input.max_group_size,
-                        tau_matrix: nalgebra::DMatrix::<MFr>::zeros(1, 1), // TODO: fix.
+                        tau_matrix: grouping_parameter.generate_tau_matrix(),
                         role_commitment: circuit[0]
                             .public_input
                             .role_commitment

@@ -92,9 +92,9 @@ export interface AnonymousVotingPublicInput {
 
 export interface KeyPublicizePrivateInput {
   id: number;
-  pub_key_or_dummy_x: (number[] | null)[];
-  pub_key_or_dummy_y: (number[] | null)[];
-  is_fortune_teller: (number[] | null)[];
+  pub_key_or_dummy_x: number[] | null;
+  pub_key_or_dummy_y: number[] | null;
+  is_fortune_teller: number[] | null;
 }
 export interface KeyPublicizePublicInput {
   pedersenParam: PedersenParam;
@@ -105,7 +105,7 @@ export interface RoleAssignmentPrivateInput {
   id: number;
   shuffleMatrices: any;
   randomness: any;
-  playerRandomness: (number[] | null)[];
+  playerRandomness: number[] | null;
 }
 export interface RoleAssignmentPublicInput {
   // parameter

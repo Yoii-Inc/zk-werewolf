@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct KeyPublicizePrivateInput {
     pub id: usize,
-    pub pub_key_or_dummy_x: Vec<Fr>,
-    pub pub_key_or_dummy_y: Vec<Fr>,
-    pub is_fortune_teller: Vec<Fr>,
+    pub pub_key_or_dummy_x: Fr,
+    pub pub_key_or_dummy_y: Fr,
+    pub is_fortune_teller: Fr,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

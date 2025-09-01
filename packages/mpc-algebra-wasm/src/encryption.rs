@@ -185,18 +185,16 @@ impl SplitAndEncrypt for KeyPublicizeEncryption {
         let scheme = &input.scheme;
         let private_input = &input.private_input;
 
-        let pub_key_or_dummy_x_share =
-            split_vec_fr(private_input.pub_key_or_dummy_x.clone(), scheme);
-        let pub_key_or_dummy_y_share =
-            split_vec_fr(private_input.pub_key_or_dummy_y.clone(), scheme);
-        let is_fortune_teller_share = split_vec_fr(private_input.is_fortune_teller.clone(), scheme);
+        let pub_key_or_dummy_x_share = split_fr(private_input.pub_key_or_dummy_x, scheme);
+        let pub_key_or_dummy_y_share = split_fr(private_input.pub_key_or_dummy_y, scheme);
+        let is_fortune_teller_share = split_fr(private_input.is_fortune_teller, scheme);
 
         (0..scheme.total_shares)
             .map(|i| KeyPublicizePrivateInput {
                 id: private_input.id,
-                pub_key_or_dummy_x: pub_key_or_dummy_x_share[i].clone(),
-                pub_key_or_dummy_y: pub_key_or_dummy_y_share[i].clone(),
-                is_fortune_teller: is_fortune_teller_share[i].clone(),
+                pub_key_or_dummy_x: pub_key_or_dummy_x_share[i],
+                pub_key_or_dummy_y: pub_key_or_dummy_y_share[i],
+                is_fortune_teller: is_fortune_teller_share[i],
             })
             .collect::<Vec<_>>()
     }
@@ -231,7 +229,7 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
         let private_input = &input.private_input;
 
         // let randomness_share = split_vec_fr(private_input.randomness.clone(), scheme);
-        let player_randomness_share = split_vec_fr(private_input.player_randomness.clone(), scheme);
+        let player_randomness_share = split_fr(private_input.player_randomness, scheme);
         // let player_randomness_share = split_fr(private_input.player_randomness, scheme);
 
         (0..scheme.total_shares)
@@ -239,7 +237,7 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
                 id: private_input.id,
                 shuffle_matrices: private_input.shuffle_matrices.clone(),
                 // is_target_id: is_target_share.iter().map(|row| row[i]).collect(),
-                player_randomness: player_randomness_share.iter().map(|row| row[i]).collect(),
+                player_randomness: player_randomness_share[i],
                 randomness: private_input.randomness.clone(),
             })
             .collect::<Vec<_>>()
