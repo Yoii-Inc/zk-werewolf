@@ -33,9 +33,9 @@ export const useBackgroundNightAction = () => {
       // ダミーのプライベート入力を作成
       const privateInput = {
         id: players.findIndex(player => player.id === myId),
-        isTargetId: players.map(() => [[0, 0, 0, 0], null]),
+        isTarget: players.map(() => [[0, 0, 0, 0], null]),
         isWerewolf: [[0, 0, 0, 0], null],
-        playerRandomness: parsedRandomness,
+        randomness: parsedRandomness,
       };
 
       const publicInput: DivinationPublicInput = {

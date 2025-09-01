@@ -34,8 +34,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const {
     isStarting,
     startGame,
-    handleNightAction,
-    handleVote,
+    // handleNightAction,
+    // handleVote,
     handleChangeRole,
     nextPhase,
     resetGame,
@@ -514,10 +514,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           role={gameInfo.players.find(player => player.name === user?.username)?.role ?? "Villager"}
           onSubmit={(targetPlayerId: string) => {
             const userRole = gameInfo.players.find(player => player.name === user?.username)?.role;
-            handleNightAction(targetPlayerId, userRole);
+            // handleNightAction(targetPlayerId, userRole);
             setShowNightAction(false);
           }}
           onClose={() => setShowNightAction(false)}
+          roomId={gameInfo.room_id}
+          myId={privateGameInfo?.playerId ?? ""}
         />
       )}
       {showVoteModal && gameInfo?.phase === "Voting" && (
@@ -526,7 +528,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           roomId={gameInfo.room_id}
           players={gameInfo.players}
           onSubmit={(targetId: string) => {
-            handleVote(targetId);
+            // handleVote(targetId);
             setShowVoteModal(false);
           }}
           onClose={() => setShowVoteModal(false)}

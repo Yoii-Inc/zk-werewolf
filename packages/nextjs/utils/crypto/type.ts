@@ -122,9 +122,10 @@ export interface RoleAssignmentPublicInput {
 // TODO: modify.
 export interface DivinationPrivateInput {
   id: number;
-  //   isTargetId: string[];
-  isTargetId: (number[] | null)[][];
-  playerRandomness: (number[] | null)[];
+  isWerewolf: (number[] | null)[];
+  isTarget: (number[] | null)[][];
+  //   randomness: (number[] | null)[];
+  randomness: any;
 }
 export interface DivinationPublicInput {
   pedersenParam: PedersenParam;
