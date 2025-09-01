@@ -3882,7 +3882,7 @@ dependencies = [
  "mpc-algebra-wasm",
  "mpc-circuits",
  "mpc-net",
- "rand 0.7.3",
+ "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_json",
