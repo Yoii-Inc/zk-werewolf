@@ -59,6 +59,6 @@ tower-http = {version="0.6.1", features=["cors", "trace"]}
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["json"] }
-serial_test = "2.0"
+serial_test = "3.2"
 tokio-test = "0.4"
 wiremock = "0.5"
