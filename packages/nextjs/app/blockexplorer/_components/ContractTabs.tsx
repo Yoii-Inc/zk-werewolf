@@ -16,7 +16,7 @@ type AddressCodeTabProps = {
 };
 
 type PageProps = {
-  address: string;
+  address: `0x${string}`;
   contractData: AddressCodeTabProps | null;
 };
 

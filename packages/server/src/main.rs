@@ -131,7 +131,7 @@ async fn main() {
         );
 
     // サーバーの起動
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     let listner = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
     println!("サーバーを起動しました: http://{}", addr);

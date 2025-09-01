@@ -80,7 +80,7 @@ const Home = () => {
   useEffect(() => {
     const fetchVillages = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/rooms`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/room/rooms`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -97,7 +97,7 @@ const Home = () => {
 
   const createRoom = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/create`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/room/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -134,7 +134,7 @@ const Home = () => {
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/room/${roomId}/join/${user.id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/room/${roomId}/join/${user.id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
