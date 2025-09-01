@@ -33,7 +33,7 @@ services:
       - .:/usr/src/workspace
       - mpc_target_0:/usr/src/workspace/target
     working_dir: /usr/src/workspace/packages/zk-mpc-node
-    command: sh -c "cargo run -- start --id 0 --input ./address/3"
+    command: ["start", "--id", "0", "--input", "./address/3"]
 
   zk-mpc-node-1:
     build:
@@ -48,7 +48,7 @@ services:
       - .:/usr/src/workspace
       - mpc_target_1:/usr/src/workspace/target
     working_dir: /usr/src/workspace/packages/zk-mpc-node
-    command: sh -c "cargo run -- start --id 1 --input ./address/3"
+    command: ["start", "--id", "1", "--input", "./address/3"]
 
   zk-mpc-node-2:
     build:
@@ -63,7 +63,7 @@ services:
       - .:/usr/src/workspace
       - mpc_target_2:/usr/src/workspace/target
     working_dir: /usr/src/workspace/packages/zk-mpc-node
-    command: sh -c "cargo run -- start --id 2 --input ./address/3"
+    command: ["start", "--id", "2", "--input", "./address/3"]
 
   blockchain:
     build:
