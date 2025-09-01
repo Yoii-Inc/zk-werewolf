@@ -1,0 +1,20 @@
+name: 'Setup Rust'
+description: 'Setup Rust toolchain with caching'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        rustflags: "-A warnings"
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', 'packages/server/src/**', 'packages/zk-mpc-node/src/**') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-

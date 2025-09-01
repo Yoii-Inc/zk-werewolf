@@ -80,17 +80,31 @@ async fn main() {
     init_logger(); // ロガーの初期化
 
     // 環境変数の存在確認
-    for var in &[
+    let required_vars = [
         "SUPABASE_URL",
         "SUPABASE_KEY",
         "JWT_SECRET",
         "ZK_MPC_NODE_1",
         "ZK_MPC_NODE_2",
         "ZK_MPC_NODE_3",
-    ] {
+    ];
+    let mut missing_vars = Vec::new();
+
+    for var in &required_vars {
         if std::env::var(var).is_err() {
             eprintln!("Error: 環境変数 {} が設定されていません", var);
+            missing_vars.push(*var);
         }
+    }
+
+    // 必須環境変数が不足している場合はプロセスを終了
+    if !missing_vars.is_empty() {
+        eprintln!(
+            "Fatal: 必須環境変数が設定されていません: {}",
+            missing_vars.join(", ")
+        );
+        eprintln!("サーバーを起動できません。.envファイルを確認してください。");
+        std::process::exit(1);
     }
 
     // CORSレイヤーの設定

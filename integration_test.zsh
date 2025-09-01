@@ -57,9 +57,9 @@ run_server_node_tests() {
     # 3つのノードを起動（それぞれ異なるポートで）
     ./target/release/zk-mpc-node start --id 0 --input ./address/3 &
     NODE0_PID=$!
-    ./target/release/zk-mpc-node start --id 1 --input ./address/3 >/dev/null &
+    ./target/release/zk-mpc-node start --id 1 --input ./address/3 &
     NODE1_PID=$!
-    ./target/release/zk-mpc-node start --id 2 --input ./address/3 >/dev/null &
+    ./target/release/zk-mpc-node start --id 2 --input ./address/3 &
     NODE2_PID=$!
 
     # ノードの起動を待機
@@ -68,11 +68,17 @@ run_server_node_tests() {
     done
 
     # zk-mpc-node インテグレーションテストの実行
-    cargo test --test integration_test -- --nocapture --test-threads=1
+    cargo test --test integration_test -- --nocapture --test-threads=1 || {
+        echo "zk-mpc-node integration tests failed"
+        exit 1
+    }
 
     # server インテグレーションテストの実行
     cd ../server
-    cargo test --test "*" -- --nocapture --test-threads=1
+    cargo test --test "*" -- --nocapture --test-threads=1 || {
+        echo "server integration tests failed"
+        exit 1
+    }
 }
 
 main() {
