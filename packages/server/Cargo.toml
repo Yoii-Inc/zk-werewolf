@@ -47,5 +47,5 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 wiremock = "0.5"
 
-base64 = "0.13"
+base64 = "0.22"
 crypto_box = { version = "0.9.1", features = ["std"] }

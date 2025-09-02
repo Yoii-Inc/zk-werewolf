@@ -2810,7 +2810,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "axum",
- "base64 0.13.1",
+ "base64 0.22.1",
  "bcrypt",
  "chrono",
  "crypto_box",
