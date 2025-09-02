@@ -139,7 +139,7 @@ dependencies = [
 [[package]]
 name = "ark-bls12-377"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -150,7 +150,7 @@ dependencies = [
 [[package]]
 name = "ark-crypto-primitives"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -171,7 +171,7 @@ dependencies = [
 [[package]]
 name = "ark-ec"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -186,7 +186,7 @@ dependencies = [
 [[package]]
 name = "ark-ed-on-bls12-377"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -199,7 +199,7 @@ dependencies = [
 [[package]]
 name = "ark-ff"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ff-asm",
  "ark-ff-macros",
@@ -218,7 +218,7 @@ dependencies = [
 [[package]]
 name = "ark-ff-asm"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -227,7 +227,7 @@ dependencies = [
 [[package]]
 name = "ark-ff-macros"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -238,7 +238,7 @@ dependencies = [
 [[package]]
 name = "ark-groth16"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
@@ -253,7 +253,7 @@ dependencies = [
 [[package]]
 name = "ark-marlin"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -274,7 +274,7 @@ dependencies = [
 [[package]]
 name = "ark-mnt4-753"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -284,7 +284,7 @@ dependencies = [
 [[package]]
 name = "ark-nonnative-field"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -301,7 +301,7 @@ dependencies = [
 [[package]]
 name = "ark-poly"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -314,7 +314,7 @@ dependencies = [
 [[package]]
 name = "ark-poly-commit"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -333,7 +333,7 @@ dependencies = [
 [[package]]
 name = "ark-r1cs-std"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -348,7 +348,7 @@ dependencies = [
 [[package]]
 name = "ark-relations"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ff",
  "ark-std",
@@ -359,7 +359,7 @@ dependencies = [
 [[package]]
 name = "ark-serialize"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-serialize-derive",
  "ark-std",
@@ -369,7 +369,7 @@ dependencies = [
 [[package]]
 name = "ark-serialize-derive"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -379,7 +379,7 @@ dependencies = [
 [[package]]
 name = "ark-snark"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-ff",
  "ark-relations",
@@ -389,7 +389,7 @@ dependencies = [
 [[package]]
 name = "ark-std"
 version = "0.3.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "colored",
  "mpc-trait",
@@ -729,7 +729,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -1071,7 +1071,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1717,7 +1717,7 @@ checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
 dependencies = [
  "hermit-abi 0.5.2",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1886,7 +1886,7 @@ dependencies = [
 [[package]]
 name = "mpc-algebra"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-bls12-377",
  "ark-crypto-primitives",
@@ -1960,7 +1960,7 @@ dependencies = [
 [[package]]
 name = "mpc-net"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-std",
  "async-trait",
@@ -1980,7 +1980,7 @@ dependencies = [
 [[package]]
 name = "mpc-trait"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 
 [[package]]
 name = "nalgebra"
@@ -2618,7 +2618,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3078,7 +3078,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3681,7 +3681,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0978bf7171b3d90bac376700cb56d606feb40f251a475a5d6634613564460b22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -4139,7 +4139,7 @@ dependencies = [
 [[package]]
 name = "zk-mpc"
 version = "0.1.0"
-source = "git+https://github.com/Yoii-Inc/zk-mpc.git#351c9bfd7ceec837d3923903d765855dca585b34"
+source = "git+https://github.com/Yoii-Inc/zk-mpc.git#cbd0d21fec60e07560c45a0effe840a78f80f3eb"
 dependencies = [
  "ark-bls12-377",
  "ark-crypto-primitives",
