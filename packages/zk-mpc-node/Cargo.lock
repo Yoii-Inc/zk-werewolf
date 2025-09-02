@@ -3888,7 +3888,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "structopt",
- "thiserror 1.0.69",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-test",
  "tower-http",
