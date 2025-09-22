@@ -12,7 +12,7 @@ rand = "0.8"
 getrandom = { version = "0.2", features = ["js"] }
 base64 = "0.13"
 crypto_box = { version = "0.9.1", features = ["std"] }
-nalgebra = { version = "0.33.0", features = ["serde-serialize"] }
+nalgebra = { version = "0.34.1", features = ["serde-serialize"] }
 console_error_panic_hook = "0.1"
 anyhow = "1.0"
 
