@@ -24,30 +24,9 @@ use mpc_algebra::MpcEqGadget;
 use mpc_algebra::MpcFpVar;
 use mpc_algebra::MpcToBitsGadget;
 use mpc_algebra::Reveal;
+use mpc_algebra_wasm::{calc_shuffle_matrix, Role};
 use zk_mpc::circuits::serialize::werewolf;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
-
-use zk_mpc::werewolf::types::{GroupingParameter, Role};
-use zk_mpc::werewolf::utils::*;
-
-impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> MpcCircuit<F>
-    for AnonymousVotingCircuit<F>
-{
-    type Private = AnonymousVotingPrivateInput<F>;
-    type Public = AnonymousVotingPublicInput<F>;
-
-    fn combine_inputs(individuals: Vec<Self::Private>, public: Self::Public) -> Self {
-        AnonymousVotingCircuit {
-            private_input: individuals,
-            public_input: public,
-        }
-    }
-
-    fn validate(&self) -> Result<(), anyhow::Error> {
-        // Implement validation logic here
-        Ok(())
-    }
-}
 
 impl AnonymousVotingCircuit<Fr> {
     pub fn calculate_output(&self) -> Fr {
@@ -464,19 +443,8 @@ impl RoleAssignmentCircuit<mm::MpcField<Fr>> {
     pub fn calculate_output(&self) -> Vec<mm::MpcField<Fr>> {
         let num_players = self.private_input.len();
 
-        let grouping_parameter = GroupingParameter::new(
-            vec![
-                (Role::Villager, (2, false)),
-                (Role::FortuneTeller, (1, false)),
-                (Role::Werewolf, (1, false)),
-            ]
-            .into_iter()
-            .collect(),
-        );
+        let grouping_parameter = &self.public_input.grouping_parameter;
 
-        // let grouping_parameter = self.public_input.grouping_parameter;
-
-        // let grouping_parameter = sgrouping_parameter.clone();
         let shuffle_matrix = self
             .private_input
             .iter()
@@ -492,7 +460,7 @@ impl RoleAssignmentCircuit<mm::MpcField<Fr>> {
 
         for id in 0..num_players {
             let (role, role_val, player_ids) =
-                calc_shuffle_matrix(&grouping_parameter, &revealed_shuffle_matrix, id).unwrap();
+                calc_shuffle_matrix(grouping_parameter, &revealed_shuffle_matrix, id).unwrap();
 
             match role {
                 Role::Villager => {

@@ -11,7 +11,8 @@ use zk_mpc::{
 
 use mpc_algebra_wasm::{
     AnonymousVotingEncryption, CircuitEncryptedInputIdentifier, DivinationEncryption,
-    NodeEncryptedShare, RoleAssignmentEncryption, SplitAndEncrypt, WinningJudgementEncryption,
+    KeyPublicizeEncryption, NodeEncryptedShare, RoleAssignmentEncryption, SplitAndEncrypt,
+    WinningJudgementEncryption,
 };
 
 use crate::*;
@@ -24,9 +25,6 @@ impl CircuitFactory {
     ) -> BuiltinCircuit<Fr> {
         match circuit_type {
             CircuitEncryptedInputIdentifier::Divination(c) => {
-                // BuiltinCircuit::Divination(DivinationCircuit {
-                //     mpc_input: c.clone(),
-                // })
                 let player_num = c[0].public_input.player_num;
                 let alive_player_num = c.len();
                 let rng = &mut test_rng();
@@ -46,7 +44,7 @@ impl CircuitFactory {
                     public_input: DivinationPublicInput::<Fr> {
                         pedersen_param: c[0].public_input.pedersen_param.clone(),
                         elgamal_param: c[0].public_input.elgamal_param.clone(),
-                        pub_key: c[0].public_input.pub_key.clone(),
+                        pub_key: c[0].public_input.pub_key,
                         player_num,
                     },
                 })
@@ -69,35 +67,6 @@ impl CircuitFactory {
                         player_num,
                     },
                 })
-            }
-            CircuitEncryptedInputIdentifier::Divination(ref c) => {
-                // let rng = &mut test_rng();
-                // let local_input = WerewolfMpcInput::<Fr>::rand(rng);
-                // BuiltinCircuit::Divination(DivinationCircuit {
-                //     mpc_input: local_input,
-                // })
-                todo!()
-            }
-            CircuitEncryptedInputIdentifier::AnonymousVoting(ref c) => {
-                // let pedersen_param = c.pedersen_param.to_local();
-                // BuiltinCircuit::AnonymousVoting(AnonymousVotingCircuit {
-                //     is_target_id: vec![
-                //         vec![Fr::default(); c.is_target_id[0].len()];
-                //         c.is_target_id.len()
-                //     ],
-                //     pedersen_param: pedersen_param.clone(),
-                //     player_randomness: vec![Fr::default(); c.player_randomness.len()],
-                //     player_commitment: vec![
-                //         <Fr as LocalOrMPC<Fr>>::PedersenComScheme::commit(
-                //             &pedersen_param,
-                //             &Fr::default().into_repr().to_bytes_le(),
-                //             &<Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
-                //         )
-                //         .unwrap();
-                //         c.player_commitment.len()
-                //     ],
-                // })
-                todo!()
             }
             CircuitEncryptedInputIdentifier::WinningJudge(ref c) => {
                 let alive_player_num = c.len();
@@ -126,15 +95,12 @@ impl CircuitFactory {
                     private_input: (0..player_num)
                         .map(|_| RoleAssignmentPrivateInput::<Fr> {
                             id: 0,
-                            shuffle_matrices: nalgebra::DMatrix::<Fr>::zeros(8, 8),
+                            shuffle_matrices: nalgebra::DMatrix::<Fr>::zeros(8, 8), // TODO: fix hardcoding
                             player_randomness: Fr::default(),
                             randomness:
                                 ark_crypto_primitives::commitment::pedersen::Randomness::rand(
                                     &mut rng,
                                 ),
-                            // is_werewolf: Fr::default(),
-                            // is_target: vec![Fr::default(); player_num],
-                            // randomness: elgamal_randomness.clone(),
                         })
                         .collect::<Vec<_>>(),
                     public_input: RoleAssignmentPublicInput::<Fr> {
@@ -144,12 +110,21 @@ impl CircuitFactory {
                         role_commitment: public_input.role_commitment,
                         player_commitment: public_input.player_commitment,
                         pedersen_param: public_input.pedersen_param,
+                        grouping_parameter: public_input.grouping_parameter.clone(),
                     },
                 })
             }
             CircuitEncryptedInputIdentifier::KeyPublicize(ref c) => {
-                // BuiltinCircuit::KeyPublicize(KeyPublicizeCircuit { mpc_input: todo!() })
-                todo!()
+                let alive_player_num = c.len();
+
+                BuiltinCircuit::KeyPublicize(KeyPublicizeCircuit {
+                    private_input: (0..alive_player_num)
+                        .map(|_| KeyPublicizePrivateInput::<Fr>::default())
+                        .collect::<Vec<_>>(),
+                    public_input: KeyPublicizePublicInput::<Fr> {
+                        pedersen_param: c[0].public_input.pedersen_param.clone(),
+                    },
+                })
             }
 
             _ => panic!("Unsupported circuit type for create_local_circuit"),
@@ -316,19 +291,18 @@ impl CircuitFactory {
                             .shuffle_matrices
                             .map(MFr::from_add_shared),
                         player_randomness: MFr::from_add_shared(decrypted_input.player_randomness),
-                        randomness: <MFr as LocalOrMPC<MFr>>::PedersenRandomness::from_public(
-                            // TODO: 本当はfrom_add_shared
+                        randomness: <MFr as LocalOrMPC<MFr>>::PedersenRandomness::from_add_shared(
                             decrypted_input.randomness,
                         ),
                     });
                 }
 
                 // TODO: fix hardcoding.
-                let grouping_parameter = zk_mpc::werewolf::types::GroupingParameter::new(
+                let grouping_parameter = mpc_algebra_wasm::GroupingParameter::new(
                     vec![
-                        (zk_mpc::werewolf::types::Role::Villager, (2, false)),
-                        (zk_mpc::werewolf::types::Role::FortuneTeller, (1, false)),
-                        (zk_mpc::werewolf::types::Role::Werewolf, (1, false)),
+                        (mpc_algebra_wasm::Role::Villager, (2, false)),
+                        (mpc_algebra_wasm::Role::FortuneTeller, (1, false)),
+                        (mpc_algebra_wasm::Role::Werewolf, (1, false)),
                     ]
                     .into_iter()
                     .collect(),
@@ -356,6 +330,47 @@ impl CircuitFactory {
                         pedersen_param: <MFr as LocalOrMPC<MFr>>::PedersenParam::from_local(
                             &circuit[0].public_input.pedersen_param,
                         ),
+                        grouping_parameter,
+                    },
+                })
+            }
+            CircuitEncryptedInputIdentifier::KeyPublicize(circuit) => {
+                // private_input部分は復号化してそのまま入れるイメージ。
+
+                // let my_node_id = "0";
+
+                let mut private_input = Vec::new();
+
+                for i in 0..circuit.len() {
+                    let private_encrypted_input = circuit[i]
+                        .shares
+                        .iter()
+                        .find(|share| share.node_id == my_node_id)
+                        .expect("No share found for this node");
+
+                    // mpc-algebra-wasmにおけるcreate_encrypted_sharesの反転が必要。
+                    let decrypted_input =
+                        KeyPublicizeEncryption::decrypt(private_encrypted_input, secret_key)
+                            .expect("Failed to decrypt input");
+
+                    private_input.push(KeyPublicizePrivateInput::<MFr> {
+                        id: decrypted_input.id,
+                        pub_key_or_dummy_x: MFr::from_add_shared(
+                            decrypted_input.pub_key_or_dummy_x,
+                        ),
+                        pub_key_or_dummy_y: MFr::from_add_shared(
+                            decrypted_input.pub_key_or_dummy_y,
+                        ),
+                        is_fortune_teller: MFr::from_add_shared(decrypted_input.is_fortune_teller),
+                    });
+                }
+
+                BuiltinCircuit::KeyPublicize(KeyPublicizeCircuit {
+                    private_input,
+                    public_input: KeyPublicizePublicInput::<MFr> {
+                        pedersen_param: <MFr as LocalOrMPC<MFr>>::PedersenParam::from_local(
+                            &circuit[0].public_input.pedersen_param,
+                        ),
                     },
                 })
             }
@@ -363,6 +378,7 @@ impl CircuitFactory {
         }
     }
 
+    // TODO:
     pub fn create_verify_inputs(circuit_type: &BuiltinCircuit<MFr>) -> Vec<Fr> {
         match circuit_type {
             // CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit)) => {
@@ -406,6 +422,12 @@ impl CircuitFactory {
                 inputs.push(num_alive);
                 // inputs.push(game_state.sync_reveal());
                 inputs
+            }
+            BuiltinCircuit::RoleAssignment(circuit) => {
+                todo!()
+            }
+            BuiltinCircuit::KeyPublicize(circuit) => {
+                todo!()
             }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
         }
