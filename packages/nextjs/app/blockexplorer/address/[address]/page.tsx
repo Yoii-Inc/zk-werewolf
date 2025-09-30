@@ -36,7 +36,7 @@ async function fetchByteCodeAndAssembly(buildInfoDirectory: string, contractPath
   return { bytecode, assembly };
 }
 
-const getContractData = async (address: string) => {
+const getContractData = async (address: `0x${string}`) => {
   const contracts = deployedContracts as GenericContractsDeclaration | null;
   const chainId = foundry.id;
   let contractPath = "";
@@ -83,7 +83,7 @@ export function generateStaticParams() {
 }
 
 const AddressPage = async ({ params }: PageProps) => {
-  const address = params?.address as string;
+  const address = params?.address as `0x${string}`;
 
   if (isZeroAddress(address)) return null;
 

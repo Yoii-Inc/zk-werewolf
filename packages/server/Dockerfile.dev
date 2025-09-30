@@ -1,0 +1,31 @@
+FROM rust:1.89 as builder
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/workspace
+
+# Copy all source code first
+COPY packages/ ./packages/
+
+# Build the application
+WORKDIR /usr/src/workspace/packages/server
+RUN cargo build
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /usr/src/workspace/packages/server/target/debug/server /app/server
+RUN chmod +x /app/server
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/server"]

@@ -80,9 +80,9 @@ pub async fn get_rooms(state: &AppState) -> HashMap<String, Room> {
     state.rooms.lock().await.clone()
 }
 
-pub async fn get_room_info(state: &AppState, room_id: &str) -> Room {
+pub async fn get_room_info(state: &AppState, room_id: &str) -> Option<Room> {
     let rooms = state.rooms.lock().await;
-    rooms.get(room_id).unwrap().clone()
+    rooms.get(room_id).cloned()
 }
 
 pub async fn delete_room(state: AppState, room_id: &str) -> bool {

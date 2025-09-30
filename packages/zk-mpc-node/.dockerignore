@@ -1,0 +1,30 @@
+# Build artifacts
+target/
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+
+# Data files
+data/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Documentation
+*.md
+READEME.md
+
+# Test files (if not needed in container)
+tests/

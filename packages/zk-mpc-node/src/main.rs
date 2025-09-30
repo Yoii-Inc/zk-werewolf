@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             // Create a listener for client connections
-            let addr = SocketAddr::from(([127, 0, 0, 1], (9000 + id) as u16));
+            let addr = SocketAddr::from(([0, 0, 0, 0], (9000 + id) as u16));
 
             println!("Listening on port {}", 9000 + id);
 
