@@ -1,4 +1,10 @@
-use crate::services::zk_proof::check_status_with_retry;
+use crate::{
+    models::{
+        chat::{ChatMessage, ChatMessageType},
+        role::Role,
+    },
+    services::zk_proof::check_status_with_retry,
+};
 
 use super::player::Player;
 use ark_bls12_377::Fr;
@@ -29,6 +35,13 @@ pub struct Game {
     pub chat_log: super::chat::ChatLog,
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
+    pub divination_result: Option<DivinationResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DivinationResult {
+    pub ciphertext:
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -238,6 +251,7 @@ impl Game {
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
             batch_request: BatchRequest::new(),
+            divination_result: None,
         }
     }
 
@@ -448,6 +462,30 @@ impl Game {
                 match identifier {
                     CircuitEncryptedInputIdentifier::Divination(items) => {
                         // itemsを処理する
+                        let divination_result: DivinationResult = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(result) => DivinationResult { ciphertext: result },
+                                Err(e) => {
+                                    println!("Failed to deserialize divination result: {}", e);
+                                    self.chat_log.add_system_message(
+                                        "占い結果の処理に失敗しました。".to_string(),
+                                    );
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                self.chat_log.add_system_message(
+                                    "占い結果が見つかりませんでした。".to_string(),
+                                );
+                                return;
+                            }
+                        };
+
+                        self.divination_result = Some(divination_result);
+                        println!("占い結果が正常に処理されました。");
+                        self.chat_log
+                            .add_system_message("占い結果が生成されました。".to_string());
                     }
                     CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
                         println!("AnonymousVoting process is starting...");
@@ -515,12 +553,111 @@ impl Game {
                     }
                     CircuitEncryptedInputIdentifier::WinningJudge(items) => {
                         // itemsを処理する
+
+                        let game_state: Fr = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(state) => state,
+                                Err(e) => {
+                                    println!("Failed to deserialize game_state: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                return;
+                            }
+                        };
+
+                        // 状態をゲームの結果に反映
+
+                        let result = if game_state == Fr::from(1u32) {
+                            GameResult::WerewolfWin
+                        } else if game_state == Fr::from(2u32) {
+                            GameResult::VillagerWin
+                        } else {
+                            self.chat_log
+                                .add_system_message("ゲームはまだ続くようです。".to_string());
+                            GameResult::InProgress
+                        };
+
+                        if result != GameResult::InProgress {
+                            let winner_message = match result {
+                                GameResult::VillagerWin => "村人陣営の勝利です！",
+                                GameResult::WerewolfWin => "人狼陣営の勝利です！",
+                                GameResult::InProgress => unreachable!(),
+                            };
+
+                            self.chat_log.add_message(ChatMessage::new(
+                                "system".to_string(),
+                                "システム".to_string(),
+                                format!("{}", winner_message),
+                                ChatMessageType::System,
+                            ));
+
+                            self.phase = GamePhase::Finished;
+                        }
+
+                        self.result = result.clone();
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
                         // itemsを処理する
+                        let role_result: Vec<Fr> = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(state) => state,
+                                Err(e) => {
+                                    println!("Failed to deserialize role_result: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                return;
+                            }
+                        };
+
+                        // role_resultをゲームの結果に反映
+                        for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
+                            player.role = if *role == Fr::from(0u32) {
+                                Some(Role::Villager)
+                            } else if *role == Fr::from(1u32) {
+                                Some(Role::Seer)
+                            } else if *role == Fr::from(2u32) {
+                                Some(Role::Werewolf)
+                            } else {
+                                None
+                            };
+                        }
+
+                        self.chat_log.add_system_message(format!(
+                            "役職が割り当てられました: {}。ゲームを開始します。",
+                            self.players
+                                .iter()
+                                .map(|p| format!("{}: {}", p.name, p.role.as_ref().unwrap()))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
                         // itemsを処理する
+                        let public_key: <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey =
+                            match output.value {
+                                Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                    Ok(key) => key,
+                                    Err(e) => {
+                                        println!("Failed to deserialize public key: {}", e);
+                                        return;
+                                    }
+                                },
+                                None => {
+                                    println!("No output value found");
+                                    return;
+                                }
+                            };
+
+                        self.crypto_parameters = Some(CryptoParameters {
+                            fortune_teller_public_key: public_key,
+                            ..self.crypto_parameters.clone().unwrap()
+                        });
                     }
                 }
 

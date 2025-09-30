@@ -7,9 +7,11 @@ use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 pub mod encryption;
 pub mod mpc_circuits_wasm;
 pub mod types;
+pub mod werewolf;
 pub use encryption::*;
 pub use mpc_circuits_wasm::*;
 pub use types::*;
+pub use werewolf::*;
 
 pub const PERDERSON_WINDOW_SIZE: usize = 256;
 pub const PERDERSON_WINDOW_NUM: usize = 1;
