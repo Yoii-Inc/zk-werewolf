@@ -57,6 +57,11 @@ export const useGamePhase = (
             tauMatrix: null,
             roleCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
             playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
+            groupingParameter: {
+              Villager: [2, false],
+              FortuneTeller: [1, false],
+              Werewolf: [1, false],
+            },
           };
 
           const rinputres = await fetch("/test_role_assignment_input.json");
