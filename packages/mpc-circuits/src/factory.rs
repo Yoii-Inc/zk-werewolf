@@ -378,7 +378,7 @@ impl CircuitFactory {
         }
     }
 
-    // TODO:
+    // TODO: implement for all circuits
     pub fn create_verify_inputs(circuit_type: &BuiltinCircuit<MFr>) -> Vec<Fr> {
         match circuit_type {
             // CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit)) => {

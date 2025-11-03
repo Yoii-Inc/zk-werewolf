@@ -91,7 +91,7 @@ impl ConstraintSynthesizer<Fr> for AnonymousVotingCircuit<Fr> {
         let player_num = self.private_input[0].is_target_id.len();
         let alive_player_num = self.private_input.len();
 
-        // check player commitment
+        // TODO: check player commitment
         // for i in 0..player_num {
         //     let pedersen_circuit = PedersenComCircuit {
         //         param: Some(self.pedersen_param.clone()),
@@ -172,7 +172,7 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for AnonymousVotingCircuit<mm::MpcF
         let player_num = self.private_input[0].is_target_id.len();
         let alive_player_num = self.private_input.len();
 
-        // check player commitment
+        // TODO: check player commitment
         // for i in 0..player_num {
         //     let pedersen_circuit = PedersenComCircuit {
         //         param: Some(self.pedersen_param.clone()),
@@ -269,7 +269,7 @@ impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer
         self,
         cs: ark_relations::r1cs::ConstraintSystemRef<F>,
     ) -> Result<(), ark_relations::r1cs::SynthesisError> {
-        // Implement constraint generation logic here
+        // TODO: Implement constraint generation logic here
         Ok(())
     }
 }
@@ -281,7 +281,7 @@ impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer
         self,
         cs: ark_relations::r1cs::ConstraintSystemRef<F>,
     ) -> Result<(), ark_relations::r1cs::SynthesisError> {
-        // Implement constraint generation logic here
+        // TODO: Implement constraint generation logic here
         Ok(())
     }
 }
@@ -293,7 +293,7 @@ impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer
         self,
         cs: ark_relations::r1cs::ConstraintSystemRef<F>,
     ) -> Result<(), ark_relations::r1cs::SynthesisError> {
-        // Implement constraint generation logic here
+        // TODO: Implement constraint generation logic here
         Ok(())
     }
 }
@@ -481,7 +481,7 @@ impl RoleAssignmentCircuit<mm::MpcField<Fr>> {
 
 impl ConstraintSynthesizer<Fr> for WinningJudgementCircuit<Fr> {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> ark_relations::r1cs::Result<()> {
-        // check player commitment
+        // TODO: check player commitment
         // let player_num = self.player_randomness.len();
         let alive_player_num = self.private_input.len();
         // for i in 0..alive_player_num {
@@ -526,7 +526,7 @@ impl ConstraintSynthesizer<Fr> for WinningJudgementCircuit<Fr> {
             )?,
         )?;
 
-        // // check commitment
+        // // TODO: check commitment
         // for am_werewolf_with_commit in self.am_werewolf.iter() {
         //     let am_werewolf_com_circuit = PedersenComCircuit {
         //         param: Some(self.pedersen_param.clone()),
@@ -552,7 +552,7 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for WinningJudgementCircuit<mm::Mpc
         self,
         cs: ConstraintSystemRef<mm::MpcField<Fr>>,
     ) -> ark_relations::r1cs::Result<()> {
-        // check player commitment
+        // TODO: check player commitment
         // let player_num = self.player_randomness.len();
         let alive_player_num = self.private_input.len();
         // for i in 0..alive_player_num {
@@ -601,7 +601,7 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for WinningJudgementCircuit<mm::Mpc
             )?,
         )?;
 
-        // // check commitment
+        // // TODO: check commitment
         // for am_werewolf_with_commit in self.am_werewolf.iter() {
         //     let am_werewolf_com_circuit = PedersenComCircuit {
         //         param: Some(self.pedersen_param.clone()),
