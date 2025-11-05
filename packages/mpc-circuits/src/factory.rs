@@ -297,16 +297,7 @@ impl CircuitFactory {
                     });
                 }
 
-                // TODO: fix hardcoding.
-                let grouping_parameter = mpc_algebra_wasm::GroupingParameter::new(
-                    vec![
-                        (mpc_algebra_wasm::Role::Villager, (2, false)),
-                        (mpc_algebra_wasm::Role::FortuneTeller, (1, false)),
-                        (mpc_algebra_wasm::Role::Werewolf, (1, false)),
-                    ]
-                    .into_iter()
-                    .collect(),
-                );
+                let grouping_parameter = circuit[0].public_input.grouping_parameter.clone();
 
                 BuiltinCircuit::RoleAssignment(RoleAssignmentCircuit {
                     private_input,
