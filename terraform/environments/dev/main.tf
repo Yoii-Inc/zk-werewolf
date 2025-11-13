@@ -50,7 +50,7 @@ data "sops_file" "secrets" {
 
 locals {
   # Parse secrets if file exists, otherwise use empty map
-  secrets = local.secrets_file_exists ? jsondecode(data.sops_file.secrets[0].raw) : {
+  secrets = local.secrets_file_exists ? yamldecode(data.sops_file.secrets[0].raw) : {
     backend = {
       supabase_url = ""
       supabase_key = ""
