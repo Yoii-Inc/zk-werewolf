@@ -82,21 +82,31 @@ sops secrets.enc.yaml
 
 ### Using Secrets in Terraform
 
-Secrets can be loaded using the `yamldecode` function:
+Secrets are automatically loaded using the SOPS Terraform provider:
 
 ```hcl
-locals {
-  secrets = yamldecode(file("${path.module}/secrets.enc.yaml"))
-}
+# Secrets are loaded via data.sops_file.secrets
+# and made available in local.secrets
 
-# Use in environment variables
-environment_variables = [
+# Example: Backend service environment variables
+environment_variables = concat([
+  {
+    name  = "PORT"
+    value = "8080"
+  }
+], local.secrets_file_exists ? [
   {
     name  = "SUPABASE_URL"
     value = local.secrets.backend.supabase_url
+  },
+  {
+    name  = "JWT_SECRET"
+    value = local.secrets.backend.jwt_secret
   }
-]
+] : [])
 ```
+
+**Note**: If `secrets.enc.yaml` doesn't exist, the services will deploy without secrets (useful for initial setup).
 
 ### Rotating Secrets
 

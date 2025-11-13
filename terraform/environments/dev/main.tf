@@ -11,6 +11,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    sops = {
+      source  = "carlpett/sops"
+      version = "~> 1.0"
+    }
   }
   required_version = ">= 1.2.0"
 }
@@ -33,6 +37,26 @@ provider "aws" {
 
 locals {
   name = "zk-werewolf-dev"
+
+  # Load secrets from SOPS encrypted file if it exists
+  secrets_file_exists = fileexists("${path.module}/secrets.enc.yaml")
+}
+
+# SOPS data source (only if secrets file exists)
+data "sops_file" "secrets" {
+  count = local.secrets_file_exists ? 1 : 0
+  source_file = "${path.module}/secrets.enc.yaml"
+}
+
+locals {
+  # Parse secrets if file exists, otherwise use empty map
+  secrets = local.secrets_file_exists ? jsondecode(data.sops_file.secrets[0].raw) : {
+    backend = {
+      supabase_url = ""
+      supabase_key = ""
+      jwt_secret   = ""
+    }
+  }
 }
 
 # KMS key for SOPS encryption
@@ -154,7 +178,7 @@ module "backend_service" {
   task_role_arn      = module.ecs_cluster.task_role_arn
   log_group_name     = module.ecs_cluster.cloudwatch_log_group_name
 
-  environment_variables = [
+  environment_variables = concat([
     {
       name  = "PORT"
       value = "8080"
@@ -163,7 +187,20 @@ module "backend_service" {
       name  = "ENVIRONMENT"
       value = "dev"
     }
-  ]
+  ], local.secrets_file_exists ? [
+    {
+      name  = "SUPABASE_URL"
+      value = local.secrets.backend.supabase_url
+    },
+    {
+      name  = "SUPABASE_KEY"
+      value = local.secrets.backend.supabase_key
+    },
+    {
+      name  = "JWT_SECRET"
+      value = local.secrets.backend.jwt_secret
+    }
+  ] : [])
 
   health_check_grace_period = 60
   enable_execute_command    = true
