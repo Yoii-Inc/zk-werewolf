@@ -168,3 +168,59 @@ module "backend_service" {
   health_check_grace_period = 60
   enable_execute_command    = true
 }
+
+# =============================================================================
+# Frontend ECS Service
+# =============================================================================
+
+module "frontend_service" {
+  source = "../../modules/ecs-service"
+
+  service_name       = "${local.name}-frontend"
+  cluster_id         = module.ecs_cluster.cluster_id
+  container_image    = "${module.ecr.frontend_repository_url}:latest"
+  container_port     = 3000
+  cpu                = "256"
+  memory             = "512"
+  desired_count      = 1
+  launch_type        = null
+
+  capacity_provider_strategy = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 50
+      base              = 1
+    },
+    {
+      capacity_provider = "FARGATE_SPOT"
+      weight            = 50
+    }
+  ]
+
+  subnet_ids         = module.vpc.public_subnets
+  security_group_ids = [module.security_groups.ecs_tasks_security_group_id]
+  assign_public_ip   = true
+
+  target_group_arn   = module.alb.frontend_target_group_arn
+  execution_role_arn = module.ecs_cluster.task_execution_role_arn
+  task_role_arn      = module.ecs_cluster.task_role_arn
+  log_group_name     = module.ecs_cluster.cloudwatch_log_group_name
+
+  environment_variables = [
+    {
+      name  = "PORT"
+      value = "3000"
+    },
+    {
+      name  = "NEXT_PUBLIC_API_URL"
+      value = "http://${module.alb.alb_dns_name}/api"
+    },
+    {
+      name  = "NEXT_PUBLIC_WS_URL"
+      value = "ws://${module.alb.alb_dns_name}/ws"
+    }
+  ]
+
+  health_check_grace_period = 60
+  enable_execute_command    = true
+}

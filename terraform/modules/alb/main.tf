@@ -63,14 +63,44 @@ resource "aws_lb" "main" {
   )
 }
 
-# HTTP Listener (redirect to HTTPS if certificate is provided)
+# Target Group for Frontend
+resource "aws_lb_target_group" "frontend" {
+  name        = "${var.name}-frontend"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 3
+  }
+
+  deregistration_delay = 30
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.name}-frontend-tg"
+    }
+  )
+}
+
+# HTTP Listener (redirect to HTTPS if certificate is provided, otherwise forward to frontend)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
-    type = var.certificate_arn != "" ? "redirect" : "fixed-response"
+    type = var.certificate_arn != "" ? "redirect" : "forward"
 
     dynamic "redirect" {
       for_each = var.certificate_arn != "" ? [1] : []
@@ -81,18 +111,11 @@ resource "aws_lb_listener" "http" {
       }
     }
 
-    dynamic "fixed_response" {
-      for_each = var.certificate_arn == "" ? [1] : []
-      content {
-        content_type = "text/plain"
-        message_body = "OK"
-        status_code  = "200"
-      }
-    }
+    target_group_arn = var.certificate_arn == "" ? aws_lb_target_group.frontend.arn : null
   }
 }
 
-# HTTPS Listener (optional, if certificate provided)
+# HTTPS Listener (optional, if certificate provided, forward to frontend by default)
 resource "aws_lb_listener" "https" {
   count = var.certificate_arn != "" ? 1 : 0
 
@@ -103,13 +126,8 @@ resource "aws_lb_listener" "https" {
   certificate_arn   = var.certificate_arn
 
   default_action {
-    type = "fixed-response"
-
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "OK"
-      status_code  = "200"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend.arn
   }
 }
 
@@ -177,6 +195,11 @@ output "alb_dns_name" {
 output "alb_zone_id" {
   description = "The zone ID of the Application Load Balancer"
   value       = aws_lb.main.zone_id
+}
+
+output "frontend_target_group_arn" {
+  description = "The ARN of the frontend target group"
+  value       = aws_lb_target_group.frontend.arn
 }
 
 output "backend_target_group_arn" {
