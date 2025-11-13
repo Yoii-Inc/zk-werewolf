@@ -1,4 +1,4 @@
-FROM rust:1.89 as builder
+FROM rust:1.89 AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -8,7 +8,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/workspace
 
-# Copy all source code first
+# Copy workspace Cargo.toml first
+COPY Cargo.toml Cargo.lock ./
+
+# Copy all source code
 COPY packages/ ./packages/
 
 # Build the application
