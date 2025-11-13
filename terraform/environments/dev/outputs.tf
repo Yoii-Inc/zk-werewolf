@@ -113,3 +113,30 @@ output "backend_task_definition_arn" {
   description = "Backend task definition ARN"
   value       = module.backend_service.task_definition_arn
 }
+
+# Frontend Service Outputs
+output "frontend_service_name" {
+  description = "Frontend ECS service name"
+  value       = module.frontend_service.service_name
+}
+
+output "frontend_task_definition_arn" {
+  description = "Frontend task definition ARN"
+  value       = module.frontend_service.task_definition_arn
+}
+
+# Application URLs
+output "application_url" {
+  description = "Application URL (ALB endpoint)"
+  value       = "http://${module.alb.alb_dns_name}"
+}
+
+output "api_url" {
+  description = "API URL"
+  value       = "http://${module.alb.alb_dns_name}/api"
+}
+
+output "ws_url" {
+  description = "WebSocket URL"
+  value       = "ws://${module.alb.alb_dns_name}/ws"
+}

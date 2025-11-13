@@ -21,3 +21,8 @@ node_modules
 
 # cli
 dist
+# SOPS encrypted secrets (unencrypted)
+secrets.yaml
+
+# Keep encrypted version in git
+!secrets.enc.yaml

@@ -1,0 +1,14 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+tfplan
+*.tfvars
+!terraform.tfvars.example
+
+# SOPS secrets (unencrypted)
+secrets.yaml
+
+# Keep encrypted version in git
+!secrets.enc.yaml

@@ -23,35 +23,96 @@ This configuration creates:
 
 ## Setup
 
-1. Copy the example tfvars file:
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   ```
+### 1. Configure AWS Credentials
 
-2. Edit `terraform.tfvars` with your AWS account ID:
-   ```hcl
-   AWS_ACCOUNT_ID = "your-aws-account-id"
-   ```
+```bash
+# Login with AWS SSO
+aws-sso-util login --profile yoii-crypto-dev.AWSAdministratorAccess
+export AWS_PROFILE=yoii-crypto-dev.AWSAdministratorAccess
+```
 
-3. Initialize Terraform:
-   ```bash
-   terraform init
-   ```
+### 2. Configure Terraform Variables
 
-4. Review the plan:
-   ```bash
-   terraform plan
-   ```
+```bash
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your AWS account ID
+```
 
-5. Apply the configuration:
-   ```bash
-   terraform apply
-   ```
+### 3. Configure Secrets with SOPS
+
+```bash
+# Install SOPS if not already installed
+brew install sops  # macOS
+
+# Copy the secrets template
+cp secrets.enc.yaml.example secrets.enc.yaml
+
+# Edit the secrets file (opens in your $EDITOR)
+sops secrets.enc.yaml
+
+# The file will be automatically encrypted when saved
+```
+
+**Important**: Never commit unencrypted secrets. The `.gitignore` is configured to only allow `secrets.enc.yaml` (encrypted) files.
+
+### 4. Deploy Infrastructure
+
+```bash
+# Initialize Terraform
+terraform init
+
+# Review the plan
+terraform plan
+
+# Apply the configuration
+terraform apply
+```
+
+## Managing Secrets with SOPS
+
+### Viewing Encrypted Secrets
+
+```bash
+# View decrypted content
+sops -d secrets.enc.yaml
+
+# Edit secrets (automatically re-encrypts on save)
+sops secrets.enc.yaml
+```
+
+### Using Secrets in Terraform
+
+Secrets can be loaded using the `yamldecode` function:
+
+```hcl
+locals {
+  secrets = yamldecode(file("${path.module}/secrets.enc.yaml"))
+}
+
+# Use in environment variables
+environment_variables = [
+  {
+    name  = "SUPABASE_URL"
+    value = local.secrets.backend.supabase_url
+  }
+]
+```
+
+### Rotating Secrets
+
+1. Edit the secrets file: `sops secrets.enc.yaml`
+2. Update values
+3. Save (automatically re-encrypts)
+4. Commit and push
+5. Run `terraform apply` to update ECS tasks
 
 ## Outputs
 
 After applying, you'll get:
 
+- **Application URL**: Main application endpoint
+- **API URL**: Backend API endpoint
+- **WebSocket URL**: WebSocket endpoint
 - VPC ID and subnet IDs
 - ECR repository URLs for all services
 - ECS cluster details
