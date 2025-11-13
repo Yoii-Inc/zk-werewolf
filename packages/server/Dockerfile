@@ -21,17 +21,21 @@ COPY packages/mpc-algebra-wasm/Cargo.toml packages/mpc-algebra-wasm/
 RUN mkdir -p packages/server/src packages/zk-mpc-node/src packages/mpc-circuits/src packages/mpc-algebra-wasm/src
 RUN echo "fn main() {}" > packages/server/src/main.rs
 RUN echo "fn main() {}" > packages/zk-mpc-node/src/main.rs
+RUN echo "" > packages/zk-mpc-node/src/lib.rs
 RUN echo "" > packages/mpc-circuits/src/lib.rs
 RUN echo "" > packages/mpc-algebra-wasm/src/lib.rs
 
 # Build dependencies only (this layer will be cached)
-RUN cargo build --release --package server
+RUN cargo build --release --package server --locked
+
+# Remove dummy source files
+RUN rm -rf packages/*/src
 
 # Now copy the actual source code
 COPY packages/ ./packages/
 
-# Build the application (this will be fast as dependencies are cached)
-RUN cargo build --release --package server
+# Build the application (dependencies are already compiled)
+RUN cargo build --release --package server --locked
 
 FROM debian:bookworm-slim
 
