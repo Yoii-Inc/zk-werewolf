@@ -4,13 +4,16 @@ This Terraform configuration deploys the ZK Werewolf application to AWS ECS usin
 
 ## Architecture
 
-- **Frontend**: CloudFront + S3 for static hosting (planned)
-- **Backend API**: ECS Fargate behind Application Load Balancer
+- **Frontend**: Next.js on ECS Fargate behind ALB
+- **Backend API**: Rust API on ECS Fargate behind ALB
 - **MPC Nodes**: 3 ECS Fargate services (planned)
 - **Database**: Supabase Cloud (external)
+- **Load Balancer**: Application Load Balancer (ALB)
+  - `/` → Frontend (Next.js on port 3000)
+  - `/api/*`, `/ws/*` → Backend (Rust API on port 8080)
 - **Service Discovery**: AWS Cloud Map for internal service communication
 - **Networking**: VPC with public/private subnets across 2 AZs
-  - **Dev environment**: Public subnets only (no NAT Gateway for cost savings)
+  - **Dev environment**: Public subnets only (no NAT Gateway for cost savings ~$32/month)
   - **Prod environment**: Private subnets with NAT Gateway (recommended)
 - **Secrets Management**: SOPS with AWS KMS for encrypted secrets in Git
 
