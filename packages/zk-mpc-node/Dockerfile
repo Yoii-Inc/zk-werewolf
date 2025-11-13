@@ -1,4 +1,4 @@
-FROM rust:1.89 AS builder
+FROM rust:1.83 AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
