@@ -8,33 +8,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/workspace
 
-# Copy workspace Cargo.toml first
+# Copy workspace files
 COPY Cargo.toml Cargo.lock ./
 
-# Copy all package Cargo.toml files for dependency caching
-COPY packages/server/Cargo.toml packages/server/
-COPY packages/zk-mpc-node/Cargo.toml packages/zk-mpc-node/
-COPY packages/mpc-circuits/Cargo.toml packages/mpc-circuits/
-COPY packages/mpc-algebra-wasm/Cargo.toml packages/mpc-algebra-wasm/
-
-# Create dummy source files to build dependencies
-RUN mkdir -p packages/server/src packages/zk-mpc-node/src packages/mpc-circuits/src packages/mpc-algebra-wasm/src
-RUN echo "fn main() {}" > packages/server/src/main.rs
-RUN echo "fn main() {}" > packages/zk-mpc-node/src/main.rs
-RUN echo "" > packages/zk-mpc-node/src/lib.rs
-RUN echo "" > packages/mpc-circuits/src/lib.rs
-RUN echo "" > packages/mpc-algebra-wasm/src/lib.rs
-
-# Build dependencies only (this layer will be cached)
-RUN cargo build --release --package server --locked
-
-# Remove dummy source files
-RUN rm -rf packages/*/src
-
-# Now copy the actual source code
+# Copy all source code
 COPY packages/ ./packages/
 
-# Build the application (dependencies are already compiled)
+# Build the application
 RUN cargo build --release --package server --locked
 
 FROM debian:bookworm-slim
