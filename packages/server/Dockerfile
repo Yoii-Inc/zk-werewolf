@@ -1,4 +1,4 @@
-FROM rust:1.82 as builder
+FROM rust:1.82 AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -8,7 +8,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/workspace
 
-# Copy Cargo.toml files first for better caching
+# Copy workspace Cargo.toml first
+COPY Cargo.toml Cargo.lock ./
+
+# Copy all package Cargo.toml files for dependency caching
 COPY packages/server/Cargo.toml packages/server/
 COPY packages/zk-mpc-node/Cargo.toml packages/zk-mpc-node/
 COPY packages/mpc-circuits/Cargo.toml packages/mpc-circuits/
@@ -21,11 +24,11 @@ RUN echo "fn main() {}" > packages/zk-mpc-node/src/main.rs
 RUN echo "" > packages/mpc-circuits/src/lib.rs
 RUN echo "" > packages/mpc-algebra-wasm/src/lib.rs
 
-# Build dependencies only
+# Build dependencies only (this layer will be cached)
 RUN cargo build --release --package server
 
 # Now copy the actual source code
-COPY . .
+COPY packages/ ./packages/
 
 # Build the application (this will be fast as dependencies are cached)
 RUN cargo build --release --package server

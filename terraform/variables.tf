@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "ap-northeast-1"
 }
 
+variable "aws_profile" {
+  description = "AWS profile to use"
+  type        = string
+  default     = null
+}
+
 variable "environment" {
   description = "Environment name"
   type        = string

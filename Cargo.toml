@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "packages/server",
+    "packages/zk-mpc-node",
+    "packages/mpc-circuits",
+    "packages/mpc-algebra-wasm",
+]
+resolver = "2"
