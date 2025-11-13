@@ -56,6 +56,24 @@ locals {
       supabase_key = ""
       jwt_secret   = ""
     }
+    mpc_nodes = {
+      node_0 = {
+        private_key = ""
+      }
+      node_1 = {
+        private_key = ""
+      }
+      node_2 = {
+        private_key = ""
+      }
+    }
+    database = {
+      host     = ""
+      port     = ""
+      username = ""
+      password = ""
+      database = ""
+    }
   }
 }
 

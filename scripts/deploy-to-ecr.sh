@@ -88,6 +88,9 @@ BACKEND_REPO=$(get_terraform_output "backend_repository_url")
 FRONTEND_REPO=$(get_terraform_output "frontend_repository_url")
 MPC_NODE_REPO=$(get_terraform_output "mpc_node_repository_url")
 
+# Get ALB DNS name for frontend build args
+ALB_DNS=$(get_terraform_output "alb_dns_name")
+
 # Validate ECR URLs based on service
 validate_repo() {
     local service=$1
@@ -109,6 +112,8 @@ build_and_push() {
     local dockerfile=$2
     local repo=$3
     local tag=${4:-latest}
+    shift 4
+    local build_args=("$@")
 
     log_info "==================================="
     log_info "Processing: ${service}"
@@ -122,7 +127,15 @@ build_and_push() {
     # Build Docker image
     if [ "$SKIP_BUILD" = false ]; then
         log_info "Building ${service} Docker image..."
-        if docker build -f "${dockerfile}" -t "${repo}:${tag}" .; then
+
+        # Prepare build args
+        local build_cmd="docker build --platform linux/amd64 -f ${dockerfile} -t ${repo}:${tag}"
+        for arg in "${build_args[@]}"; do
+            build_cmd="${build_cmd} --build-arg ${arg}"
+        done
+        build_cmd="${build_cmd} ."
+
+        if eval "${build_cmd}"; then
             log_info "Successfully built ${service} image"
         else
             log_error "Failed to build ${service} image"
@@ -145,28 +158,32 @@ build_and_push() {
 # Deploy services based on selection
 case $SERVICE in
     backend)
-        build_and_push "backend" "packages/server/Dockerfile" "${BACKEND_REPO}"
+        build_and_push "backend" "packages/server/Dockerfile" "${BACKEND_REPO}" "latest"
         ;;
     frontend)
-        build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}"
+        build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
+            "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
+            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/ws"
         ;;
     mpc-node)
-        build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}"
+        build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
     all)
-        build_and_push "backend" "packages/server/Dockerfile" "${BACKEND_REPO}"
-        build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}"
-        build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}"
+        build_and_push "backend" "packages/server/Dockerfile" "${BACKEND_REPO}" "latest"
+        build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
+            "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
+            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/ws"
+        build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
     *)
         log_error "Unknown service: ${SERVICE}. Valid options: backend, frontend, mpc-node, all"
         ;;
 esac
 
-log_info << EOF
+cat << EOF
 
-===================================
-Deployment completed successfully!
+${GREEN}===================================
+Deployment completed successfully!${NC}
 ===================================
 
 Next steps:
