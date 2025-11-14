@@ -64,15 +64,6 @@ services:
     working_dir: /usr/src/workspace/packages/zk-mpc-node
     command: ["start", "--id", "2", "--input", "./address/3"]
 
-  blockchain:
-    build:
-      context: .
-      dockerfile: packages/foundry/Dockerfile
-    ports:
-      - "8545:8545"
-    volumes:
-      - ./packages/foundry:/app
-
   frontend:
     build:
       context: .
