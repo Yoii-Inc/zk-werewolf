@@ -73,6 +73,9 @@ log_info "Getting ECS configuration from Terraform..."
 cd "${TERRAFORM_DIR}/${ENVIRONMENT}"
 
 CLUSTER_NAME=$(get_terraform_output "ecs_cluster_name")
+APPLICATION_URL=$(get_terraform_output "application_url")
+API_URL=$(get_terraform_output "api_url")
+WS_URL=$(get_terraform_output "ws_url")
 
 if [ -z "$CLUSTER_NAME" ]; then
     log_error "Failed to get ECS cluster name from Terraform outputs"
@@ -175,3 +178,15 @@ Monitor your deployment:
 View logs:
   aws logs tail /ecs/${CLUSTER_NAME} --follow --region ${AWS_REGION}
 EOF
+
+if [ -n "$APPLICATION_URL" ]; then
+    log_info "Application URL: ${APPLICATION_URL}"
+fi
+
+if [ -n "$API_URL" ]; then
+    log_info "API URL: ${API_URL}"
+fi
+
+if [ -n "$WS_URL" ]; then
+    log_info "WebSocket URL: ${WS_URL}"
+fi
