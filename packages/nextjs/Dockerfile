@@ -11,7 +11,7 @@ COPY . .
 
 # Build WASM package
 WORKDIR /build/packages/mpc-algebra-wasm
-RUN wasm-pack build --target nodejs --out-dir pkg-node
+RUN wasm-pack build --target web --out-dir pkg
 
 # Stage 2: Build Next.js app
 FROM node:18
@@ -23,7 +23,7 @@ COPY package.json package-lock.json* ./
 COPY packages ./packages
 
 # Copy built WASM from previous stage
-COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg-node ./packages/mpc-algebra-wasm/pkg-node
+COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-node
 
 # Install dependencies
 RUN npm install
