@@ -272,19 +272,70 @@ impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer
         self,
         cs: ark_relations::r1cs::ConstraintSystemRef<F>,
     ) -> Result<(), ark_relations::r1cs::SynthesisError> {
-        // TODO: Implement constraint generation logic here
-        Ok(())
-    }
-}
+        let pk_x = self
+            .private_input
+            .iter()
+            .map(|input| input.pub_key_or_dummy_x)
+            .collect::<Vec<_>>();
 
-impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer<F>
-    for DivinationCircuit<F>
-{
-    fn generate_constraints(
-        self,
-        cs: ark_relations::r1cs::ConstraintSystemRef<F>,
-    ) -> Result<(), ark_relations::r1cs::SynthesisError> {
-        // TODO: Implement constraint generation logic here
+        let pk_y = self
+            .private_input
+            .iter()
+            .map(|input| input.pub_key_or_dummy_y)
+            .collect::<Vec<_>>();
+
+        let is_fortune_teller = self
+            .private_input
+            .iter()
+            .map(|input| input.is_fortune_teller)
+            .collect::<Vec<_>>();
+
+        let x_var = pk_x
+            .iter()
+            .map(|x| FpVar::<F>::new_witness(ark_relations::ns!(cs, "gadget_randomness"), || Ok(x)))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let y_var = pk_y
+            .iter()
+            .map(|y| FpVar::<F>::new_witness(ark_relations::ns!(cs, "gadget_randomness"), || Ok(y)))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let is_ft_var = is_fortune_teller
+            .iter()
+            .map(|b| FpVar::<F>::new_witness(ark_relations::ns!(cs, "gadget_randomness"), || Ok(b)))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // is_fortune_teller = 0 or 1
+        for b in is_ft_var.iter() {
+            let is_zero = ark_r1cs_std::prelude::FieldVar::<F, F>::is_zero(b)?;
+            let is_one = ark_r1cs_std::prelude::FieldVar::<F, F>::is_one(b)?;
+            let is_bool = is_zero.or(&is_one)?;
+            is_bool.enforce_equal(&Boolean::constant(true))?;
+        }
+
+        let _sum_x_var =
+            x_var
+                .iter()
+                .enumerate()
+                .fold(<FpVar<F> as Zero>::zero(), |mut acc, (i, x)| {
+                    acc = acc + x * &is_ft_var[i];
+                    acc
+                });
+
+        let _sum_y_var =
+            y_var
+                .iter()
+                .enumerate()
+                .fold(<FpVar<F> as Zero>::zero(), |mut acc, (i, y)| {
+                    acc = acc + y * &is_ft_var[i];
+                    acc
+                });
+
+        // TODO: Add verify commitments
+        // self.verify_commitments(cs.clone())?;
+
+        println!("total number of constraints: {}", cs.num_constraints());
+
         Ok(())
     }
 }
@@ -464,8 +515,8 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for DivinationCircuit<mm::MpcField<
         let is_werewolf_bit = MpcBoolean::new_witness_vec(
             cs.clone(),
             &self
-            .private_input
-            .iter()
+                .private_input
+                .iter()
                 .map(|input| input.is_werewolf)
                 .collect::<Vec<_>>(),
         )?;
@@ -488,7 +539,7 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for DivinationCircuit<mm::MpcField<
             .collect::<Result<Vec<_>, _>>()?;
 
         let is_wt = is_werewolf_bit
-                    .iter()
+            .iter()
             .zip(is_target_sum_bit.iter())
             .map(|(x, y)| x.and(y))
             .collect::<Result<Vec<_>, _>>()?;
