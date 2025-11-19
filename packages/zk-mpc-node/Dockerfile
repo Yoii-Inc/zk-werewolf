@@ -1,4 +1,4 @@
-FROM rust:1.89 as builder
+FROM rust:1.83 AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -8,12 +8,14 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/workspace
 
-# Copy all source code first
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+
+# Copy all source code
 COPY packages/ ./packages/
 
 # Build the application
-WORKDIR /usr/src/workspace/packages/zk-mpc-node
-RUN cargo build --release
+RUN cargo build --release --package zk-mpc-node --locked
 
 FROM debian:bookworm-slim
 
@@ -23,7 +25,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY --from=builder /usr/src/workspace/packages/zk-mpc-node/target/release/zk-mpc-node /app/zk-mpc-node
+COPY --from=builder /usr/src/workspace/target/release/zk-mpc-node /app/zk-mpc-node
 COPY packages/zk-mpc-node/address /app/address
 RUN chmod +x /app/zk-mpc-node
 

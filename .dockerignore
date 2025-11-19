@@ -51,3 +51,7 @@ temp/
 **/data/
 **/tests/
 **/*.wasm
+
+# Terraform artifacts
+terraform/.terraform/
+**/.terraform/
