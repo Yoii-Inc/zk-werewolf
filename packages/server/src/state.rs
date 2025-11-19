@@ -40,6 +40,32 @@ impl AppState {
         }
     }
 
+    pub async fn broadcast_phase_change(
+        &self,
+        room_id: &str,
+        from_phase: &str,
+        to_phase: &str,
+    ) -> Result<(), String> {
+        let tx = self.get_or_create_room_channel(room_id).await;
+
+        let phase_notification = serde_json::json!({
+            "message_type": "phase_change",
+            "from_phase": from_phase,
+            "to_phase": to_phase,
+            "room_id": room_id,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "requires_dummy_request": from_phase == "Night" && to_phase == "Discussion"
+        });
+
+        if let Ok(message_text) = serde_json::to_string(&phase_notification) {
+            if let Err(e) = tx.send(Message::Text(message_text)) {
+                return Err(format!("Failed to broadcast phase change: {}", e));
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn save_chat_message(
         &self,
         room_id: &str,

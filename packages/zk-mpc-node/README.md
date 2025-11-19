@@ -13,6 +13,7 @@ cargo run --release keygen --id 1
 ```bash
 # ノード0を起動(例)
 cargo run --release start --id 0 --input ./address/3
+cargo run --release start --id 0 --input ./address/localhost3
 
 # ノード1を起動(例)
 cargo run --release start --id 1 --input ./address/3

@@ -17,7 +17,30 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
 
     ws.onmessage = event => {
       console.log("メッセージを受信しました:", event.data);
-      const fullMessage: WebSocketMessage = JSON.parse(event.data);
+      const data = JSON.parse(event.data);
+
+      // フェーズ変更通知の場合
+      if (data.message_type === "phase_change") {
+        console.log(`フェーズ変更通知を受信: ${data.from_phase} → ${data.to_phase}`);
+
+        // Night → Discussion の場合、ダミーリクエストが必要な通知を発行
+        if (data.requires_dummy_request) {
+          // カスタムイベントを発行してuseGamePhaseフックに通知
+          window.dispatchEvent(
+            new CustomEvent("phaseChangeNotification", {
+              detail: {
+                fromPhase: data.from_phase,
+                toPhase: data.to_phase,
+                requiresDummyRequest: true,
+              },
+            }),
+          );
+        }
+        return;
+      }
+
+      // 通常のチャットメッセージの場合
+      const fullMessage: WebSocketMessage = data;
 
       setMessages(prevMessages => [
         ...prevMessages,

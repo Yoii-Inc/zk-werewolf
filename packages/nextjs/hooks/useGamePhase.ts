@@ -34,6 +34,55 @@ export const useGamePhase = (
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
 
+  // WebSocketからのフェーズ変更通知を処理
+  useEffect(() => {
+    const handlePhaseChangeNotification = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { fromPhase, toPhase, requiresDummyRequest } = customEvent.detail;
+
+      if (requiresDummyRequest && gameInfo && username) {
+        const currentPlayer = gameInfo.players.find(player => player.name === username);
+
+        // 占い師以外の生きているプレイヤーの場合、ダミーリクエストを送信
+        if (currentPlayer && currentPlayer.role !== "Seer" && !currentPlayer.is_dead) {
+          console.log(`フェーズ変更通知受信: ${fromPhase} → ${toPhase}`);
+          console.log(`占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
+
+          // ダミーリクエストの送信
+          const sendDummyRequest = async () => {
+            try {
+              await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
+              addMessage({
+                id: Date.now().toString(),
+                sender: "システム",
+                message: "ダミーリクエストを送信しました",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            } catch (error) {
+              console.error("ダミーリクエスト送信エラー:", error);
+              addMessage({
+                id: Date.now().toString(),
+                sender: "システム",
+                message: "ダミーリクエストの送信に失敗しました",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            }
+          };
+
+          sendDummyRequest();
+        }
+      }
+    };
+
+    window.addEventListener("phaseChangeNotification", handlePhaseChangeNotification);
+
+    return () => {
+      window.removeEventListener("phaseChangeNotification", handlePhaseChangeNotification);
+    };
+  }, [gameInfo, username, roomId, handleBackgroundNightAction, addMessage]);
+
   // 占いステータスを監視
   useEffect(() => {
     if (proofStatus === "completed") {
@@ -315,21 +364,6 @@ export const useGamePhase = (
       // Night → Discussionへの変更時の処理
       if (prevPhase === "Night" && gameInfo.phase === "Discussion") {
         console.log(`フェーズ変更を検知: ${prevPhase} → ${gameInfo.phase}`);
-
-        // 占い師以外の生きているプレイヤーの場合、ダミーリクエストを送信
-        if (currentPlayer && currentPlayer.role !== "Seer" && !currentPlayer.is_dead) {
-          // ダミーリクエストの送信
-          const sendBackgroundNightAction = async () => {
-            try {
-              console.log(`占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
-              await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
-            } catch (error) {
-              console.error("ダミーリクエスト送信エラー:", error);
-            }
-          };
-
-          sendBackgroundNightAction();
-        }
 
         // 勝敗判定処理を実行
         handleGameResultCheck(transitionId);
