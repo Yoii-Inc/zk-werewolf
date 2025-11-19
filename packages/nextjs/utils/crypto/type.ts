@@ -72,7 +72,7 @@ export interface PedersenParam {
   }[][];
 }
 
-export interface PedersernCommitment {
+export interface PedersenCommitment {
   x: (number[] | null)[];
   y: (number[] | null)[];
   _params: null;
@@ -86,15 +86,15 @@ export interface AnonymousVotingPrivateInput {
 }
 export interface AnonymousVotingPublicInput {
   pedersenParam: PedersenParam;
-  playerCommitment: PedersernCommitment[];
+  playerCommitment: PedersenCommitment[];
   playerNum: number;
 }
 
 export interface KeyPublicizePrivateInput {
   id: number;
-  pub_key_or_dummy_x: (number[] | null)[];
-  pub_key_or_dummy_y: (number[] | null)[];
-  is_fortune_teller: (number[] | null)[];
+  pub_key_or_dummy_x: number[] | null;
+  pub_key_or_dummy_y: number[] | null;
+  is_fortune_teller: number[] | null;
 }
 export interface KeyPublicizePublicInput {
   pedersenParam: PedersenParam;
@@ -103,35 +103,51 @@ export interface KeyPublicizePublicInput {
 // TODO: modify.
 export interface RoleAssignmentPrivateInput {
   id: number;
-  //   isTargetId: string[];
-  isTargetId: (number[] | null)[][];
-  playerRandomness: (number[] | null)[];
+  shuffleMatrices: any;
+  randomness: any;
+  playerRandomness: number[] | null;
 }
 export interface RoleAssignmentPublicInput {
+  // parameter
+  numPlayers: number;
+  maxGroupSize: number;
   pedersenParam: PedersenParam;
-  playerCommitment: PedersernCommitment[];
+  groupingParameter: GroupingParameter;
+
+  // instance
+  tauMatrix: any;
+  roleCommitment: PedersenCommitment[];
+  playerCommitment: PedersenCommitment[];
 }
+
+type GroupingParameter = {
+  Villager: [number, boolean];
+  FortuneTeller: [number, boolean];
+  Werewolf: [number, boolean];
+};
 
 // TODO: modify.
 export interface DivinationPrivateInput {
   id: number;
-  //   isTargetId: string[];
-  isTargetId: (number[] | null)[][];
-  playerRandomness: (number[] | null)[];
+  isWerewolf: (bigint[] | null)[];
+  isTarget: (bigint[] | null)[][];
+  //   randomness: (number[] | null)[];
+  randomness: any;
 }
 export interface DivinationPublicInput {
   pedersenParam: PedersenParam;
   elgamalParam: any;
-  playerCommitment: PedersernCommitment[];
+  pubKey: any;
+  playerNum: any;
+  //   playerCommitment: PedersenCommitment[];
 }
 
-// TODO: modify.
 export interface WinningJudgementPrivateInput {
   id: number;
-  isTargetId: (number[] | null)[][];
+  amWerewolf: (number[] | null)[];
   playerRandomness: (number[] | null)[];
 }
 export interface WinningJudgementPublicInput {
   pedersenParam: PedersenParam;
-  playerCommitment: PedersernCommitment[];
+  playerCommitment: PedersenCommitment[];
 }
