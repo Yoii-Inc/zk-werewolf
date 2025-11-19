@@ -1,6 +1,10 @@
 use crate::mpc_circuits_wasm::*;
 use ark_bls12_377::Fr;
+use ark_crypto_primitives::encryption::elgamal::Randomness;
+use ark_ec::ProjectiveCurve;
+use ark_ed_on_bls12_377::EdwardsProjective;
 use ark_ff::PubUniformRand;
+use ark_ff::UniformRand;
 use ark_ff::Zero;
 use base64::{decode, encode};
 use crypto_box::{
@@ -181,18 +185,16 @@ impl SplitAndEncrypt for KeyPublicizeEncryption {
         let scheme = &input.scheme;
         let private_input = &input.private_input;
 
-        let pub_key_or_dummy_x_share =
-            split_vec_fr(private_input.pub_key_or_dummy_x.clone(), scheme);
-        let pub_key_or_dummy_y_share =
-            split_vec_fr(private_input.pub_key_or_dummy_y.clone(), scheme);
-        let is_fortune_teller_share = split_vec_fr(private_input.is_fortune_teller.clone(), scheme);
+        let pub_key_or_dummy_x_share = split_fr(private_input.pub_key_or_dummy_x, scheme);
+        let pub_key_or_dummy_y_share = split_fr(private_input.pub_key_or_dummy_y, scheme);
+        let is_fortune_teller_share = split_fr(private_input.is_fortune_teller, scheme);
 
         (0..scheme.total_shares)
             .map(|i| KeyPublicizePrivateInput {
                 id: private_input.id,
-                pub_key_or_dummy_x: pub_key_or_dummy_x_share[i].clone(),
-                pub_key_or_dummy_y: pub_key_or_dummy_y_share[i].clone(),
-                is_fortune_teller: is_fortune_teller_share[i].clone(),
+                pub_key_or_dummy_x: pub_key_or_dummy_x_share[i],
+                pub_key_or_dummy_y: pub_key_or_dummy_y_share[i],
+                is_fortune_teller: is_fortune_teller_share[i],
             })
             .collect::<Vec<_>>()
     }
@@ -221,8 +223,24 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
 
     type ShareForNode = RoleAssignmentPrivateInput;
 
+    // TODO: fix. complete implementation.
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
-        todo!()
+        let scheme = &input.scheme;
+        let private_input = &input.private_input;
+
+        // let randomness_share = split_vec_fr(private_input.randomness.clone(), scheme);
+        let player_randomness_share = split_fr(private_input.player_randomness, scheme);
+        // let player_randomness_share = split_fr(private_input.player_randomness, scheme);
+
+        (0..scheme.total_shares)
+            .map(|i| RoleAssignmentPrivateInput {
+                id: private_input.id,
+                shuffle_matrices: private_input.shuffle_matrices.clone(),
+                // is_target_id: is_target_share.iter().map(|row| row[i]).collect(),
+                player_randomness: player_randomness_share[i],
+                randomness: private_input.randomness.clone(),
+            })
+            .collect::<Vec<_>>()
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue> {
@@ -250,7 +268,23 @@ impl SplitAndEncrypt for DivinationEncryption {
     type ShareForNode = DivinationPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
-        todo!()
+        let scheme = &input.scheme;
+        let private_input = &input.private_input;
+
+        let is_werewolf_share = split_fr(private_input.is_werewolf, scheme);
+
+        let is_target_share = split_vec_fr(private_input.is_target.clone(), scheme);
+
+        let randomness_share = split_elgamal_randomness(private_input.randomness.clone(), scheme);
+
+        (0..scheme.total_shares)
+            .map(|i| DivinationPrivateInput {
+                id: private_input.id,
+                is_werewolf: is_werewolf_share[i],
+                is_target: is_target_share.iter().map(|row| row[i]).collect(),
+                randomness: randomness_share[i].clone(),
+            })
+            .collect::<Vec<_>>()
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue> {
@@ -278,7 +312,19 @@ impl SplitAndEncrypt for WinningJudgementEncryption {
     type ShareForNode = WinningJudgementPrivateInput;
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode> {
-        todo!()
+        let scheme = &input.scheme;
+        let private_input = &input.private_input;
+
+        let am_werewolf_share = split_fr(private_input.am_werewolf, scheme);
+        let player_randomness_share = split_fr(private_input.player_randomness, scheme);
+
+        (0..scheme.total_shares)
+            .map(|i| WinningJudgementPrivateInput {
+                id: private_input.id,
+                am_werewolf: am_werewolf_share[i],
+                player_randomness: player_randomness_share[i],
+            })
+            .collect::<Vec<_>>()
     }
 
     fn create_encrypted_shares(input: &Self::Input) -> Result<Self::Output, JsValue> {
@@ -332,6 +378,27 @@ fn split_fr(x: Fr, scheme: &SecretSharingScheme) -> Vec<Fr> {
         sum += share;
     }
     let last_share = x - sum;
+    shares.push(last_share);
+
+    shares
+}
+
+fn split_elgamal_randomness(
+    x: Randomness<EdwardsProjective>,
+    scheme: &SecretSharingScheme,
+) -> Vec<Randomness<EdwardsProjective>> {
+    let mut shares = Vec::new();
+    let mut sum: Randomness<EdwardsProjective> =
+        Randomness(<EdwardsProjective as ProjectiveCurve>::ScalarField::zero());
+
+    let rng = &mut rand::thread_rng();
+
+    for _i in 0..(scheme.total_shares - 1) {
+        let share = Randomness::rand(rng);
+        sum.0 += share.0;
+        shares.push(share);
+    }
+    let last_share = Randomness(x.0 - sum.0);
     shares.push(last_share);
 
     shares

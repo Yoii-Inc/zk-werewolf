@@ -39,6 +39,7 @@ export const useVoting = () => {
           //   prover_num: "3",
           proof_type: "AnonymousVoting",
           data: {
+            user_id: String(voteData.privateInput.id),
             prover_count: alivePlayerCount,
             encrypted_data: encryptedVote,
           },

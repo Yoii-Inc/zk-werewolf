@@ -6,9 +6,8 @@ use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 pub struct DivinationPrivateInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> {
     pub id: usize,
     pub is_werewolf: F,
-    pub is_target: F,
+    pub is_target: Vec<F>,
     pub randomness: F::ElGamalRandomness,
-    pub randomness_bits: Vec<F>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -16,4 +15,5 @@ pub struct DivinationPublicInput<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrM
     pub pedersen_param: F::PedersenParam,
     pub elgamal_param: F::ElGamalParam,
     pub pub_key: F::ElGamalPubKey,
+    pub player_num: usize,
 }

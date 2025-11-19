@@ -17,6 +17,7 @@ console_error_panic_hook = "0.1"
 anyhow = "1.0"
 
 ark-ff = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ff", version = "0.3.0" }
+ark-ec = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ec", version = "0.3.0" }
 ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
 ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0" }
 

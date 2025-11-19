@@ -206,6 +206,7 @@ fn setup_voting_dummy() -> ClientRequestType {
         },
     };
     let prover_info = ProverInfo {
+        user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&anon_voting_output).unwrap(),
     };
@@ -276,6 +277,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
     // 1つ目のリクエストを追加
     // let request1 = setup_voting_dummy();
     let prover_info_1 = ProverInfo {
+        user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[0]).unwrap(),
     };
@@ -284,6 +286,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
 
     // 2つ目のリクエストを追加
     let prover_info_2 = ProverInfo {
+        user_id: "1".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[1]).unwrap(),
     };
@@ -292,6 +295,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
 
     // 3つ目のリクエストを追加（これでバッチサイズに達する）
     let prover_info_3 = ProverInfo {
+        user_id: "2".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[2]).unwrap(),
     };

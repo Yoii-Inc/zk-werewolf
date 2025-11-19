@@ -103,26 +103,48 @@ pub async fn get_game_state(state: AppState, room_id: String) -> Result<Game, St
 
 // ゲームフェーズ管理
 pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String, String> {
+    let current_phase = {
+        let games = state.games.lock().await;
+        if let Some(game) = games.get(room_id) {
+            game.phase.clone()
+        } else {
+            return Err("Game not found".to_string());
+        }
+    };
+
+    let next_phase = match current_phase {
+        GamePhase::Waiting => GamePhase::Night,
+        GamePhase::Night => GamePhase::Discussion,
+        GamePhase::Discussion => GamePhase::Voting,
+        GamePhase::Voting => GamePhase::Result,
+        GamePhase::Result => GamePhase::Night,
+        GamePhase::Finished => return Err("ゲームは既に終了しています".to_string()),
+    };
+
+    // フェーズ変更をゲームに適用
+
     let mut games = state.games.lock().await;
     if let Some(game) = games.get_mut(room_id) {
-        let current_phase = game.phase.clone();
-        let next_phase = match current_phase {
-            GamePhase::Waiting => GamePhase::Night,
-            GamePhase::Night => {
-                game.resolve_night_actions();
-                GamePhase::Discussion
-            }
-            GamePhase::Discussion => GamePhase::Voting,
-            GamePhase::Voting => {
-                game.resolve_voting();
-                GamePhase::Result
-            }
-            GamePhase::Result => GamePhase::Night,
-            GamePhase::Finished => return Err("ゲームは既に終了しています".to_string()),
-        };
-        game.add_phase_change_message(current_phase, next_phase.clone());
-        game.phase = next_phase;
-        Ok(format!("フェーズを更新しました: {:?}", game.phase))
+        if current_phase == GamePhase::Night {
+            game.resolve_night_actions();
+        } else if current_phase == GamePhase::Voting {
+            game.resolve_voting();
+        }
+        game.add_phase_change_message(current_phase.clone(), next_phase.clone());
+        game.phase = next_phase.clone();
+
+        // WebSocket通知を送信
+        let from_phase_str = format!("{:?}", current_phase);
+        let to_phase_str = format!("{:?}", next_phase);
+
+        if let Err(e) = state
+            .broadcast_phase_change(room_id, &from_phase_str, &to_phase_str)
+            .await
+        {
+            eprintln!("Failed to broadcast phase change: {}", e);
+        }
+
+        Ok(format!("フェーズを更新しました: {:?}", next_phase))
     } else {
         Err("Game not found".to_string())
     }

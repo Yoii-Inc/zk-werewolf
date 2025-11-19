@@ -1,0 +1,113 @@
+use std::collections::BTreeMap;
+
+use ark_ff::PrimeField;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Role {
+    FortuneTeller,
+    Werewolf,
+    Villager,
+}
+
+impl Role {
+    pub fn description(&self) -> &'static str {
+        match self {
+            Role::Villager => "Villager: They have no special abilities, but they participate in discussions and voting.",
+            Role::Werewolf => "Werewolf: They attack villagers at night. They pretend to be villagers during the day.",
+            Role::FortuneTeller => "Fortune Teller: They can know whether a player is a werewolf or not at night.",
+        }
+    }
+
+    pub fn is_werewolf(&self) -> bool {
+        matches!(self, Role::Werewolf)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GroupingParameter(BTreeMap<Role, (usize, bool)>);
+
+impl GroupingParameter {
+    pub fn new(input: BTreeMap<Role, (usize, bool)>) -> Self {
+        Self(input)
+    }
+
+    // F: Field used in the MPC.
+    pub fn generate_tau_matrix<F: PrimeField>(&self) -> nalgebra::DMatrix<F> {
+        let num_players = self.get_num_players();
+        let num_groups = self.get_num_groups();
+
+        let mut tau =
+            nalgebra::DMatrix::<F>::zeros(num_players + num_groups, num_players + num_groups);
+
+        let mut player_index = 0;
+        let mut group_index = 0;
+
+        for (_, (count, is_not_alone)) in self.0.iter() {
+            if *is_not_alone {
+                assert!(
+                    *count >= 2,
+                    "Error: not alone group count must be greater than 2"
+                );
+
+                // group
+                tau[(player_index, num_players + group_index)] = F::one();
+
+                // player
+                for _ in 0..*count - 1 {
+                    tau[(player_index + 1, player_index)] = F::one();
+                    player_index += 1;
+                }
+                tau[(num_players + group_index, player_index)] = F::one();
+                player_index += 1;
+                group_index += 1;
+            } else {
+                for _ in 0..*count {
+                    // group
+                    tau[(player_index, num_players + group_index)] = F::one();
+                    // player
+                    tau[(num_players + group_index, player_index)] = F::one();
+                    player_index += 1;
+                    group_index += 1;
+                }
+            }
+        }
+
+        tau
+    }
+
+    pub fn get_num_roles(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn get_num_groups(&self) -> usize {
+        self.0
+            .values()
+            .map(|(count, is_not_alone)| if *is_not_alone { 1 } else { *count })
+            .sum()
+    }
+
+    pub fn get_num_players(&self) -> usize {
+        self.0.values().map(|x| x.0).sum()
+    }
+
+    pub fn get_max_group_size(&self) -> usize {
+        self.0
+            .values()
+            .map(|(count, is_not_alone)| if *is_not_alone { *count } else { 1 })
+            .max()
+            .expect("Error: No max value found")
+    }
+
+    pub fn get_corresponding_role(&self, role_id: usize) -> Role {
+        let mut count = self.get_num_players();
+        for (role, (role_count, is_not_alone)) in self.0.iter() {
+            count += if *is_not_alone { 1 } else { *role_count };
+            if role_id < count {
+                return role.clone();
+            }
+        }
+
+        panic!("Error: Invalid role id is given");
+    }
+}

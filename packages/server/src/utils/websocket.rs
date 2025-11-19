@@ -24,6 +24,16 @@ struct WebSocketMessage {
     room_id: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct PhaseChangeNotification {
+    message_type: String,
+    from_phase: String,
+    to_phase: String,
+    room_id: String,
+    timestamp: String,
+    requires_dummy_request: bool,
+}
+
 impl WebSocketMessage {
     fn to_chat_message(&self) -> ChatMessage {
         let message_type = match self.message_type.as_str() {

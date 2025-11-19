@@ -1,4 +1,10 @@
-use crate::services::zk_proof::check_status_with_retry;
+use crate::{
+    models::{
+        chat::{ChatMessage, ChatMessageType},
+        role::Role,
+    },
+    services::zk_proof::check_status_with_retry,
+};
 
 use super::player::Player;
 use ark_bls12_377::Fr;
@@ -29,6 +35,13 @@ pub struct Game {
     pub chat_log: super::chat::ChatLog,
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
+    pub divination_result: Option<DivinationResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DivinationResult {
+    pub ciphertext:
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -82,6 +95,7 @@ pub struct ChangeRoleRequest {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProverInfo {
+    pub user_id: String,
     pub prover_count: usize,
     pub encrypted_data: String,
 }
@@ -104,6 +118,16 @@ impl ClientRequestType {
             | ClientRequestType::WinningJudge(info)
             | ClientRequestType::RoleAssignment(info)
             | ClientRequestType::KeyPublicize(info) => info.prover_count,
+        }
+    }
+
+    fn get_user_id(&self) -> &str {
+        match self {
+            ClientRequestType::Divination(info)
+            | ClientRequestType::AnonymousVoting(info)
+            | ClientRequestType::WinningJudge(info)
+            | ClientRequestType::RoleAssignment(info)
+            | ClientRequestType::KeyPublicize(info) => info.user_id.as_str(),
         }
     }
 }
@@ -238,6 +262,7 @@ impl Game {
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
             batch_request: BatchRequest::new(),
+            divination_result: None,
         }
     }
 
@@ -370,29 +395,39 @@ impl Game {
     pub async fn add_request(&mut self, request: ClientRequestType) -> String {
         // let mut batch_request = &self.batch_request;
         let size_limit = request.get_prover_count();
-        self.batch_request.requests.push(request);
 
-        // バッチが満杯になったら処理を開始
-        if self.batch_request.requests.len() >= size_limit {
-            let batch_id = self.batch_request.batch_id.clone();
+        if !self
+            .batch_request
+            .requests
+            .iter()
+            .any(|r| r.get_user_id() == request.get_user_id())
+        {
+            self.batch_request.requests.push(request);
 
-            // let mut service = self.clone();
+            // バッチが満杯になったら処理を開始
+            if self.batch_request.requests.len() >= size_limit {
+                let batch_id = self.batch_request.batch_id.clone();
 
-            // TODO: 非同期でバッチ処理を開始
-            // tokio::spawn(async move {
-            // let mut games = game.lock().await;
-            // if let Some(game) = games.get_mut(room_id) {
-            //     // ゲームの状態を更新する処理
-            //     // ...
-            // }
+                // let mut service = self.clone();
 
-            self.process_batch().await;
-            // });
+                // TODO: 非同期でバッチ処理を開始
+                // tokio::spawn(async move {
+                // let mut games = game.lock().await;
+                // if let Some(game) = games.get_mut(room_id) {
+                //     // ゲームの状態を更新する処理
+                //     // ...
+                // }
 
-            // 新しいバッチを作成
-            self.batch_request = BatchRequest::new();
+                self.process_batch().await;
+                // });
 
-            batch_id
+                // 新しいバッチを作成
+                self.batch_request = BatchRequest::new();
+
+                batch_id
+            } else {
+                self.batch_request.batch_id.clone()
+            }
         } else {
             self.batch_request.batch_id.clone()
         }
@@ -448,6 +483,30 @@ impl Game {
                 match identifier {
                     CircuitEncryptedInputIdentifier::Divination(items) => {
                         // itemsを処理する
+                        let divination_result: DivinationResult = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(result) => DivinationResult { ciphertext: result },
+                                Err(e) => {
+                                    println!("Failed to deserialize divination result: {}", e);
+                                    self.chat_log.add_system_message(
+                                        "占い結果の処理に失敗しました。".to_string(),
+                                    );
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                self.chat_log.add_system_message(
+                                    "占い結果が見つかりませんでした。".to_string(),
+                                );
+                                return;
+                            }
+                        };
+
+                        self.divination_result = Some(divination_result);
+                        println!("占い結果が正常に処理されました。");
+                        self.chat_log
+                            .add_system_message("占い結果が生成されました。".to_string());
                     }
                     CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
                         println!("AnonymousVoting process is starting...");
@@ -515,12 +574,111 @@ impl Game {
                     }
                     CircuitEncryptedInputIdentifier::WinningJudge(items) => {
                         // itemsを処理する
+
+                        let game_state: Fr = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(state) => state,
+                                Err(e) => {
+                                    println!("Failed to deserialize game_state: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                return;
+                            }
+                        };
+
+                        // 状態をゲームの結果に反映
+
+                        let result = if game_state == Fr::from(1u32) {
+                            GameResult::WerewolfWin
+                        } else if game_state == Fr::from(2u32) {
+                            GameResult::VillagerWin
+                        } else {
+                            self.chat_log
+                                .add_system_message("ゲームはまだ続くようです。".to_string());
+                            GameResult::InProgress
+                        };
+
+                        if result != GameResult::InProgress {
+                            let winner_message = match result {
+                                GameResult::VillagerWin => "村人陣営の勝利です！",
+                                GameResult::WerewolfWin => "人狼陣営の勝利です！",
+                                GameResult::InProgress => unreachable!(),
+                            };
+
+                            self.chat_log.add_message(ChatMessage::new(
+                                "system".to_string(),
+                                "システム".to_string(),
+                                format!("{}", winner_message),
+                                ChatMessageType::System,
+                            ));
+
+                            self.phase = GamePhase::Finished;
+                        }
+
+                        self.result = result.clone();
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
                         // itemsを処理する
+                        let role_result: Vec<Fr> = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(state) => state,
+                                Err(e) => {
+                                    println!("Failed to deserialize role_result: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No output value found");
+                                return;
+                            }
+                        };
+
+                        // role_resultをゲームの結果に反映
+                        for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
+                            player.role = if *role == Fr::from(0u32) {
+                                Some(Role::Villager)
+                            } else if *role == Fr::from(1u32) {
+                                Some(Role::Seer)
+                            } else if *role == Fr::from(2u32) {
+                                Some(Role::Werewolf)
+                            } else {
+                                None
+                            };
+                        }
+
+                        self.chat_log.add_system_message(format!(
+                            "役職が割り当てられました: {}。ゲームを開始します。",
+                            self.players
+                                .iter()
+                                .map(|p| format!("{}: {}", p.name, p.role.as_ref().unwrap()))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
                         // itemsを処理する
+                        let public_key: <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey =
+                            match output.value {
+                                Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                    Ok(key) => key,
+                                    Err(e) => {
+                                        println!("Failed to deserialize public key: {}", e);
+                                        return;
+                                    }
+                                },
+                                None => {
+                                    println!("No output value found");
+                                    return;
+                                }
+                            };
+
+                        self.crypto_parameters = Some(CryptoParameters {
+                            fortune_teller_public_key: public_key,
+                            ..self.crypto_parameters.clone().unwrap()
+                        });
                     }
                 }
 
