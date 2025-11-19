@@ -15,7 +15,7 @@ ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std",
 ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0" }
 ark-ec = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ec", version = "0.3.0" }
 
-nalgebra = { version = "0.33.0", features = ["serde-serialize"] }
+nalgebra = { version = "0.34.1", features = ["serde-serialize"] }
 
 mpc-algebra-wasm = { path = "../mpc-algebra-wasm" }
 crypto_box = { version = "0.9.1", features = ["std"] }
