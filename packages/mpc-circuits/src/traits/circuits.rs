@@ -3,7 +3,7 @@ use crate::*;
 use ark_bls12_377::Fr;
 use ark_crypto_primitives::encryption::AsymmetricEncryptionScheme;
 use ark_ec::{group, AffineCurve};
-use ark_ff::{BigInteger, PrimeField};
+use ark_ff::{BigInteger, PrimeField, SquareRootField};
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
@@ -11,8 +11,8 @@ use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
 use ark_r1cs_std::prelude::Boolean;
 use ark_r1cs_std::select::CondSelectGadget;
-use ark_r1cs_std::ToBitsGadget;
-use ark_relations::r1cs::ConstraintSystemRef;
+use ark_r1cs_std::{R1CSVar, ToBitsGadget};
+use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_relations::{lc, r1cs::ConstraintSynthesizer};
 use ark_std::{rand, test_rng};
 use ark_std::{One, Zero};
@@ -28,6 +28,7 @@ use mpc_algebra::{malicious_majority as mm, MpcBoolean};
 use mpc_algebra::{BitDecomposition, BooleanWire};
 use mpc_algebra::{EqualityZero, ModulusConversion};
 use mpc_algebra_wasm::{calc_shuffle_matrix, Role};
+use nalgebra as na;
 use zk_mpc::circuits::serialize::werewolf;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 
@@ -673,14 +674,278 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for DivinationCircuit<mm::MpcField<
     }
 }
 
-impl<F: PrimeField + LocalOrMPC<F> + ElGamalLocalOrMPC<F>> ConstraintSynthesizer<F>
-    for RoleAssignmentCircuit<F>
-{
+impl ConstraintSynthesizer<Fr> for RoleAssignmentCircuit<Fr> {
     fn generate_constraints(
         self,
-        cs: ark_relations::r1cs::ConstraintSystemRef<F>,
+        cs: ark_relations::r1cs::ConstraintSystemRef<Fr>,
     ) -> Result<(), ark_relations::r1cs::SynthesisError> {
         // TODO: Implement constraint generation logic here
+        // check player commitment
+        // assert_eq!(
+        //     self.public_input.num_players,
+        //     self.private_input.player_randomness.len()
+        // );
+        // assert_eq!(
+        //     self.public_input.num_players,
+        //     self.public_input.player_commitment.len()
+        // );
+
+        // TODO: check player commitment
+        // for i in 0..self.public_input.num_players {
+        //     let pedersen_circuit = PedersenComCircuit {
+        //         param: Some(self.pedersen_param.clone()),
+        //         input: self.player_randomness[i],
+        //         open: <Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
+        //         commit: self.player_commitment[i],
+        //     };
+        //     pedersen_circuit.generate_constraints(cs.clone())?;
+        // }
+
+        // initialize
+        let tau_matrix_var = na::DMatrix::from_iterator(
+            self.public_input.tau_matrix.nrows(),
+            self.public_input.tau_matrix.ncols(),
+            self.public_input.tau_matrix.iter().map(|b| {
+                FpVar::new_witness(cs.clone(), || Ok(b))
+                    .expect("tau matrix var is not allocated correctly")
+            }),
+        );
+
+        let shuffle_matrix_var = self
+            .private_input
+            .iter()
+            .map(|input| {
+                na::DMatrix::from_iterator(
+                    input.shuffle_matrices.nrows(),
+                    input.shuffle_matrices.ncols(),
+                    input.shuffle_matrices.iter().map(|b| {
+                        FpVar::new_witness(cs.clone(), || Ok(b))
+                            .expect("shuffle matrix var is not allocated correctly")
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let inverse_shuffle_matrix_var = self
+            .private_input
+            .iter()
+            .map(|input| {
+                na::DMatrix::from_iterator(
+                    input.shuffle_matrices.nrows(),
+                    input.shuffle_matrices.ncols(),
+                    input.shuffle_matrices.transpose().iter().map(|b| {
+                        FpVar::new_witness(cs.clone(), || Ok(b))
+                            .expect("shuffle matrix var is not allocated correctly")
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // each shuffle matrix is a permutation matrix and sub matrix is a identity matrix
+        shuffle_matrix_var.iter().for_each(|matrix| {
+            enforce_permutation_matrix(matrix, self.public_input.num_players).unwrap()
+        });
+
+        // calculate
+        // M = Product of shuffle_matrix
+        let matrix_M_var = shuffle_matrix_var
+            .clone()
+            .iter()
+            .skip(1)
+            .fold(shuffle_matrix_var[1].clone(), |acc, x| acc * x);
+
+        let inverse_matrix_M_var = inverse_shuffle_matrix_var
+            .clone()
+            .iter()
+            .skip(1)
+            .fold(inverse_shuffle_matrix_var[1].clone(), |acc, x| acc * x);
+
+        // rho = M^-1 * tau * M
+        let rho_var = inverse_matrix_M_var * &tau_matrix_var * &matrix_M_var;
+
+        let mut rho_sequence_var = Vec::with_capacity(self.public_input.num_players);
+        let mut current_rho = rho_var.clone();
+        for _ in 0..self.public_input.num_players {
+            rho_sequence_var.push(current_rho.clone());
+            current_rho *= rho_var.clone(); // rho^(i+1) = rho^i * rho
+        }
+
+        // input_result is consistent with the calculated result
+        let length = self.public_input.tau_matrix.nrows();
+
+        // 1. gen one-hot vector
+        let unit_vecs = (0..self.public_input.num_players)
+            .map(|i| test_one_hot_vector(length, i, cs.clone()))
+            .collect::<Vec<_>>();
+
+        // 2. calculate rho^i * unit_vec_j to value
+        let calced_vec = unit_vecs
+            .iter()
+            .map(|unit_vec_j| {
+                rho_sequence_var
+                    .iter()
+                    .map(|rho| {
+                        let res_index = rho * unit_vec_j.clone();
+                        test_index_to_value(res_index, true).unwrap()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let calced_role = calced_vec
+            .iter()
+            .map(|val| test_max(val, self.public_input.num_players, true).unwrap())
+            .collect::<Vec<_>>();
+
+        // // commitment
+        // for i in 0..self.num_players {
+        //     let pedersen_circuit = PedersenComCircuit {
+        //         param: Some(self.public_input.pedersen_param.clone()),
+        //         input: calced_role[i].value().unwrap_or_default(),
+        //         open: self.private_input[i].randomness.clone(),
+        //         commit: self.public_input.role_commitment[i],
+        //     };
+        //     pedersen_circuit.generate_constraints(cs.clone())?;
+        // }
+
+        Ok(())
+    }
+}
+
+impl ConstraintSynthesizer<mm::MpcField<Fr>> for RoleAssignmentCircuit<mm::MpcField<Fr>> {
+    fn generate_constraints(
+        self,
+        cs: ark_relations::r1cs::ConstraintSystemRef<mm::MpcField<Fr>>,
+    ) -> Result<(), ark_relations::r1cs::SynthesisError> {
+        // TODO: Implement constraint generation logic here
+        // check player commitment
+        // assert_eq!(
+        //     self.public_input.num_players,
+        //     self.private_input.player_randomness.len()
+        // );
+        // assert_eq!(
+        //     self.public_input.num_players,
+        //     self.public_input.player_commitment.len()
+        // );
+
+        // TODO: check player commitment
+        // for i in 0..self.public_input.num_players {
+        //     let pedersen_circuit = PedersenComCircuit {
+        //         param: Some(self.pedersen_param.clone()),
+        //         input: self.player_randomness[i],
+        //         open: <Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
+        //         commit: self.player_commitment[i],
+        //     };
+        //     pedersen_circuit.generate_constraints(cs.clone())?;
+        // }
+
+        // initialize
+        let tau_matrix_var = na::DMatrix::from_iterator(
+            self.public_input.tau_matrix.nrows(),
+            self.public_input.tau_matrix.ncols(),
+            self.public_input.tau_matrix.iter().map(|b| {
+                MpcFpVar::new_witness(cs.clone(), || Ok(b))
+                    .expect("tau matrix var is not allocated correctly")
+            }),
+        );
+
+        let shuffle_matrix_var = self
+            .private_input
+            .iter()
+            .map(|input| {
+                na::DMatrix::from_iterator(
+                    input.shuffle_matrices.nrows(),
+                    input.shuffle_matrices.ncols(),
+                    input.shuffle_matrices.iter().map(|b| {
+                        MpcFpVar::new_witness(cs.clone(), || Ok(b))
+                            .expect("shuffle matrix var is not allocated correctly")
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let inverse_shuffle_matrix_var = self
+            .private_input
+            .iter()
+            .map(|input| {
+                na::DMatrix::from_iterator(
+                    input.shuffle_matrices.nrows(),
+                    input.shuffle_matrices.ncols(),
+                    input.shuffle_matrices.transpose().iter().map(|b| {
+                        MpcFpVar::new_witness(cs.clone(), || Ok(b))
+                            .expect("shuffle matrix var is not allocated correctly")
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // each shuffle matrix is a permutation matrix and sub matrix is a identity matrix
+        shuffle_matrix_var.iter().for_each(|matrix| {
+            enforce_permutation_matrix_mpc(matrix, self.public_input.num_players).unwrap()
+        });
+
+        // calculate
+        // M = Product of shuffle_matrix
+        let matrix_M_var = shuffle_matrix_var
+            .clone()
+            .iter()
+            .skip(1)
+            .fold(shuffle_matrix_var[1].clone(), |acc, x| acc * x);
+
+        let inverse_matrix_M_var = inverse_shuffle_matrix_var
+            .clone()
+            .iter()
+            .skip(1)
+            .fold(inverse_shuffle_matrix_var[1].clone(), |acc, x| acc * x);
+
+        // rho = M^-1 * tau * M
+        let rho_var = inverse_matrix_M_var * &tau_matrix_var * &matrix_M_var;
+
+        let mut rho_sequence_var = Vec::with_capacity(self.public_input.num_players);
+        let mut current_rho = rho_var.clone();
+        for _ in 0..self.public_input.num_players {
+            rho_sequence_var.push(current_rho.clone());
+            current_rho *= rho_var.clone(); // rho^(i+1) = rho^i * rho
+        }
+
+        // input_result is consistent with the calculated result
+        let length = self.public_input.tau_matrix.nrows();
+
+        // 1. gen one-hot vector
+        let unit_vecs = (0..self.public_input.num_players)
+            .map(|i| test_one_hot_vector_mpc(length, i, cs.clone()))
+            .collect::<Vec<_>>();
+
+        // 2. calculate rho^i * unit_vec_j to value
+        let calced_vec = unit_vecs
+            .iter()
+            .map(|unit_vec_j| {
+                rho_sequence_var
+                    .iter()
+                    .map(|rho| {
+                        let res_index = rho * unit_vec_j.clone();
+                        test_index_to_value_mpc(res_index, true).unwrap()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let calced_role = calced_vec
+            .iter()
+            .map(|val| test_max_mpc(val, self.public_input.num_players, true).unwrap())
+            .collect::<Vec<_>>();
+
+        // // commitment
+        // for i in 0..self.num_players {
+        //     let pedersen_circuit = PedersenComCircuit {
+        //         param: Some(self.public_input.pedersen_param.clone()),
+        //         input: calced_role[i].value().unwrap_or_default(),
+        //         open: self.private_input[i].randomness.clone(),
+        //         commit: self.public_input.role_commitment[i],
+        //     };
+        //     pedersen_circuit.generate_constraints(cs.clone())?;
+        // }
+
         Ok(())
     }
 }
@@ -1007,4 +1272,241 @@ impl ConstraintSynthesizer<mm::MpcField<Fr>> for WinningJudgementCircuit<mm::Mpc
 
         Ok(())
     }
+}
+
+// return maximum value in the vector a, index runs from 0 to use_index_len
+fn test_max<F: PrimeField>(
+    a: &[FpVar<F>],
+    use_index_len: usize,
+    should_enforce: bool,
+) -> Result<FpVar<F>, SynthesisError> {
+    let cs = a[0].cs().clone();
+    let max_var = FpVar::new_witness(cs, || {
+        let max = a.iter().map(|x| x.value().unwrap()).max().unwrap();
+        Ok(max)
+    })?;
+
+    if should_enforce {
+        // each element must be less than half of the modulus
+        for i in 0..use_index_len {
+            a[i].enforce_cmp(&max_var, core::cmp::Ordering::Less, true)?;
+        }
+    }
+
+    Ok(max_var)
+}
+
+fn test_max_mpc<F: PrimeField + SquareRootField + BitDecomposition + EqualityZero>(
+    a: &[MpcFpVar<F>],
+    use_index_len: usize,
+    should_enforce: bool,
+) -> Result<MpcFpVar<F>, SynthesisError> {
+    let cs = a[0].cs().clone();
+    let max_var = MpcFpVar::new_witness(cs, || {
+        let max = a.iter().map(|x| x.value().unwrap()).max().unwrap();
+        Ok(max)
+    })?;
+
+    if should_enforce {
+        for i in 0..use_index_len {
+            a[i].enforce_cmp(&max_var, core::cmp::Ordering::Less, true)?;
+        }
+    }
+
+    Ok(max_var)
+}
+
+fn test_index_to_value<F: PrimeField>(
+    a: na::DVector<FpVar<F>>,
+    should_enforce: bool,
+) -> Result<FpVar<F>, SynthesisError> {
+    let cs = a[0].cs().clone();
+    let value_var = FpVar::new_witness(cs.clone(), || {
+        let res = a
+            .iter()
+            .position(|x| x.value().unwrap().is_one())
+            .expect("This index vector is not a one-hot vector");
+        Ok(F::from(res as u64))
+    })?;
+
+    if should_enforce {
+        let stair_vector = na::DVector::from(
+            (0..a.len())
+                .map(|i| FpVar::new_constant(cs.clone(), F::from(i as u64)).unwrap())
+                .collect::<Vec<_>>(),
+        );
+        let ip = a.dot(&stair_vector);
+
+        ip.enforce_equal(&value_var)?;
+    }
+    Ok(value_var)
+}
+
+fn test_index_to_value_mpc<F: PrimeField + Reveal>(
+    a: na::DVector<MpcFpVar<F>>,
+    should_enforce: bool,
+) -> Result<MpcFpVar<F>, SynthesisError>
+where
+    <F as Reveal>::Base: Zero,
+{
+    let cs = a[0].cs().clone();
+    let value_var = MpcFpVar::new_witness(cs.clone(), || {
+        let res = a
+            .iter()
+            .position(|x| x.value().unwrap().is_one())
+            .expect("This index vector is not a one-hot vector");
+        Ok(F::from(res as u64))
+    })?;
+
+    if should_enforce {
+        let stair_vector = na::DVector::from(
+            (0..a.len())
+                .map(|i| MpcFpVar::new_constant(cs.clone(), F::from(i as u64)).unwrap())
+                .collect::<Vec<_>>(),
+        );
+        let ip = a.dot(&stair_vector);
+
+        ip.enforce_equal(&value_var)?;
+    }
+    Ok(value_var)
+}
+
+fn test_one_hot_vector<F: PrimeField>(
+    length: usize,
+    index: usize,
+    cs: ConstraintSystemRef<F>,
+) -> na::DVector<FpVar<F>> {
+    assert!(index < length);
+    let mut res = na::DVector::<FpVar<F>>::zeros(length);
+    for i in 0..length {
+        if i == index {
+            res[i] = FpVar::new_constant(cs.clone(), F::one()).unwrap();
+        } else {
+            res[i] = FpVar::new_constant(cs.clone(), F::zero()).unwrap();
+        }
+    }
+    res
+}
+
+fn test_one_hot_vector_mpc<F: PrimeField + Reveal>(
+    length: usize,
+    index: usize,
+    cs: ConstraintSystemRef<F>,
+) -> na::DVector<MpcFpVar<F>>
+where
+    <F as Reveal>::Base: Zero,
+{
+    assert!(index < length);
+    let mut res = na::DVector::<MpcFpVar<F>>::zeros(length);
+    for i in 0..length {
+        if i == index {
+            res[i] = MpcFpVar::new_constant(cs.clone(), F::one()).unwrap();
+        } else {
+            res[i] = MpcFpVar::new_constant(cs.clone(), F::zero()).unwrap();
+        }
+    }
+    res
+}
+
+fn enforce_permutation_matrix<F: PrimeField>(
+    matrix: &na::DMatrix<FpVar<F>>,
+    n: usize,
+) -> Result<(), SynthesisError> {
+    let size = matrix.nrows();
+    // (0,0) ~ (n-1,n-1) is arbitrary permutation matrix
+
+    for i in 0..n {
+        let mut i_th_row_sum = <FpVar<F> as Zero>::zero();
+        let mut i_th_column_sum = <FpVar<F> as Zero>::zero();
+
+        for j in 0..n {
+            // all check 0 or 1 -> row sum and column sum is 1
+            let val = &matrix[(i, j)];
+
+            val.is_eq(&<FpVar<F> as Zero>::zero())
+                .unwrap()
+                .or(&val.is_eq(&<FpVar<F> as One>::one()).unwrap())
+                .unwrap()
+                .enforce_equal(&Boolean::TRUE)?;
+
+            // row column is ambiguos
+            i_th_row_sum += val;
+            i_th_column_sum += &matrix[(j, i)];
+        }
+
+        i_th_row_sum.enforce_equal(&<FpVar<F> as One>::one())?;
+        i_th_column_sum.enforce_equal(&<FpVar<F> as One>::one())?;
+    }
+
+    for i in 0..size {
+        for j in 0..size {
+            if i >= n || j >= n {
+                // (n~n+m-1, n~n+m-1) is identity matrix
+                if i == j {
+                    let val = &matrix[(i, j)];
+                    val.enforce_equal(&<FpVar<F> as One>::one())?;
+                } else {
+                    // other is 0
+                    let val = &matrix[(i, j)];
+                    val.enforce_equal(&<FpVar<F> as Zero>::zero())?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn enforce_permutation_matrix_mpc<
+    F: PrimeField + Reveal + ark_ff::SquareRootField + mpc_algebra::EqualityZero,
+>(
+    matrix: &na::DMatrix<MpcFpVar<F>>,
+    n: usize,
+) -> Result<(), SynthesisError>
+where
+    <F as Reveal>::Base: Zero,
+{
+    let size = matrix.nrows();
+    // (0,0) ~ (n-1,n-1) is arbitrary permutation matrix
+
+    for i in 0..n {
+        let mut i_th_row_sum = <MpcFpVar<F> as Zero>::zero();
+        let mut i_th_column_sum = <MpcFpVar<F> as Zero>::zero();
+
+        for j in 0..n {
+            // all check 0 or 1 -> row sum and column sum is 1
+            let val = &matrix[(i, j)];
+
+            val.is_zero()
+                .unwrap()
+                .or(&(val - <MpcFpVar<F> as One>::one()).is_zero().unwrap())
+                .unwrap()
+                .enforce_equal(&MpcBoolean::TRUE)?;
+
+            // row column is ambiguos
+            i_th_row_sum += val;
+            i_th_column_sum += &matrix[(j, i)];
+        }
+
+        i_th_row_sum.enforce_equal(&<MpcFpVar<F> as One>::one())?;
+        i_th_column_sum.enforce_equal(&<MpcFpVar<F> as One>::one())?;
+    }
+
+    for i in 0..size {
+        for j in 0..size {
+            if i >= n || j >= n {
+                // (n~n+m-1, n~n+m-1) is identity matrix
+                if i == j {
+                    let val = &matrix[(i, j)];
+                    val.enforce_equal(&<MpcFpVar<F> as One>::one())?;
+                } else {
+                    // other is 0
+                    let val = &matrix[(i, j)];
+                    val.enforce_equal(&<MpcFpVar<F> as Zero>::zero())?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
