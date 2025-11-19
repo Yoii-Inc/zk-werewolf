@@ -53,8 +53,13 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
 
         const privateInput = {
           id: players.findIndex(player => player.id === myId),
-          isWerewolf: [[0n, 0n, 0n, 0n], null],
-          isTarget: players.map(player => [player.id === selectedPlayer ? [0n, 0n, 0n, 1n] : [0n, 0n, 0n, 0n], null]),
+          isWerewolf: [JSONbigNative.parse('["0","0","0","0"]'), null],
+          isTarget: players.map(player => [
+            player.id === selectedPlayer
+              ? JSONbigNative.parse('["0","0","0","1"]')
+              : JSONbigNative.parse('["0","0","0","0"]'),
+            null,
+          ]),
           randomness: parsedRandomness,
         };
 
@@ -62,7 +67,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
           pedersenParam: parsedParams,
           elgamalParam: parsedElgamalParam,
           pubKey: parsedElgamalPubkey,
-          playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
+          //   playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
           playerNum: players.length,
         };
 

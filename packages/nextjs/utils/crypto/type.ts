@@ -139,7 +139,7 @@ export interface DivinationPublicInput {
   elgamalParam: any;
   pubKey: any;
   playerNum: any;
-  playerCommitment: PedersenCommitment[];
+  //   playerCommitment: PedersenCommitment[];
 }
 
 export interface WinningJudgementPrivateInput {

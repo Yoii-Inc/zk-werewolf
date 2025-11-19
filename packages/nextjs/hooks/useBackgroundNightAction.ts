@@ -33,14 +33,14 @@ export const useBackgroundNightAction = () => {
       // ダミーのプライベート入力を作成
       const privateInput = {
         id: players.findIndex(player => player.id === myId),
-        isTarget: players.map(() => [[0n, 0n, 0n, 0n], null]),
-        isWerewolf: [[0n, 0n, 0n, 0n], null],
+        isTarget: players.map(() => [JSONbigNative.parse('["0","0","0","0"]'), null]),
+        isWerewolf: [JSONbigNative.parse('["0","0","0","0"]'), null],
         randomness: parsedRandomness,
       };
 
       const publicInput: DivinationPublicInput = {
         pedersenParam: parsedParams,
-        playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
+        // playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
         elgamalParam: parsedElgamalParam,
         pubKey: parsedElgamalPubkey,
         playerNum: players.length,
@@ -87,6 +87,7 @@ export const useBackgroundNightAction = () => {
         body: JSON.stringify({
           proof_type: "Divination",
           data: {
+            user_id: String(divinationData.privateInput.id),
             prover_count: alivePlayerCount,
             encrypted_data: encryptedDivination,
           },
