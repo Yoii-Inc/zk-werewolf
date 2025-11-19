@@ -95,6 +95,7 @@ pub struct ChangeRoleRequest {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProverInfo {
+    pub user_id: String,
     pub prover_count: usize,
     pub encrypted_data: String,
 }
@@ -117,6 +118,16 @@ impl ClientRequestType {
             | ClientRequestType::WinningJudge(info)
             | ClientRequestType::RoleAssignment(info)
             | ClientRequestType::KeyPublicize(info) => info.prover_count,
+        }
+    }
+
+    fn get_user_id(&self) -> &str {
+        match self {
+            ClientRequestType::Divination(info)
+            | ClientRequestType::AnonymousVoting(info)
+            | ClientRequestType::WinningJudge(info)
+            | ClientRequestType::RoleAssignment(info)
+            | ClientRequestType::KeyPublicize(info) => info.user_id.as_str(),
         }
     }
 }
@@ -384,29 +395,39 @@ impl Game {
     pub async fn add_request(&mut self, request: ClientRequestType) -> String {
         // let mut batch_request = &self.batch_request;
         let size_limit = request.get_prover_count();
-        self.batch_request.requests.push(request);
 
-        // バッチが満杯になったら処理を開始
-        if self.batch_request.requests.len() >= size_limit {
-            let batch_id = self.batch_request.batch_id.clone();
+        if !self
+            .batch_request
+            .requests
+            .iter()
+            .any(|r| r.get_user_id() == request.get_user_id())
+        {
+            self.batch_request.requests.push(request);
 
-            // let mut service = self.clone();
+            // バッチが満杯になったら処理を開始
+            if self.batch_request.requests.len() >= size_limit {
+                let batch_id = self.batch_request.batch_id.clone();
 
-            // TODO: 非同期でバッチ処理を開始
-            // tokio::spawn(async move {
-            // let mut games = game.lock().await;
-            // if let Some(game) = games.get_mut(room_id) {
-            //     // ゲームの状態を更新する処理
-            //     // ...
-            // }
+                // let mut service = self.clone();
 
-            self.process_batch().await;
-            // });
+                // TODO: 非同期でバッチ処理を開始
+                // tokio::spawn(async move {
+                // let mut games = game.lock().await;
+                // if let Some(game) = games.get_mut(room_id) {
+                //     // ゲームの状態を更新する処理
+                //     // ...
+                // }
 
-            // 新しいバッチを作成
-            self.batch_request = BatchRequest::new();
+                self.process_batch().await;
+                // });
 
-            batch_id
+                // 新しいバッチを作成
+                self.batch_request = BatchRequest::new();
+
+                batch_id
+            } else {
+                self.batch_request.batch_id.clone()
+            }
         } else {
             self.batch_request.batch_id.clone()
         }

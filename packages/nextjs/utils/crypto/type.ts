@@ -112,6 +112,7 @@ export interface RoleAssignmentPublicInput {
   numPlayers: number;
   maxGroupSize: number;
   pedersenParam: PedersenParam;
+  groupingParameter: GroupingParameter;
 
   // instance
   tauMatrix: any;
@@ -119,11 +120,17 @@ export interface RoleAssignmentPublicInput {
   playerCommitment: PedersenCommitment[];
 }
 
+type GroupingParameter = {
+  Villager: [number, boolean];
+  FortuneTeller: [number, boolean];
+  Werewolf: [number, boolean];
+};
+
 // TODO: modify.
 export interface DivinationPrivateInput {
   id: number;
-  isWerewolf: (number[] | null)[];
-  isTarget: (number[] | null)[][];
+  isWerewolf: (bigint[] | null)[];
+  isTarget: (bigint[] | null)[][];
   //   randomness: (number[] | null)[];
   randomness: any;
 }

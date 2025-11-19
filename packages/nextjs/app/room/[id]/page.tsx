@@ -115,7 +115,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     <div className="h-screen flex bg-gradient-to-br from-indigo-50 to-purple-50">
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-xl text-indigo-600">ルーム情報を読み込み中...</div>
+          <div className="text-xl text-indigo-600">Loading room information...</div>
         </div>
       ) : roomInfo ? (
         <div className="flex-1 flex flex-col">
@@ -126,7 +126,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <h1 className="text-2xl font-bold text-indigo-900">{roomInfo.name}</h1>
                 {roomInfo.status === "Open" && (
                   <span className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm border">
-                    部屋の状態：オープン(参加者待ち)
+                    Room Status: Open (Waiting for players)
                   </span>
                 )}
                 {gameInfo && (
@@ -134,23 +134,23 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {gameInfo.phase === "Night" ? (
                       <span className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
                         <Moon size={16} />
-                        夜フェーズ
+                        Night Phase
                       </span>
                     ) : (
                       <span className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
                         <Sun size={16} />
-                        {gameInfo.phase}フェーズ
+                        {gameInfo.phase} Phase
                       </span>
                     )}
 
                     {gameInfo.result !== "InProgress" && (
                       <span className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm">
-                        ゲーム結果: {gameInfo.result === "VillagerWin" ? "村人陣営の勝利" : "人狼陣営の勝利"}
+                        Game Result: {gameInfo.result === "VillagerWin" ? "Villagers Win" : "Werewolves Win"}
                       </span>
                     )}
 
                     <span className="flex items-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full text-sm">
-                      あなたの役職：{" "}
+                      Your Role:{" "}
                       {(() => {
                         const role = gameInfo.players.find(player => player.name === user?.username)?.role;
                         switch (role) {
@@ -178,7 +178,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                           }}
                           className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm border border-gray-300 transition-colors"
                         >
-                          次のフェーズへ(デバッグ用)
+                          Next Phase (Debug)
                         </button>
                       </>
                     )}
@@ -195,7 +195,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2 text-indigo-700">
                   <Clock size={18} />
                   <span>
-                    残り時間: {Math.floor(roomInfo.remainingTime / 60)}:
+                    Time Remaining: {Math.floor(roomInfo.remainingTime / 60)}:
                     {String(roomInfo.remainingTime % 60).padStart(2, "0")}
                   </span>
                 </div>
@@ -209,7 +209,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         : "bg-green-600 hover:bg-green-700"
                     }`}
                   >
-                    {isStarting ? "開始中..." : "ゲーム開始"}
+                    {isStarting ? "Starting..." : "Start Game"}
                   </button>
                 )}
                 {gameInfo?.phase === "Night" &&
@@ -219,7 +219,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                       onClick={() => setShowNightAction(true)}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
                     >
-                      夜の行動を実行
+                      Execute Night Action
                     </button>
                   )}
                 {gameInfo?.phase === "Voting" && (
@@ -227,7 +227,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     onClick={() => setShowVoteModal(true)}
                     className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
                   >
-                    投票する
+                    Vote
                   </button>
                 )}
               </div>
@@ -238,7 +238,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             {/* Players List */}
             <div className="w-64 bg-white/80 backdrop-blur-sm border-l border-indigo-100">
               <div className="p-4 border-b border-indigo-100">
-                <h2 className="text-lg font-semibold text-indigo-900">参加者一覧</h2>
+                <h2 className="text-lg font-semibold text-indigo-900">Players List</h2>
               </div>
               <div className="p-4 space-y-3">
                 {(gameInfo ? gameInfo.players : roomInfo.players).map(player => (
@@ -258,7 +258,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         <span className={player.is_dead === true ? "line-through" : ""}>{player.name}</span>
                       </div>
                       {!player.isReady && (
-                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">準備中</span>
+                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">In preparation</span>
                       )}
                     </div>
 
@@ -273,7 +273,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                           }`}
                         >
-                          村人
+                          Villager
                         </button>
                         <button
                           onClick={() => handleChangeRole(player.id, "人狼")}
@@ -283,7 +283,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                               : "bg-red-100 text-red-600 hover:bg-red-200"
                           }`}
                         >
-                          人狼
+                          Werewolf
                         </button>
                         <button
                           onClick={() => handleChangeRole(player.id, "占い師")}
@@ -293,7 +293,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                               : "bg-blue-100 text-blue-600 hover:bg-blue-200"
                           }`}
                         >
-                          占い師
+                          Seer
                         </button>
                       </div>
                     )}
@@ -389,7 +389,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         addMessage({
                           id: Date.now().toString(),
                           sender: "システム",
-                          message: "ゲームがリセットされました",
+                          message: "Game has been reset",
                           timestamp: new Date().toISOString(),
                           type: "system",
                         });

@@ -36,6 +36,7 @@ export const useDivination = () => {
           body: JSON.stringify({
             proof_type: "Divination",
             data: {
+              user_id: String(divinationData.privateInput.id),
               prover_count: alivePlayerCount,
               encrypted_data: encryptedDivination,
             },

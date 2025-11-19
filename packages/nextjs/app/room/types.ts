@@ -21,10 +21,7 @@ export interface Game {
   result?: "VillagerWin" | "WerewolfWin";
 }
 
-export type NightAction =
-  | { Attack: { target_id: string } }
-  | { Divine: { target_id: string } }
-  | { Guard: { target_id: string } };
+export type NightAction = { Attack: { target_id: string } } | { Divine: { target_id: string } };
 
 export interface NightActionRequest {
   player_id: string;

@@ -138,12 +138,12 @@ export const Header = () => {
           <div className="flex items-center gap-4 ml-4">
             <span className="text-sm font-medium">{user?.username}</span>
             <button onClick={handleLogout} className="btn btn-sm btn-ghost">
-              ログアウト
+              Logout
             </button>
           </div>
         ) : (
           <Link href="/login" className="btn btn-sm btn-ghost ml-4">
-            ログイン
+            Login
           </Link>
         )}
       </div>

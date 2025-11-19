@@ -126,7 +126,7 @@ const Home = () => {
 
   const joinRoom = async (roomId: string) => {
     if (!isAuthenticated || !user) {
-      toast.error("ルームに参加するにはログインが必要です", {
+      toast.error("You need to be logged in to join a room", {
         duration: 4000,
         position: "top-center",
       });
@@ -143,11 +143,11 @@ const Home = () => {
       });
 
       if (!response.ok) {
-        throw new Error("ルームへの参加に失敗しました");
+        throw new Error("Failed to join the room");
       }
 
       setNotification({
-        message: `${user.username}として参加しました`,
+        message: `joined the room as ${user.username}`,
         type: "success",
       });
 
@@ -156,7 +156,7 @@ const Home = () => {
     } catch (error) {
       console.error("Error joining room:", error);
       setNotification({
-        message: "ルームへの参加に失敗しました",
+        message: "Failed to join the room",
         type: "error",
       });
     }
@@ -177,7 +177,7 @@ const Home = () => {
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-4">
           <Moon size={32} className="text-indigo-600" />
-          <h1 className="text-3xl font-bold text-indigo-900">人狼ゲーム</h1>
+          <h1 className="text-3xl font-bold text-indigo-900">Werewolf Game</h1>
         </div>
         <div className="flex items-center gap-4">
           <input
@@ -192,7 +192,7 @@ const Home = () => {
             className="bg-indigo-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <Plus size={20} />
-            ルーム作成
+            Create Room
           </button>
         </div>
       </div>
@@ -205,14 +205,14 @@ const Home = () => {
           >
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold text-indigo-900">
-                {room.name ? room.name : `ルーム${room.room_id}`}
+                {room.name ? room.name : `Room ${room.room_id}`}
               </h2>
               <span
                 className={`px-4 py-1.5 rounded-full text-sm font-medium ${
                   room.status === "Open" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
                 }`}
               >
-                {room.status === "Open" ? "待機中" : "ゲーム中"}
+                {room.status === "Open" ? "Waiting" : "In Game"}
               </span>
             </div>
 
@@ -220,12 +220,12 @@ const Home = () => {
               <div className="flex items-center gap-2">
                 <Users size={18} />
                 <span>
-                  {room.players?.length ?? 0}/{room.max_players}人
+                  {room.players?.length ?? 0}/{room.max_players} players
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock size={18} />
-                <span>作成: {/*room.createdAt> :*/ "不明"}</span>
+                <span>Created: {/*room.createdAt> :*/ "Unknown"}</span>
               </div>
             </div>
 
@@ -239,7 +239,7 @@ const Home = () => {
               }`}
             >
               <PlayCircle size={20} />
-              {room.status === "Open" ? "参加する" : "ゲーム中"}
+              {room.status === "Open" ? "Join" : "In Game"}
             </button>
           </div>
         ))}

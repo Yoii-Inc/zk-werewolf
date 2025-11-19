@@ -10,7 +10,7 @@ export const useBackgroundNightAction = () => {
   const handleBackgroundNightAction = useCallback(async (roomId: string, myId: string, players: Player[]) => {
     try {
       // パラメータの取得
-      const res = await fetch("/pedersen-params.json");
+      const res = await fetch("/pedersen_params2.json");
       const params = await res.text();
       const parsedParams = JSONbigNative.parse(params);
 
@@ -33,8 +33,8 @@ export const useBackgroundNightAction = () => {
       // ダミーのプライベート入力を作成
       const privateInput = {
         id: players.findIndex(player => player.id === myId),
-        isTarget: players.map(() => [[0, 0, 0, 0], null]),
-        isWerewolf: [[0, 0, 0, 0], null],
+        isTarget: players.map(() => [[0n, 0n, 0n, 0n], null]),
+        isWerewolf: [[0n, 0n, 0n, 0n], null],
         randomness: parsedRandomness,
       };
 

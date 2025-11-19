@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
-import { RoleAssignmentInput } from "~~/utils/crypto/type";
+import { RoleAssignmentInput, RoleAssignmentOutput } from "~~/utils/crypto/type";
 
 export const useRoleAssignment = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -24,23 +24,31 @@ export const useRoleAssignment = () => {
           throw new Error("MPC node public keys are not properly configured");
         }
 
+        console.log(roleAssignmentData);
+
         // 役職配布データの暗号化（MPCノードの公開鍵を使用）
-        const encryptedRoleAssignment = await MPCEncryption.encryptRoleAssignment(roleAssignmentData);
+        const encryptedRoleAssignment: RoleAssignmentOutput =
+          await MPCEncryption.encryptRoleAssignment(roleAssignmentData);
 
         console.log("役職配布リクエストを送信します。");
+
+        const requestBody = {
+          proof_type: "RoleAssignment",
+          data: {
+            user_id: String(roleAssignmentData.privateInput.id),
+            prover_count: alivePlayerCount,
+            encrypted_data: encryptedRoleAssignment,
+          },
+        };
+
+        console.log(requestBody);
 
         const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            proof_type: "RoleAssignment",
-            data: {
-              prover_count: alivePlayerCount,
-              encrypted_data: encryptedRoleAssignment,
-            },
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!newProofId.ok) {

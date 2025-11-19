@@ -36,6 +36,7 @@ export const useWinningJudge = () => {
           body: JSON.stringify({
             proof_type: "WinningJudge",
             data: {
+              user_id: String(winningJudgeData.privateInput.id),
               prover_count: alivePlayerCount,
               encrypted_data: encryptedWinningJudge,
             },

@@ -20,5 +20,5 @@ export type Player = {
   name: string;
   is_dead: boolean;
   isReady: boolean;
-  role: "Villager" | "Werewolf" | "Seer" | "Guard";
+  role: "Villager" | "Werewolf" | "Seer";
 };

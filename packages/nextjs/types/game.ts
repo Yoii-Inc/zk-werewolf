@@ -35,7 +35,7 @@ export interface PrivateGameInfo {
 export interface Player {
   id: string;
   name: string;
-  role: "Seer" | "Werewolf" | "Villager" | "Guard";
+  role: "Seer" | "Werewolf" | "Villager";
   is_dead: boolean;
   isReady: boolean;
 }
