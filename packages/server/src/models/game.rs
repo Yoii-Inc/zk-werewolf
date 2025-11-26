@@ -392,7 +392,11 @@ impl Game {
         ));
     }
 
-    pub async fn add_request(&mut self, request: ClientRequestType) -> String {
+    pub async fn add_request(
+        &mut self,
+        request: ClientRequestType,
+        app_state: &crate::state::AppState,
+    ) -> String {
         // let mut batch_request = &self.batch_request;
         let size_limit = request.get_prover_count();
 
@@ -418,7 +422,7 @@ impl Game {
                 //     // ...
                 // }
 
-                self.process_batch().await;
+                self.process_batch(app_state).await;
                 // });
 
                 // 新しいバッチを作成
@@ -433,7 +437,7 @@ impl Game {
         }
     }
 
-    async fn process_batch(&mut self) {
+    async fn process_batch(&mut self, app_state: &crate::state::AppState) {
         self.batch_request.status = BatchStatus::Processing;
 
         // requsets: Vec<ClientRequestType>をCircuitEncryptedInputIdentifierに変換
@@ -503,10 +507,29 @@ impl Game {
                             }
                         };
 
-                        self.divination_result = Some(divination_result);
+                        self.divination_result = Some(divination_result.clone());
                         println!("占い結果が正常に処理されました。");
                         self.chat_log
                             .add_system_message("占い結果が生成されました。".to_string());
+
+                        // 全プレイヤーに占い結果を通知
+                        let result_data = serde_json::json!({
+                            "ciphertext": serde_json::to_value(&divination_result.ciphertext).unwrap_or_default(),
+                            "status": "ready"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "divination",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast divination result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
                         println!("AnonymousVoting process is starting...");
@@ -571,6 +594,26 @@ impl Game {
                         self.vote_results.clear();
 
                         println!("Vote results cleared after processing.");
+
+                        // 全プレイヤーに投票結果を通知
+                        let result_data = serde_json::json!({
+                            "executed_player_id": target_id.into_repr().to_string(),
+                            "executed_player_name": self.players[target_index].name,
+                            "status": "completed"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "anonymous_voting",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast voting result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::WinningJudge(items) => {
                         // itemsを処理する
@@ -619,6 +662,26 @@ impl Game {
                         }
 
                         self.result = result.clone();
+
+                        // 全プレイヤーに勝利判定結果を通知
+                        let result_data = serde_json::json!({
+                            "game_result": result,
+                            "game_state_value": game_state.into_repr().to_string(),
+                            "status": "completed"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "winning_judge",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast winning judge result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
                         // itemsを処理する
@@ -653,10 +716,41 @@ impl Game {
                             "役職が割り当てられました: {}。ゲームを開始します。",
                             self.players
                                 .iter()
-                                .map(|p| format!("{}: {}", p.name, p.role.as_ref().unwrap()))
+                                .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         ));
+
+                        // 全プレイヤーに役職配布結果を通知
+                        let role_assignments: Vec<_> = self
+                            .players
+                            .iter()
+                            .map(|p| {
+                                serde_json::json!({
+                                    "player_id": p.id,
+                                    "player_name": p.name,
+                                    "role": p.role
+                                })
+                            })
+                            .collect();
+
+                        let result_data = serde_json::json!({
+                            "role_assignments": role_assignments,
+                            "status": "completed"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "role_assignment",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast role assignment result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
                         // itemsを処理する

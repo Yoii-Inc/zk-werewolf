@@ -66,6 +66,34 @@ impl AppState {
         Ok(())
     }
 
+    pub async fn broadcast_computation_result(
+        &self,
+        room_id: &str,
+        computation_type: &str,
+        result_data: serde_json::Value,
+        target_player_id: Option<String>,
+        batch_id: &str,
+    ) -> Result<(), String> {
+        let tx = self.get_or_create_room_channel(room_id).await;
+
+        let computation_notification = serde_json::json!({
+            "message_type": "computation_result",
+            "computation_type": computation_type,
+            "result_data": result_data,
+            "room_id": room_id,
+            "target_player_id": target_player_id,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "batch_id": batch_id
+        });
+
+        if let Ok(message_text) = serde_json::to_string(&computation_notification) {
+            if let Err(e) = tx.send(Message::Text(message_text)) {
+                return Err(format!("Failed to broadcast computation result: {}", e));
+            }
+        }
+
+        Ok(())
+    }
     pub async fn save_chat_message(
         &self,
         room_id: &str,

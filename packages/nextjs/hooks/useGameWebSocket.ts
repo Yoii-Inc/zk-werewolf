@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, WebSocketMessage } from "~~/types/game";
 
+interface ComputationResult {
+  computationType: string;
+  resultData: any;
+  targetPlayerId?: string;
+  batchId: string;
+  timestamp: string;
+}
+
 export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
   const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected");
@@ -36,6 +44,25 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
             }),
           );
         }
+        return;
+      }
+
+      // 計算結果通知の場合
+      if (data.message_type === "computation_result") {
+        console.log(`計算結果通知を受信: ${data.computation_type}`);
+
+        // カスタムイベントを発行
+        window.dispatchEvent(
+          new CustomEvent("computationResultNotification", {
+            detail: {
+              computationType: data.computation_type,
+              resultData: data.result_data,
+              targetPlayerId: data.target_player_id,
+              batchId: data.batch_id,
+              timestamp: data.timestamp,
+            },
+          }),
+        );
         return;
       }
 

@@ -139,14 +139,13 @@ pub async fn batch_proof_handling(
         ClientRequestType::AnonymousVoting(info) => info.user_id.clone(),
         ClientRequestType::WinningJudge(info) => info.user_id.clone(),
         ClientRequestType::KeyPublicize(info) => info.user_id.clone(),
-        _ => return Err("Invalid request type".to_string()),
     };
 
     game.chat_log
         .add_system_message(format!("{}が証明リクエストを送信しました。", user_id));
 
     // バッチリクエストに追加
-    let batch_id = game.add_request(request.clone()).await;
+    let batch_id = game.add_request(request.clone(), &state).await;
 
     Ok(batch_id)
 }

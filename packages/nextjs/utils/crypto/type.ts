@@ -81,7 +81,7 @@ export interface PedersenCommitment {
 export interface AnonymousVotingPrivateInput {
   id: number;
   //   isTargetId: string[];
-  isTargetId: (number[] | null)[][];
+  isTargetId: (bigint[] | null)[][];
   playerRandomness: (number[] | null)[];
 }
 export interface AnonymousVotingPublicInput {

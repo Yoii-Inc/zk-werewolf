@@ -24,7 +24,7 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
     e.preventDefault();
     if (!selectedPlayerId) return;
 
-    const res = await fetch("/pedersen-params.json");
+    const res = await fetch("/pedersen_params2.json");
     const params = await res.text();
 
     const parsedParams = JSONbigNative.parse(params);
@@ -39,7 +39,12 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
 
     const privateInput = {
       id: players.findIndex(player => player.id === myId),
-      isTargetId: players.map(player => [player.id === selectedPlayerId ? [0, 0, 0, 1] : [0, 0, 0, 0], null]),
+      isTargetId: players.map(player => [
+        player.id === selectedPlayerId
+          ? JSONbigNative.parse('["0","0","0","1"]')
+          : JSONbigNative.parse('["0","0","0","0"]'),
+        null,
+      ]),
       playerRandomness: parsedRandomness,
     };
     const publicInput: AnonymousVotingPublicInput = {

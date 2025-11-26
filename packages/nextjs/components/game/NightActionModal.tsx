@@ -102,11 +102,12 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
 
         console.log("占いを実行します。");
         await submitDivination(roomId, votingData, alivePlayerCount);
-      } else {
-        // 占い師以外のプレイヤーの場合、ダミーリクエストを送信
-        console.log("ダミーリクエストを送信します。");
-        await handleBackgroundNightAction(roomId, myId, players);
       }
+      //   else {
+      //     // 占い師以外のプレイヤーの場合、ダミーリクエストを送信
+      //     console.log("ダミーリクエストを送信します。");
+      //     await handleBackgroundNightAction(roomId, myId, players);
+      //   }
 
       // 親コンポーネントのonSubmit関数を呼び出す
       await onSubmit(selectedPlayer);
@@ -160,7 +161,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
             disabled={!selectedPlayer || isSubmitting}
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? "処理中..." : "Confirm"}
+            {isSubmitting ? "Processing..." : "Confirm"}
           </button>
         </div>
       </div>

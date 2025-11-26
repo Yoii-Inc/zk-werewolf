@@ -33,6 +33,7 @@ export const useGamePhase = (
   const phaseTransitionProcessedRef = useRef<string | null>(null);
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
+  const handleGameResultCheckRef = useRef<((transitionId: string) => void) | null>(null);
 
   // WebSocketからのフェーズ変更通知を処理
   useEffect(() => {
@@ -40,38 +41,54 @@ export const useGamePhase = (
       const customEvent = event as CustomEvent;
       const { fromPhase, toPhase, requiresDummyRequest } = customEvent.detail;
 
-      if (requiresDummyRequest && gameInfo && username) {
-        const currentPlayer = gameInfo.players.find(player => player.name === username);
+      console.log(`WebSocketフェーズ変更通知受信: ${fromPhase} → ${toPhase}`);
 
-        // 占い師以外の生きているプレイヤーの場合、ダミーリクエストを送信
-        if (currentPlayer && currentPlayer.role !== "Seer" && !currentPlayer.is_dead) {
-          console.log(`フェーズ変更通知受信: ${fromPhase} → ${toPhase}`);
-          console.log(`占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
+      if (!gameInfo || !username) return;
 
-          // ダミーリクエストの送信
-          const sendDummyRequest = async () => {
-            try {
-              await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
-              addMessage({
-                id: Date.now().toString(),
-                sender: "システム",
-                message: "ダミーリクエストを送信しました",
-                timestamp: new Date().toISOString(),
-                type: "system",
-              });
-            } catch (error) {
-              console.error("ダミーリクエスト送信エラー:", error);
-              addMessage({
-                id: Date.now().toString(),
-                sender: "システム",
-                message: "ダミーリクエストの送信に失敗しました",
-                timestamp: new Date().toISOString(),
-                type: "system",
-              });
-            }
-          };
+      const currentPlayer = gameInfo.players.find(player => player.name === username);
+      if (!currentPlayer) return;
 
-          sendDummyRequest();
+      // トランジションIDを生成
+      const transitionId = `${fromPhase}_to_${toPhase}`;
+
+      // hasActedをリセット
+      updateHasActed(roomId, currentPlayer.id, false);
+      console.log(`WebSocket通知によりhasActedをリセット: ${fromPhase} → ${toPhase}`);
+
+      // ダミーリクエストの送信処理
+      if (requiresDummyRequest && currentPlayer.role !== "Seer" && !currentPlayer.is_dead) {
+        console.log(`占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
+
+        const sendDummyRequest = async () => {
+          try {
+            await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
+            addMessage({
+              id: Date.now().toString(),
+              sender: "システム",
+              message: "ダミーリクエストを送信しました",
+              timestamp: new Date().toISOString(),
+              type: "system",
+            });
+          } catch (error) {
+            console.error("ダミーリクエスト送信エラー:", error);
+            addMessage({
+              id: Date.now().toString(),
+              sender: "システム",
+              message: "ダミーリクエストの送信に失敗しました",
+              timestamp: new Date().toISOString(),
+              type: "system",
+            });
+          }
+        };
+
+        sendDummyRequest();
+      }
+
+      // 勝利判定処理
+      if ((fromPhase === "Night" && toPhase === "Discussion") || (fromPhase === "Voting" && toPhase === "Result")) {
+        console.log(`WebSocket通知による勝利判定処理開始: ${fromPhase} → ${toPhase}`);
+        if (handleGameResultCheckRef.current) {
+          handleGameResultCheckRef.current(transitionId);
         }
       }
     };
@@ -163,7 +180,7 @@ export const useGamePhase = (
         const amWerewolfValues =
           gameInfo.players.find(player => player.name === username)?.role === "Werewolf"
             ? JSONbigNative.parse("[9015221291577245683, 8239323489949974514, 1646089257421115374, 958099254763297437]")
-            : [0n, 0n, 0n, 0n];
+            : JSONbigNative.parse("[0, 0, 0, 0]");
 
         const privateInput = {
           id: players.findIndex(player => player.id === myId),
@@ -228,6 +245,11 @@ export const useGamePhase = (
     },
     [gameInfo, roomId, username, submitWinningJudge],
   );
+
+  // handleGameResultCheckをuseRefに設定
+  useEffect(() => {
+    handleGameResultCheckRef.current = handleGameResultCheck;
+  }, [handleGameResultCheck]);
 
   // 役職配布の処理
   useEffect(() => {
@@ -329,62 +351,18 @@ export const useGamePhase = (
     //   }, [gameInfo?.phase, roomId, username, addMessage, submitRoleAssignment]);
   }, [gameInfo?.phase, roomId, username]);
 
-  // フェーズ変更の検出と処理
+  // フェーズ変更の検出（基本的な更新のみ）
   useEffect(() => {
     if (!gameInfo) return;
 
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = gameInfo.phase;
 
-    // トランジションIDを生成（フェーズ変更の一意性を確保するため）
-    const transitionId = prevPhase && `${prevPhase}_to_${gameInfo.phase}`;
-
-    // transitionIdがundefinedの場合は処理しない
-    if (!transitionId) return;
-
-    // 既に処理済みのトランジションならスキップ
-    if (phaseTransitionProcessedRef.current === transitionId) {
-      return;
-    }
-
-    // フェーズが変わった時の処理
+    // フェーズが変わった時のログ出力のみ
     if (prevPhase && prevPhase !== gameInfo.phase) {
-      // このトランジションを処理済みとしてマーク
-      phaseTransitionProcessedRef.current = transitionId;
-
-      const currentPlayer = gameInfo.players.find(player => player.name === username);
-      const currentPlayerId = currentPlayer?.id;
-
-      // hasActedをリセット
-      if (currentPlayerId) {
-        updateHasActed(roomId, currentPlayerId, false);
-        console.log(`Phase changed from ${prevPhase} to ${gameInfo.phase}, hasActed reset to false`);
-      }
-
-      // Night → Discussionへの変更時の処理
-      if (prevPhase === "Night" && gameInfo.phase === "Discussion") {
-        console.log(`フェーズ変更を検知: ${prevPhase} → ${gameInfo.phase}`);
-
-        // 勝敗判定処理を実行
-        handleGameResultCheck(transitionId);
-      } else if (prevPhase === "Voting" && gameInfo.phase === "Result") {
-        // 勝敗判定処理を実行
-        handleGameResultCheck(transitionId);
-      }
-
-      // 次のフェーズ変更のために一定時間後にリセット
-      const resetTimer = setTimeout(() => {
-        if (phaseTransitionProcessedRef.current === transitionId) {
-          phaseTransitionProcessedRef.current = null;
-          winningJudgementSentRef.current = null;
-          console.log(`フェーズ変更フラグをリセットしました: ${transitionId}`);
-        }
-      }, 10000);
-
-      // コンポーネントのアンマウント時などにタイマーをクリア
-      return () => clearTimeout(resetTimer);
+      console.log(`フェーズ変更を検知: ${prevPhase} → ${gameInfo.phase}`);
     }
-  }, [gameInfo, roomId, username, handleBackgroundNightAction, handleGameResultCheck]);
+  }, [gameInfo?.phase]);
 
   return { prevPhase: prevPhaseRef.current };
 };
