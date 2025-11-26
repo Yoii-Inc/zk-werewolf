@@ -31,10 +31,18 @@ export const useBackgroundNightAction = () => {
       const parsedElgamalPubkey = JSONbigNative.parse(elgamalpubkey);
 
       // ダミーのプライベート入力を作成
+      // Determine whether the current player (by myId) is a Werewolf using the players array
+      const amWerewolfValues =
+        players.find(player => player.id === myId)?.role === "Werewolf"
+          ? JSONbigNative.parse(
+              '["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"]',
+            )
+          : JSONbigNative.parse('["0", "0", "0", "0"]');
+
       const privateInput = {
         id: players.findIndex(player => player.id === myId),
         isTarget: players.map(() => [JSONbigNative.parse('["0","0","0","0"]'), null]),
-        isWerewolf: [JSONbigNative.parse('["0","0","0","0"]'), null],
+        isWerewolf: [amWerewolfValues, null],
         randomness: parsedRandomness,
       };
 

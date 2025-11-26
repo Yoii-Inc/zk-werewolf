@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import JSONbig from "json-bigint";
 import type { ChatMessage } from "~~/types/game";
+import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
 import { getPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
@@ -88,15 +89,86 @@ export const useComputationResults = (
                 const secretKeyText = await secretKeyResponse.text();
                 const secretKey = JSONbigNative.parse(secretKeyText);
 
+                // ElGamalパラメータをJSONファイルから読み取り
+                const paramsResponse = await fetch("/test_elgamal_params.json");
+                if (!paramsResponse.ok) {
+                  throw new Error("ElGamalパラメータの読み込みに失敗しました");
+                }
+
+                const paramsText = await paramsResponse.text();
+                const elgamalParams = JSONbigNative.parse(paramsText);
+
                 console.log("占い結果の復号化を開始:", {
                   ciphertext: result.resultData.ciphertext,
                   secretKey: secretKey,
+                  elgamalParams: elgamalParams,
                 });
 
-                // TODO: 実際の復号化処理を実装
-                // 現在は復号化ロジックの代わりに暗号文と秘密鍵をログ出力
-                console.log("暗号文:", result.resultData.ciphertext);
-                console.log("秘密鍵:", secretKey);
+                // WASM復号化処理を実行
+                const decryptInput = {
+                  elgamalParams: elgamalParams,
+                  secretKey: secretKey,
+                  ciphertext: result.resultData.ciphertext,
+                };
+
+                const decryptedResult = await MPCEncryption.decryptElGamal(decryptInput);
+                console.log("復号化結果:", decryptedResult);
+
+                const notWerewolf = {
+                  x: [["0", "0", "0", "0"], null],
+                  y: [
+                    ["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"],
+                    null,
+                  ],
+                  _params: null,
+                };
+
+                const werewolf = {
+                  x: [
+                    ["469834705808616970", "3489346716202062344", "3775031930862818012", "1284874629665735135"],
+                    null,
+                  ],
+                  y: [
+                    ["3606830077131325521", "9477679840825260018", "8867541030756743570", "1156619796726615314"],
+                    null,
+                  ],
+                  _params: null,
+                };
+
+                const decryptedStr = JSON.stringify(decryptedResult);
+                const notWerewolfStr = JSON.stringify(notWerewolf);
+                const werewolfStr = JSON.stringify(werewolf);
+
+                let isWerewolf: boolean;
+                if (decryptedStr === notWerewolfStr) {
+                  isWerewolf = false;
+                } else if (decryptedStr === werewolfStr) {
+                  isWerewolf = true;
+                } else {
+                  console.warn("占い結果が期待値と一致しません", decryptedResult);
+                  addMessage({
+                    id: Date.now().toString(),
+                    sender: "システム",
+                    message: "占い結果が正しくありません。",
+                    timestamp: new Date().toISOString(),
+                    type: "system",
+                  });
+                  return;
+                }
+
+                console.log("占い結果(復号化):", decryptedResult);
+                console.log("判定:", isWerewolf ? "人狼です" : "人狼ではありません");
+                if (result.targetPlayerId) {
+                  console.log("対象プレイヤーID:", result.targetPlayerId);
+                }
+
+                addMessage({
+                  id: Date.now().toString(),
+                  sender: "システム",
+                  message: `占い結果: ${isWerewolf ? "人狼です" : "人狼ではありません"}`,
+                  timestamp: new Date().toISOString(),
+                  type: "system",
+                });
 
                 // 占い処理完了をグローバルイベントで通知
                 window.dispatchEvent(new CustomEvent("divinationCompleted"));
@@ -105,7 +177,7 @@ export const useComputationResults = (
                 addMessage({
                   id: Date.now().toString(),
                   sender: "システム",
-                  message: "占い結果を復号化しました。（詳細はコンソールログを確認してください）",
+                  message: `占い結果を復号化しました: ${JSON.stringify(decryptedResult)}`,
                   timestamp: new Date().toISOString(),
                   type: "system",
                 });

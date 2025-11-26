@@ -3,6 +3,7 @@
 import init, {
   init as RustInit,
   divination,
+  elgamal_decrypt,
   key_publicize,
   role_assignment,
   voting_split_and_encrypt,
@@ -13,6 +14,8 @@ import {
   AnonymousVotingOutput,
   DivinationInput,
   DivinationOutput,
+  ElGamalDecryptInput,
+  ElGamalDecryptOutput,
   KeyPublicizeInput,
   KeyPublicizeOutput,
   RoleAssignmentInput,
@@ -97,6 +100,20 @@ export class MPCEncryption {
     } catch (error) {
       console.error("Winning judgement encryption failed:", error);
       throw new Error(`Failed to encrypt winning judgement`);
+    }
+  }
+
+  /**
+   * ElGamal復号化
+   */
+  public static async decryptElGamal(input: ElGamalDecryptInput): Promise<any> {
+    await this.initializeWasm();
+    try {
+      const result = elgamal_decrypt(input);
+      return JSON.parse(result);
+    } catch (error) {
+      console.error("ElGamal decryption failed:", error);
+      throw new Error(`Failed to decrypt ElGamal cipher: ${error}`);
     }
   }
 }

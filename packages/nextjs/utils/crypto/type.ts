@@ -151,3 +151,13 @@ export interface WinningJudgementPublicInput {
   pedersenParam: PedersenParam;
   playerCommitment: PedersenCommitment[];
 }
+
+export interface ElGamalDecryptInput {
+  elgamalParams: any;
+  secretKey: any;
+  ciphertext: any;
+}
+
+export interface ElGamalDecryptOutput {
+  plaintext: any;
+}

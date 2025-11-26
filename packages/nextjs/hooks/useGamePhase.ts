@@ -37,7 +37,7 @@ export const useGamePhase = (
 
   // WebSocketからのフェーズ変更通知を処理
   useEffect(() => {
-    const handlePhaseChangeNotification = (event: Event) => {
+    const handlePhaseChangeNotification = async (event: Event) => {
       const customEvent = event as CustomEvent;
       const { fromPhase, toPhase, requiresDummyRequest } = customEvent.detail;
 
@@ -55,13 +55,17 @@ export const useGamePhase = (
       updateHasActed(roomId, currentPlayer.id, false);
       console.log(`WebSocket通知によりhasActedをリセット: ${fromPhase} → ${toPhase}`);
 
-      // ダミーリクエストの送信処理
-      if (requiresDummyRequest && currentPlayer.role !== "Seer" && !currentPlayer.is_dead) {
-        console.log(`占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
+      // 処理の優先順位を明確にした順次実行
+      const processingSteps: (() => Promise<void>)[] = [];
 
-        const sendDummyRequest = async () => {
+      // Step 1: ダミーリクエスト送信
+      if (requiresDummyRequest && currentPlayer.role !== "Seer" && !currentPlayer.is_dead) {
+        processingSteps.push(async () => {
+          console.log(`Step 1: 占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
+
           try {
             await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
+
             addMessage({
               id: Date.now().toString(),
               sender: "システム",
@@ -69,8 +73,10 @@ export const useGamePhase = (
               timestamp: new Date().toISOString(),
               type: "system",
             });
+
+            console.log("Step 1: ダミーリクエスト送信完了");
           } catch (error) {
-            console.error("ダミーリクエスト送信エラー:", error);
+            console.error("Step 1: ダミーリクエスト送信エラー:", error);
             addMessage({
               id: Date.now().toString(),
               sender: "システム",
@@ -79,16 +85,30 @@ export const useGamePhase = (
               type: "system",
             });
           }
-        };
-
-        sendDummyRequest();
+        });
       }
 
-      // 勝利判定処理
+      // Step 2: 勝利判定実行
       if ((fromPhase === "Night" && toPhase === "Discussion") || (fromPhase === "Voting" && toPhase === "Result")) {
-        console.log(`WebSocket通知による勝利判定処理開始: ${fromPhase} → ${toPhase}`);
-        if (handleGameResultCheckRef.current) {
-          handleGameResultCheckRef.current(transitionId);
+        processingSteps.push(async () => {
+          console.log(`Step 2: 勝利判定処理開始: ${fromPhase} → ${toPhase}`);
+
+          if (handleGameResultCheckRef.current) {
+            handleGameResultCheckRef.current(transitionId);
+          }
+
+          console.log("Step 2: 勝利判定処理完了");
+        });
+      }
+
+      // 順次実行（ダミーリクエスト → 勝利判定の順序を保証）
+      for (const step of processingSteps) {
+        try {
+          await step();
+          // 各ステップ間に少し遅延を入れてサーバー側の処理順序を保証
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error("処理ステップでエラーが発生:", error);
         }
       }
     };
@@ -159,14 +179,22 @@ export const useGamePhase = (
           return Promise.resolve();
         }
 
-        // 占い師の場合は、占い結果が完了するまで待つ
+        // 占い師の場合は、占い結果が完了するまで待つ（最大30秒）
         return new Promise<void>(resolve => {
+          const startTime = Date.now();
+          const maxWaitTime = 30000; // 30秒
+
           const checkDivination = () => {
+            const elapsedTime = Date.now() - startTime;
+
             if (divinationCompletedRef.current) {
               console.log("占い結果の処理が完了したため、勝敗判定を実行します");
               resolve();
+            } else if (elapsedTime >= maxWaitTime) {
+              console.log("占い結果の待機がタイムアウトしました。勝敗判定を続行します");
+              resolve();
             } else {
-              console.log("占い結果の処理待機中...");
+              console.log(`占い結果の処理待機中... (${Math.round(elapsedTime / 1000)}秒経過)`);
               setTimeout(checkDivination, 1000); // 1秒ごとにチェック
             }
           };
@@ -184,7 +212,7 @@ export const useGamePhase = (
         await waitForDivination();
         const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
 
-        const res = await fetch("/pedersen-params.json");
+        const res = await fetch("/pedersen_params2.json");
         const params = await res.text();
         const parsedParams = JSONbigNative.parse(params);
 
@@ -201,8 +229,10 @@ export const useGamePhase = (
 
         const amWerewolfValues =
           gameInfo.players.find(player => player.name === username)?.role === "Werewolf"
-            ? JSONbigNative.parse("[9015221291577245683, 8239323489949974514, 1646089257421115374, 958099254763297437]")
-            : JSONbigNative.parse("[0, 0, 0, 0]");
+            ? JSONbigNative.parse(
+                '["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"]',
+              )
+            : JSONbigNative.parse('["0", "0", "0", "0"]');
 
         const privateInput = {
           id: players.findIndex(player => player.id === myId),

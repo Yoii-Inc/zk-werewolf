@@ -41,7 +41,9 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
       id: players.findIndex(player => player.id === myId),
       isTargetId: players.map(player => [
         player.id === selectedPlayerId
-          ? JSONbigNative.parse('["0","0","0","1"]')
+          ? JSONbigNative.parse(
+              '["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]',
+            )
           : JSONbigNative.parse('["0","0","0","0"]'),
         null,
       ]),
