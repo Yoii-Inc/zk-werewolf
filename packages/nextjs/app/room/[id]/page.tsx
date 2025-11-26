@@ -6,6 +6,7 @@ import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
 import { Clock, Moon, Send, StickyNote, Sun, UserCheck, UserX, Users } from "lucide-react";
 import { useAuth } from "~~/app/contexts/AuthContext";
+import { useComputationResults } from "~~/hooks/useComputationResults";
 import { useGameActions } from "~~/hooks/useGameActions";
 import { useGameChat } from "~~/hooks/useGameChat";
 import { useGameInfo } from "~~/hooks/useGameInfo";
@@ -44,6 +45,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   // Phase monitoring
   useGamePhase(gameInfo, params.id, addMessage, user?.username);
+
+  // Computation results monitoring
+  useComputationResults(params.id, user?.id || "", addMessage, gameInfo);
 
   // Update chat hook with room info
   const chatHook = useGameChat(params.id, roomInfo);

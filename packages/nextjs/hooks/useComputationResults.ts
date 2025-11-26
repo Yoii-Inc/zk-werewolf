@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import JSONbig from "json-bigint";
 import type { ChatMessage } from "~~/types/game";
+import { getPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
+
+const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
 interface ComputationResult {
   computationType: string;
@@ -35,7 +39,12 @@ interface AnonymousVotingResult {
   status: string;
 }
 
-export const useComputationResults = (roomId: string, playerId: string, addMessage: (message: ChatMessage) => void) => {
+export const useComputationResults = (
+  roomId: string,
+  playerId: string,
+  addMessage: (message: ChatMessage) => void,
+  gameInfo?: any,
+) => {
   const [divinationResult, setDivinationResult] = useState<DivinationResult | null>(null);
   const [roleAssignmentResult, setRoleAssignmentResult] = useState<RoleAssignmentResult | null>(null);
   const [winningJudgeResult, setWinningJudgeResult] = useState<WinningJudgeResult | null>(null);
@@ -44,7 +53,7 @@ export const useComputationResults = (roomId: string, playerId: string, addMessa
 
   // WebSocketからの計算結果通知を処理
   useEffect(() => {
-    const handleComputationResult = (event: Event) => {
+    const handleComputationResult = async (event: Event) => {
       const customEvent = event as CustomEvent;
       const result: ComputationResult = customEvent.detail;
 
@@ -60,16 +69,147 @@ export const useComputationResults = (roomId: string, playerId: string, addMessa
       try {
         switch (result.computationType) {
           case "divination":
-            handleDivinationResult(result.resultData);
+            // 占い結果の処理
+            setDivinationResult(result.resultData);
+
+            // プレイヤーの役職を確認
+            const privateGameInfo = getPrivateGameInfo(roomId, playerId);
+
+            if (privateGameInfo?.playerRole === "占い師") {
+              console.log("占い師として占い結果を復号化します");
+
+              try {
+                // ElGamal秘密鍵をJSONファイルから読み取り
+                const secretKeyResponse = await fetch("/elgamal_secret_key.json");
+                if (!secretKeyResponse.ok) {
+                  throw new Error("ElGamal秘密鍵の読み込みに失敗しました");
+                }
+
+                const secretKeyText = await secretKeyResponse.text();
+                const secretKey = JSONbigNative.parse(secretKeyText);
+
+                console.log("占い結果の復号化を開始:", {
+                  ciphertext: result.resultData.ciphertext,
+                  secretKey: secretKey,
+                });
+
+                // TODO: 実際の復号化処理を実装
+                // 現在は復号化ロジックの代わりに暗号文と秘密鍵をログ出力
+                console.log("暗号文:", result.resultData.ciphertext);
+                console.log("秘密鍵:", secretKey);
+
+                // 占い処理完了をグローバルイベントで通知
+                window.dispatchEvent(new CustomEvent("divinationCompleted"));
+                console.log("占い処理完了イベントを発行しました");
+
+                addMessage({
+                  id: Date.now().toString(),
+                  sender: "システム",
+                  message: "占い結果を復号化しました。（詳細はコンソールログを確認してください）",
+                  timestamp: new Date().toISOString(),
+                  type: "system",
+                });
+              } catch (error) {
+                console.error("占い結果の復号化エラー:", error);
+                addMessage({
+                  id: Date.now().toString(),
+                  sender: "システム",
+                  message: `占い結果の復号化に失敗しました: ${error}`,
+                  timestamp: new Date().toISOString(),
+                  type: "system",
+                });
+              }
+            } else {
+              addMessage({
+                id: Date.now().toString(),
+                sender: "システム",
+                message: "占い結果が準備されました。",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            }
             break;
           case "role_assignment":
-            handleRoleAssignmentResult(result.resultData);
+            setRoleAssignmentResult(result.resultData);
+
+            // ダミーコード: gameInfoから役職を取得してprivateGameInfoを更新
+            console.log("役職配布結果を受信、gameInfoから役職を取得します");
+
+            if (gameInfo && gameInfo.players) {
+              const currentPlayer = gameInfo.players.find((player: any) => player.id === playerId);
+
+              if (currentPlayer && currentPlayer.role) {
+                console.log("gameInfoから取得した役職:", currentPlayer.role);
+
+                // 役職名を日本語に変換
+                const roleMapping: { [key: string]: "占い師" | "人狼" | "村人" } = {
+                  Seer: "占い師",
+                  Werewolf: "人狼",
+                  Villager: "村人",
+                };
+
+                const japaneseRole = roleMapping[currentPlayer.role] || "村人";
+
+                // privateGameInfoを更新
+                const privateGameInfo = getPrivateGameInfo(roomId, playerId);
+                if (privateGameInfo) {
+                  const updatedInfo = {
+                    ...privateGameInfo,
+                    playerRole: japaneseRole,
+                  };
+
+                  // セッションストレージに保存
+                  sessionStorage.setItem(`game_${roomId}_player_${playerId}`, JSON.stringify(updatedInfo));
+                  console.log("privateGameInfo更新 (gameInfoベース):", updatedInfo);
+
+                  addMessage({
+                    id: Date.now().toString(),
+                    sender: "システム",
+                    message: `あなたの役職は「${japaneseRole}」です。(gameInfoから取得)`,
+                    timestamp: new Date().toISOString(),
+                    type: "system",
+                  });
+                } else {
+                  console.warn("privateGameInfoが見つかりません");
+                }
+              } else {
+                console.warn("gameInfoから役職情報を取得できませんでした");
+              }
+            } else {
+              console.warn("gameInfoが利用できません");
+            }
+
+            addMessage({
+              id: Date.now().toString(),
+              sender: "システム",
+              message: "役職配布が完了しました。",
+              timestamp: new Date().toISOString(),
+              type: "system",
+            });
             break;
           case "winning_judge":
-            handleWinningJudgeResult(result.resultData);
+            setWinningJudgeResult(result.resultData);
+            if (result.resultData.game_result !== "InProgress") {
+              const resultMessage =
+                result.resultData.game_result === "VillagerWin" ? "村人陣営の勝利です！" : "人狼陣営の勝利です！";
+              addMessage({
+                id: Date.now().toString(),
+                sender: "システム",
+                message: resultMessage,
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            }
             break;
           case "anonymous_voting":
-            handleVotingResult(result.resultData);
+            setVotingResult(result.resultData);
+            addMessage({
+              id: Date.now().toString(),
+              sender: "システム",
+              message: `${result.resultData.executed_player_name}が処刑されました。`,
+              timestamp: new Date().toISOString(),
+              type: "system",
+            });
             break;
           default:
             console.warn("Unknown computation type:", result.computationType);
@@ -93,21 +233,67 @@ export const useComputationResults = (roomId: string, playerId: string, addMessa
     return () => {
       window.removeEventListener("computationResultNotification", handleComputationResult);
     };
-  }, [playerId, addMessage]);
+  }, [playerId, addMessage, roomId, gameInfo]);
 
   // 占い結果の処理
   const handleDivinationResult = useCallback(
-    (data: DivinationResult) => {
+    async (data: DivinationResult) => {
       setDivinationResult(data);
-      addMessage({
-        id: Date.now().toString(),
-        sender: "システム",
-        message: "占い結果が準備されました。復号化してください。",
-        timestamp: new Date().toISOString(),
-        type: "system",
-      });
+
+      // プレイヤーの役職を確認
+      const privateGameInfo = getPrivateGameInfo(roomId, playerId);
+
+      if (privateGameInfo?.playerRole === "占い師") {
+        console.log("占い師として占い結果を復号化します");
+
+        try {
+          // ElGamal秘密鍵をJSONファイルから読み取り
+          const secretKeyResponse = await fetch("/elgamal_secret_key.json");
+          if (!secretKeyResponse.ok) {
+            throw new Error("ElGamal秘密鍵の読み込みに失敗しました");
+          }
+
+          const secretKeyText = await secretKeyResponse.text();
+          const secretKey = JSONbigNative.parse(secretKeyText);
+
+          console.log("占い結果の復号化を開始:", {
+            ciphertext: data.ciphertext,
+            secretKey: secretKey,
+          });
+
+          // TODO: 実際の復号化処理を実装
+          // 現在は復号化ロジックの代わりに暗号文と秘密鍵をログ出力
+          console.log("暗号文:", data.ciphertext);
+          console.log("秘密鍵:", secretKey);
+
+          addMessage({
+            id: Date.now().toString(),
+            sender: "システム",
+            message: "占い結果を復号化しました。（詳細はコンソールログを確認してください）",
+            timestamp: new Date().toISOString(),
+            type: "system",
+          });
+        } catch (error) {
+          console.error("占い結果の復号化エラー:", error);
+          addMessage({
+            id: Date.now().toString(),
+            sender: "システム",
+            message: `占い結果の復号化に失敗しました: ${error}`,
+            timestamp: new Date().toISOString(),
+            type: "system",
+          });
+        }
+      } else {
+        addMessage({
+          id: Date.now().toString(),
+          sender: "システム",
+          message: "占い結果が準備されました。",
+          timestamp: new Date().toISOString(),
+          type: "system",
+        });
+      }
     },
-    [addMessage],
+    [roomId, playerId, addMessage],
   );
 
   // 役職配布結果の処理

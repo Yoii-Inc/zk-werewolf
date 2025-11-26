@@ -100,10 +100,32 @@ export const useGamePhase = (
     };
   }, [gameInfo, username, roomId, handleBackgroundNightAction, addMessage]);
 
-  // 占いステータスを監視
+  // 占い完了イベントを監視
+  useEffect(() => {
+    const handleDivinationCompleted = () => {
+      console.log("占い処理完了イベントを受信しました");
+      divinationCompletedRef.current = true;
+
+      // 一定時間後にフラグをリセット
+      const resetTimer = setTimeout(() => {
+        divinationCompletedRef.current = false;
+        console.log("占い完了フラグをリセットしました");
+      }, 30000); // 30秒後にリセット
+
+      return () => clearTimeout(resetTimer);
+    };
+
+    window.addEventListener("divinationCompleted", handleDivinationCompleted);
+
+    return () => {
+      window.removeEventListener("divinationCompleted", handleDivinationCompleted);
+    };
+  }, []);
+
+  // 占いステータスを監視（従来の仕組みも残す）
   useEffect(() => {
     if (proofStatus === "completed") {
-      console.log("占い結果の検証が完了しました");
+      console.log("占い結果の検証が完了しました（proofStatus経由）");
       divinationCompletedRef.current = true;
 
       // 一定時間後にフラグをリセット

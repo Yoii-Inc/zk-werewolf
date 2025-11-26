@@ -22,11 +22,11 @@ export const useBackgroundNightAction = () => {
       const commitment = await commitres.text();
       const parsedCommitment = JSONbigNative.parse(commitment);
 
-      const elgamalparamres = await fetch("/test_elgamal_params.json");
+      const elgamalparamres = await fetch("/elgamal_params.json");
       const elgamalparam = await elgamalparamres.text();
       const parsedElgamalParam = JSONbigNative.parse(elgamalparam);
 
-      const elgamalpubkeyres = await fetch("/test_elgamal_pubkey.json");
+      const elgamalpubkeyres = await fetch("/elgamal_public_key.json");
       const elgamalpubkey = await elgamalpubkeyres.text();
       const parsedElgamalPubkey = JSONbigNative.parse(elgamalpubkey);
 
