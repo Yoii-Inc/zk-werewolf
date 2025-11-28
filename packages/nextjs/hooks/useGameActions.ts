@@ -3,6 +3,7 @@ import { NightAction, NightActionRequest } from "~~/app/room/types";
 import type { ChatMessage, GameInfo, PrivateGameInfo } from "~~/types/game";
 import {
   clearPrivateGameInfo,
+  initializePrivateGameInfo,
   setPrivateGameInfo as saveToStorage,
   updateHasActed,
   updatePrivateGameInfo,
@@ -26,45 +27,19 @@ export const useGameActions = (
         throw new Error("ゲームの開始に失敗しました");
       }
 
-      // ゲーム開始時にPrivateGameInfoを初期化してセッションストレージに保存
+      // ゲーム開始時にPrivateGameInfoを役職null（未決定）で初期化
       if (userId) {
         try {
-          // ゲーム情報を取得して初期化
-          const gameResponse = await fetch(`http://localhost:8080/api/game/${roomId}/state`);
-          if (gameResponse.ok) {
-            const gameData: GameInfo = await gameResponse.json();
-            const currentPlayer = gameData.players.find(player => player.id === userId);
+          initializePrivateGameInfo(roomId, userId);
+          console.log("PrivateGameInfo initialized with null role in session storage");
 
-            if (currentPlayer) {
-              const privateGameInfo: PrivateGameInfo = {
-                playerId: userId,
-                playerRole: (() => {
-                  switch (currentPlayer.role) {
-                    case "Seer":
-                      return "占い師";
-                    case "Werewolf":
-                      return "人狼";
-                    default:
-                      return "村人";
-                  }
-                })(),
-                hasActed: false,
-              };
-
-              // セッションストレージに保存
-              saveToStorage(roomId, privateGameInfo);
-
-              console.log("PrivateGameInfo initialized and stored in session storage", privateGameInfo);
-
-              addMessage({
-                id: Date.now().toString(),
-                sender: "システム",
-                message: "あなたの役職情報がセットアップされました",
-                timestamp: new Date().toISOString(),
-                type: "system",
-              });
-            }
-          }
+          addMessage({
+            id: Date.now().toString(),
+            sender: "システム",
+            message: "ゲームが開始されました。役職配布をお待ちください...",
+            timestamp: new Date().toISOString(),
+            type: "system",
+          });
         } catch (storageError) {
           console.error("PrivateGameInfo初期化エラー:", storageError);
         }
@@ -194,12 +169,12 @@ export const useGameActions = (
         // 文字列の役職名をPrivateGameInfoの型に変換
         const roleType = (() => {
           switch (newRole) {
-            case "占い師":
-              return "占い師";
-            case "人狼":
-              return "人狼";
+            case "Seer":
+              return "Seer";
+            case "Werewolf":
+              return "Werewolf";
             default:
-              return "村人";
+              return "Villager";
           }
         })();
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import JSONbig from "json-bigint";
 import type { ChatMessage } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
-import { getPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
+import { getPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
@@ -76,7 +76,7 @@ export const useComputationResults = (
             // プレイヤーの役職を確認
             const privateGameInfo = getPrivateGameInfo(roomId, playerId);
 
-            if (privateGameInfo?.playerRole === "占い師") {
+            if (privateGameInfo?.playerRole === "Seer") {
               console.log("占い師として占い結果を復号化します");
 
               try {
@@ -213,36 +213,31 @@ export const useComputationResults = (
               if (currentPlayer && currentPlayer.role) {
                 console.log("gameInfoから取得した役職:", currentPlayer.role);
 
-                // 役職名を日本語に変換
-                const roleMapping: { [key: string]: "占い師" | "人狼" | "村人" } = {
-                  Seer: "占い師",
-                  Werewolf: "人狼",
-                  Villager: "村人",
-                };
-
-                const japaneseRole = roleMapping[currentPlayer.role] || "村人";
-
                 // privateGameInfoを更新
-                const privateGameInfo = getPrivateGameInfo(roomId, playerId);
-                if (privateGameInfo) {
-                  const updatedInfo = {
-                    ...privateGameInfo,
-                    playerRole: japaneseRole,
-                  };
+                const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
+                  playerRole: currentPlayer.role,
+                });
 
-                  // セッションストレージに保存
-                  sessionStorage.setItem(`game_${roomId}_player_${playerId}`, JSON.stringify(updatedInfo));
+                if (updatedInfo) {
                   console.log("privateGameInfo更新 (gameInfoベース):", updatedInfo);
 
                   addMessage({
                     id: Date.now().toString(),
                     sender: "システム",
-                    message: `あなたの役職は「${japaneseRole}」です。(gameInfoから取得)`,
+                    message: `あなたの役職は「${currentPlayer.role}」です。`,
                     timestamp: new Date().toISOString(),
                     type: "system",
                   });
                 } else {
-                  console.warn("privateGameInfoが見つかりません");
+                  console.warn("privateGameInfoの更新に失敗しました。初期化されていない可能性があります。");
+
+                  addMessage({
+                    id: Date.now().toString(),
+                    sender: "システム",
+                    message: "役職情報の更新に失敗しました。ゲームを再開してください。",
+                    timestamp: new Date().toISOString(),
+                    type: "system",
+                  });
                 }
               } else {
                 console.warn("gameInfoから役職情報を取得できませんでした");
@@ -315,7 +310,7 @@ export const useComputationResults = (
       // プレイヤーの役職を確認
       const privateGameInfo = getPrivateGameInfo(roomId, playerId);
 
-      if (privateGameInfo?.playerRole === "占い師") {
+      if (privateGameInfo?.playerRole === "Seer") {
         console.log("占い師として占い結果を復号化します");
 
         try {

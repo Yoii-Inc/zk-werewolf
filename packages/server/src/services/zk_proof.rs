@@ -141,6 +141,37 @@ pub async fn batch_proof_handling(
         ClientRequestType::KeyPublicize(info) => info.user_id.clone(),
     };
 
+    // 計算結果の重複チェック
+    match request {
+        ClientRequestType::RoleAssignment(_) => {
+            if game.has_role_assignment() {
+                return Err("Role assignment has already been completed".to_string());
+            }
+        }
+        ClientRequestType::Divination(_) => {
+            if game.has_divination_for_current_phase() {
+                return Err("Divination has already been completed for current phase".to_string());
+            }
+        }
+        ClientRequestType::WinningJudge(_) => {
+            // GameResultが既に決定されている場合は重複
+            if game.result != crate::models::game::GameResult::InProgress {
+                return Err(
+                    "Winning judgement has already been completed for current phase".to_string(),
+                );
+            }
+        }
+        ClientRequestType::AnonymousVoting(_) => {
+            // vote_resultsが既に存在し、現在のphaseで投票が完了している場合は重複
+            if !game.vote_results.is_empty() {
+                return Err("Voting has already been completed for current phase".to_string());
+            }
+        }
+        ClientRequestType::KeyPublicize(_) => {
+            // キー公開は重複チェック対象外
+        }
+    }
+
     game.chat_log
         .add_system_message(format!("{}が証明リクエストを送信しました。", user_id));
 

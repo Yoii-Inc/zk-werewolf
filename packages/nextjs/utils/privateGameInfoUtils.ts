@@ -66,6 +66,20 @@ export const updateHasActed = (roomId: string, playerId: string, hasActed: boole
 };
 
 /**
+ * ゲーム開始時にPrivateGameInfoを初期化（役職はnull）
+ * @param roomId ルームID
+ * @param playerId プレイヤーID
+ */
+export const initializePrivateGameInfo = (roomId: string, playerId: string): void => {
+  const initialPrivateInfo: PrivateGameInfo = {
+    playerId,
+    playerRole: null, // 役職は未決定状態で初期化
+    hasActed: false,
+  };
+  setPrivateGameInfo(roomId, initialPrivateInfo);
+};
+
+/**
  * セッションストレージからPrivateGameInfoを削除
  * @param roomId ルームID
  * @param playerId プレイヤーID

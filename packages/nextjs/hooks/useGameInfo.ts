@@ -79,16 +79,7 @@ export const useGameInfo = (
             // PrivateGameInfoを初期化
             const newPrivateInfo: PrivateGameInfo = {
               playerId: userId,
-              playerRole: (() => {
-                switch (currentPlayer.role) {
-                  case "Seer":
-                    return "占い師";
-                  case "Werewolf":
-                    return "人狼";
-                  default:
-                    return "村人";
-                }
-              })(),
+              playerRole: currentPlayer.role, // 役職を設定
               hasActed: false,
             };
 

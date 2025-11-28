@@ -11,6 +11,7 @@ use ark_bls12_377::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::CanonicalDeserialize;
+use chrono::{DateTime, Utc};
 use derivative::Derivative;
 use mpc_algebra_wasm::*;
 use reqwest::Client;
@@ -28,6 +29,7 @@ pub struct Game {
     pub max_players: usize,
     pub roles: Vec<String>,
     pub phase: GamePhase,
+    pub day_count: u32,
     pub result: GameResult,
     pub night_actions: NightActions,
     pub vote_results: HashMap<String, Vote>,
@@ -36,12 +38,50 @@ pub struct Game {
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
     pub divination_result: Option<DivinationResult>,
+    pub computation_results: ComputationResults,
+    pub started_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DivinationResult {
     pub ciphertext:
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
+}
+
+// 計算結果を管理する構造体群
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ComputationResults {
+    pub role_assignment: Option<ComputationEntry<RoleAssignmentComputationResult>>,
+}
+
+impl Default for ComputationResults {
+    fn default() -> Self {
+        ComputationResults {
+            role_assignment: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputationEntry<T> {
+    pub id: String,
+    pub computed_at: DateTime<Utc>,
+    pub initiated_by: String,
+    pub phase: GamePhase,
+    pub day_count: u32,
+    pub result: T,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoleAssignmentComputationResult {
+    pub player_roles: Vec<PlayerRoleAssignment>,
+    pub proof_data: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerRoleAssignment {
+    pub player_id: String,
+    pub role: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -256,6 +296,7 @@ impl Game {
             max_players: 9,
             roles: vec![],
             phase: GamePhase::Waiting,
+            day_count: 1,
             result: GameResult::InProgress,
             night_actions: NightActions::default(),
             vote_results: HashMap::new(),
@@ -263,7 +304,37 @@ impl Game {
             chat_log: super::chat::ChatLog::new(room_id),
             batch_request: BatchRequest::new(),
             divination_result: None,
+            computation_results: ComputationResults::default(),
+            started_at: Some(Utc::now()),
         }
+    }
+
+    // 計算結果チェック用のメソッド
+    pub fn has_role_assignment(&self) -> bool {
+        self.computation_results.role_assignment.is_some()
+    }
+
+    pub fn has_divination_for_current_phase(&self) -> bool {
+        self.divination_result.is_some()
+    }
+    pub fn save_role_assignment_result(
+        &mut self,
+        id: String,
+        initiated_by: String,
+        player_roles: Vec<PlayerRoleAssignment>,
+        proof_data: serde_json::Value,
+    ) {
+        self.computation_results.role_assignment = Some(ComputationEntry {
+            id,
+            computed_at: Utc::now(),
+            phase: self.phase.clone(),
+            day_count: self.day_count,
+            initiated_by,
+            result: RoleAssignmentComputationResult {
+                player_roles,
+                proof_data,
+            },
+        });
     }
 
     // 夜アクション関連の実装
@@ -574,7 +645,7 @@ impl Game {
                             self.players[target_index].name
                         );
 
-                        // 5. 投票結果をログに追加
+                        // 投票結果をログに追加
                         self.chat_log.add_system_message(format!(
                             "投票結果: {}が処刑されました。",
                             self.players[target_index].name
@@ -664,8 +735,16 @@ impl Game {
                         self.result = result.clone();
 
                         // 全プレイヤーに勝利判定結果を通知
+                        let alive_players: Vec<String> = self
+                            .players
+                            .iter()
+                            .filter(|p| !p.is_dead)
+                            .map(|p| p.id.clone())
+                            .collect();
+
                         let result_data = serde_json::json!({
                             "game_result": result,
+                            "alive_players": alive_players,
                             "game_state_value": game_state.into_repr().to_string(),
                             "status": "completed"
                         });
@@ -700,8 +779,9 @@ impl Game {
                         };
 
                         // role_resultをゲームの結果に反映
+                        let mut player_role_assignments = Vec::new();
                         for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
-                            player.role = if *role == Fr::from(0u32) {
+                            let assigned_role = if *role == Fr::from(0u32) {
                                 Some(Role::Villager)
                             } else if *role == Fr::from(1u32) {
                                 Some(Role::Seer)
@@ -710,7 +790,39 @@ impl Game {
                             } else {
                                 None
                             };
+
+                            player.role = assigned_role.clone();
+
+                            if let Some(role) = assigned_role {
+                                player_role_assignments.push(PlayerRoleAssignment {
+                                    player_id: player.id.clone(),
+                                    role: format!("{:?}", role),
+                                });
+                            }
                         }
+
+                        // 計算結果を保存
+                        let initiated_by = self
+                            .batch_request
+                            .requests
+                            .first()
+                            .and_then(|req| match req {
+                                ClientRequestType::RoleAssignment(role_req) => {
+                                    Some(role_req.user_id.clone())
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or_else(|| "system".to_string());
+
+                        self.save_role_assignment_result(
+                            self.batch_request.batch_id.clone(),
+                            initiated_by,
+                            player_role_assignments.clone(),
+                            serde_json::json!({
+                                "raw_role_result": role_result.iter().map(|r| r.into_repr().to_string()).collect::<Vec<_>>(),
+                                "computation_time": chrono::Utc::now().to_rfc3339()
+                            })
+                        );
 
                         self.chat_log.add_system_message(format!(
                             "役職が割り当てられました: {}。ゲームを開始します。",

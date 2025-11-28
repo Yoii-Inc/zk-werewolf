@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { Player } from "../../app/types";
+import type { Player, Role } from "../../app/types";
 import JSONbig from "json-bigint";
 import { useBackgroundNightAction } from "~~/hooks/useBackgroundNightAction";
 import { useDivination } from "~~/hooks/useDivination";
@@ -7,7 +7,7 @@ import { DivinationInput, DivinationPublicInput, NodeKey, SecretSharingScheme } 
 
 interface NightActionModalProps {
   players: Player[];
-  role: "Seer" | "Werewolf" | "Villager";
+  role: Role;
   onSubmit: (targetPlayerId: string) => void;
   onClose: () => void;
   roomId: string;

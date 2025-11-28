@@ -1,3 +1,5 @@
+import { Role } from "~~/app/types";
+
 export interface RoomInfo {
   room_id: string;
   name: string;
@@ -12,7 +14,7 @@ export interface GameInfo {
   room_id: string;
   phase: "Waiting" | "Night" | "Discussion" | "Voting" | "Result" | "Finished";
   players: Player[];
-  playerRole: "占い師" | "人狼" | "村人";
+  playerRole: Role;
   hasActed: boolean;
   result: "InProgress" | "VillagerWin" | "WerewolfWin";
   chat_log?: {
@@ -28,14 +30,14 @@ export interface GameInfo {
 
 export interface PrivateGameInfo {
   playerId: string;
-  playerRole: "占い師" | "人狼" | "村人";
+  playerRole: Role;
   hasActed: boolean; // アクションを実行済みか
 }
 
 export interface Player {
   id: string;
   name: string;
-  role: "Seer" | "Werewolf" | "Villager";
+  role: Role;
   is_dead: boolean;
   isReady: boolean;
 }

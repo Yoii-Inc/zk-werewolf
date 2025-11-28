@@ -29,7 +29,6 @@ export const useGamePhase = (
   const { submitRoleAssignment } = useRoleAssignment();
   const { handleBackgroundNightAction } = useBackgroundNightAction();
   const { proofStatus } = useDivination();
-  const roleAssignmentRequestedRef = useRef(false);
   const phaseTransitionProcessedRef = useRef<string | null>(null);
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
@@ -157,14 +156,6 @@ export const useGamePhase = (
       return () => clearTimeout(resetTimer);
     }
   }, [proofStatus]);
-
-  // ゲーム開始時にroleAssignmentRequestedRefをリセットする
-  useEffect(() => {
-    if (gameInfo?.phase === "Waiting") {
-      roleAssignmentRequestedRef.current = false;
-      console.log("ゲーム開始: roleAssignmentRequestedRefをリセットしました");
-    }
-  }, [gameInfo?.phase]);
 
   // 勝敗判定処理を行う関数
   const handleGameResultCheck = useCallback(
@@ -305,10 +296,7 @@ export const useGamePhase = (
 
   // 役職配布の処理
   useEffect(() => {
-    console.log("Role assignment requested:", roleAssignmentRequestedRef.current);
-    if (gameInfo?.phase === "Night" && !roleAssignmentRequestedRef.current) {
-      // 役職配布処理のフラグを立てる
-      roleAssignmentRequestedRef.current = true;
+    if (gameInfo?.phase === "Night" && gameInfo.players.some(p => p.role === null)) {
       const handleRoleAssignment = async () => {
         try {
           const playerCount = gameInfo.players.length;
@@ -388,20 +376,34 @@ export const useGamePhase = (
           });
         } catch (error) {
           console.error("役職配布処理エラー:", error);
-          addMessage({
-            id: Date.now().toString(),
-            sender: "システム",
-            message: "役職配布処理に失敗しました",
-            timestamp: new Date().toISOString(),
-            type: "system",
-          });
+
+          // サーバー側エラーメッセージをチェック
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes("Role assignment has already been completed")) {
+            console.log("役職配布はすでに完了済みです");
+            addMessage({
+              id: Date.now().toString(),
+              sender: "システム",
+              message: "役職配布はすでに完了しています",
+              timestamp: new Date().toISOString(),
+              type: "system",
+            });
+          } else {
+            addMessage({
+              id: Date.now().toString(),
+              sender: "システム",
+              message: "役職配布処理に失敗しました",
+              timestamp: new Date().toISOString(),
+              type: "system",
+            });
+          }
         }
       };
 
       handleRoleAssignment();
     }
     //   }, [gameInfo?.phase, roomId, username, addMessage, submitRoleAssignment]);
-  }, [gameInfo?.phase, roomId, username]);
+  }, [gameInfo?.phase, roomId, username, gameInfo?.players]);
 
   // フェーズ変更の検出（基本的な更新のみ）
   useEffect(() => {
