@@ -133,6 +133,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "service_registry_arn" {
+  description = "ARN of the Service Discovery service registry (optional)"
+  type        = string
+  default     = null
+}
+
 # =============================================================================
 # Resources
 # =============================================================================
@@ -210,6 +216,13 @@ resource "aws_ecs_service" "main" {
       capacity_provider = capacity_provider_strategy.value.capacity_provider
       weight            = capacity_provider_strategy.value.weight
       base              = lookup(capacity_provider_strategy.value, "base", null)
+    }
+  }
+
+  dynamic "service_registries" {
+    for_each = var.service_registry_arn != null ? [1] : []
+    content {
+      registry_arn = var.service_registry_arn
     }
   }
 
