@@ -45,7 +45,7 @@ tokio-tungstenite = "0.19"
 hyper = { version = "1.0" }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
-wiremock = "0.5"
+wiremock = "0.6"
 
 base64 = "0.13"
 crypto_box = { version = "0.9.1", features = ["std"] }
