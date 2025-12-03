@@ -1,5 +1,5 @@
 use mpc_net::multi::MPCNetConnection;
-use std::{net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc};
 use structopt::StructOpt;
 use zk_mpc_node::{
     models::Command, node::Node, proof::ProofManager, run_server, AppState, KeyManager,
@@ -11,11 +11,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("Fatal panic occurred: {}", panic_info);
         eprintln!("Location: {:?}", panic_info.location());
-        
+
         // Ensure process termination
         std::process::exit(1);
     }));
-    
+
     let command = Command::from_args();
 
     match command {
@@ -28,6 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Command::Start { id, input } => {
+            // 環境変数からサーバーURLを取得（デフォルト: localhost）
+            let server_url =
+                env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+            println!("Using server URL: {}", server_url);
+
             // Initialize ProofManager
             let proof_manager = Arc::new(ProofManager::new());
 
@@ -37,8 +43,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             net.connect_to_all()
                 .await
                 .expect("Failed to connect to all");
-
-            let server_url = "http://localhost:8080".to_string();
             let key_manager = Arc::new(KeyManager::new());
 
             // Initialize the node
