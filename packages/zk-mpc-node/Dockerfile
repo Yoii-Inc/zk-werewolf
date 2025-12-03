@@ -29,6 +29,6 @@ COPY --from=builder /usr/src/workspace/target/release/zk-mpc-node /app/zk-mpc-no
 COPY packages/zk-mpc-node/address /app/address
 RUN chmod +x /app/zk-mpc-node
 
-EXPOSE 9000 9001 9002
+EXPOSE 9000
 
 ENTRYPOINT ["/app/zk-mpc-node"]

@@ -26,11 +26,11 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "ZK_MPC_NODE_2"
-          value = "http://mpc-node-1.werewolf.local:9001"
+          value = "http://mpc-node-1.werewolf.local:9000"
         },
         {
           name  = "ZK_MPC_NODE_3"
-          value = "http://mpc-node-2.werewolf.local:9002"
+          value = "http://mpc-node-2.werewolf.local:9000"
         },
         {
           name  = "RUST_LOG"
@@ -146,7 +146,7 @@ resource "aws_ecs_task_definition" "mpc_node" {
       
       portMappings = [
         {
-          containerPort = 9000 + count.index
+          containerPort = 9000
           protocol      = "tcp"
         },
         {
