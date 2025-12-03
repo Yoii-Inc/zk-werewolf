@@ -102,7 +102,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
 
         const alivePlayerCount = players.filter(player => !player.is_dead).length;
 
-        console.log("占いを実行します。");
+        console.log("Executing divination.");
         await submitDivination(roomId, votingData, alivePlayerCount);
       }
       //   else {
@@ -115,7 +115,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
       await onSubmit(selectedPlayer);
       onClose();
     } catch (err) {
-      console.error(`${role === "Seer" ? "占い" : "夜の行動"}に失敗しました:`, err);
+      console.error(`${role === "Seer" ? "Divination" : "Night action"} failed:`, err);
     } finally {
       setIsSubmitting(false);
     }

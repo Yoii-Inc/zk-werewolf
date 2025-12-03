@@ -19,17 +19,17 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
     const ws = new WebSocket(`ws://localhost:8080/api/room/${roomId}/ws`);
 
     ws.onopen = () => {
-      console.log("WebSocket接続が確立されました");
+      console.log("WebSocket connection established");
       setWebsocketStatus("connected");
     };
 
     ws.onmessage = event => {
-      console.log("メッセージを受信しました:", event.data);
+      console.log("Message received:", event.data);
       const data = JSON.parse(event.data);
 
       // フェーズ変更通知の場合
       if (data.message_type === "phase_change") {
-        console.log(`フェーズ変更通知を受信: ${data.from_phase} → ${data.to_phase}`);
+        console.log(`Phase change notification received: ${data.from_phase} → ${data.to_phase}`);
 
         // カスタムイベントを発行してuseGamePhaseフックに通知
         window.dispatchEvent(
@@ -44,9 +44,9 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
         return;
       }
 
-      // 計算結果通知の場合
+      // For computation result notification
       if (data.message_type === "computation_result") {
-        console.log(`計算結果通知を受信: ${data.computation_type}`);
+        console.log(`Computation result notification received: ${data.computation_type}`);
 
         // カスタムイベントを発行
         window.dispatchEvent(
@@ -79,13 +79,13 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
     };
 
     ws.onclose = event => {
-      console.log("WebSocket接続が閉じられました", event);
+      console.log("WebSocket connection closed", event);
       setWebsocketStatus("disconnected");
       websocketRef.current = null;
     };
 
     ws.onerror = error => {
-      console.error("WebSocketエラーが発生しました:", error);
+      console.error("WebSocket error occurred:", error);
       setWebsocketStatus("error");
       websocketRef.current = null;
     };
@@ -104,7 +104,7 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
       const websocketMessage: WebSocketMessage = {
         message_type: "normal",
         player_id: Date.now().toString(),
-        player_name: "プレイヤー",
+        player_name: "Player",
         content: message,
         timestamp: new Date().toISOString(),
         room_id: roomId,

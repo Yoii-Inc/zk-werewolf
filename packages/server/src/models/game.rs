@@ -349,7 +349,7 @@ impl Game {
     // DivinationProcessing フェーズから Discussion フェーズへの遷移を管理
     pub async fn complete_divination_processing(&mut self, app_state: &crate::state::AppState) {
         if self.phase == GamePhase::DivinationProcessing {
-            println!("占い処理が完了しました。議論フェーズに移行します。");
+            println!("Divination processing completed. Moving to Discussion phase.");
 
             self.change_phase(GamePhase::Discussion);
 
@@ -404,7 +404,7 @@ impl Game {
     // 夜アクション関連の実装
     pub fn register_attack(&mut self, target_id: &str) -> Result<(), String> {
         if !self.players.iter().any(|p| p.id.to_string() == target_id) {
-            return Err("対象プレイヤーが見つかりません".to_string());
+            return Err("Target player not found".to_string());
         }
         self.night_actions.attacks.push(target_id.to_string());
         Ok(())
@@ -415,17 +415,17 @@ impl Game {
             .players
             .iter()
             .find(|p| p.id.to_string() == target_id)
-            .ok_or("対象プレイヤーが見つかりません")?;
+            .ok_or("Target player not found")?;
 
         match &target.role {
             Some(role) => Ok(role.to_string()),
-            None => Ok("不明".to_string()),
+            None => Ok("Unknown".to_string()),
         }
     }
 
     pub fn register_guard(&mut self, target_id: &str) -> Result<(), String> {
         if !self.players.iter().any(|p| p.id.to_string() == target_id) {
-            return Err("対象プレイヤーが見つかりません".to_string());
+            return Err("Target player not found".to_string());
         }
         self.night_actions.guards.push(target_id.to_string());
         Ok(())
@@ -454,16 +454,16 @@ impl Game {
     pub fn cast_vote(&mut self, voter_id: &str, target_id: &str) -> Result<(), String> {
         // プレイヤーの存在確認
         if !self.players.iter().any(|p| p.id == voter_id) {
-            return Err("投票者が見つかりません".to_string());
+            return Err("Voter not found".to_string());
         }
         if !self.players.iter().any(|p| p.id == target_id) {
-            return Err("投票対象が見つかりません".to_string());
+            return Err("Vote target not found".to_string());
         }
 
         // 死亡プレイヤーのチェック
         if let Some(voter) = self.players.iter().find(|p| p.id == voter_id) {
             if voter.is_dead {
-                return Err("死亡したプレイヤーは投票できません".to_string());
+                return Err("Dead players cannot vote".to_string());
             }
         }
 
@@ -473,7 +473,7 @@ impl Game {
             .values()
             .any(|v| v.voters.contains(&voter_id.to_string()))
         {
-            return Err("既に投票済みです".to_string());
+            return Err("Already voted".to_string());
         }
 
         self.vote_results
@@ -506,23 +506,27 @@ impl Game {
     pub fn add_phase_change_message(&mut self, from_phase: GamePhase, to_phase: GamePhase) {
         let message = match to_phase {
             GamePhase::Night => {
-                "夜になりました。人狼は獲物を選び、占い師は占う相手を選んでください。"
+                "Night has fallen. Werewolves, choose your prey. Seer, choose your target."
             }
-            GamePhase::DivinationProcessing => "占い結果を処理しています。しばらくお待ちください。",
-            GamePhase::Discussion => "朝になりました。昨晩の出来事について話し合いましょう。",
-            GamePhase::Voting => "投票の時間です。最も疑わしい人物に投票してください。",
-            GamePhase::Result => "投票が終了しました。結果を発表します。",
+            GamePhase::DivinationProcessing => {
+                "Processing divination results. Please wait a moment."
+            }
+            GamePhase::Discussion => "Morning has come. Let's discuss what happened last night.",
+            GamePhase::Voting => {
+                "It's time to vote. Cast your vote for the most suspicious person."
+            }
+            GamePhase::Result => "Voting has ended. Announcing results.",
             GamePhase::Finished => match self.result {
-                GameResult::VillagerWin => "村人陣営の勝利です！",
-                GameResult::WerewolfWin => "人狼陣営の勝利です！",
-                GameResult::InProgress => "ゲームが終了しました。",
+                GameResult::VillagerWin => "Villagers win!",
+                GameResult::WerewolfWin => "Werewolves win!",
+                GameResult::InProgress => "Game has ended.",
             },
-            GamePhase::Waiting => "ゲームの開始を待っています。",
+            GamePhase::Waiting => "Waiting for game to start.",
         };
 
         self.chat_log.add_message(super::chat::ChatMessage::new(
             "system".to_string(),
-            "システム".to_string(),
+            "System".to_string(),
             message.to_string(),
             super::chat::ChatMessageType::System,
         ));
@@ -629,16 +633,15 @@ impl Game {
                                 Err(e) => {
                                     println!("Failed to deserialize divination result: {}", e);
                                     self.chat_log.add_system_message(
-                                        "占い結果の処理に失敗しました。".to_string(),
+                                        "Failed to process divination result.".to_string(),
                                     );
                                     return;
                                 }
                             },
                             None => {
                                 println!("No output value found");
-                                self.chat_log.add_system_message(
-                                    "占い結果が見つかりませんでした。".to_string(),
-                                );
+                                self.chat_log
+                                    .add_system_message("Divination result not found.".to_string());
                                 return;
                             }
                         };
@@ -652,9 +655,10 @@ impl Game {
                         };
 
                         self.add_divination_result(divination_result.clone());
-                        println!("占い結果が正常に処理されました。");
-                        self.chat_log
-                            .add_system_message("占い結果が生成されました。".to_string());
+                        println!("Divination result processed successfully.");
+                        self.chat_log.add_system_message(
+                            "Divination result has been generated.".to_string(),
+                        );
 
                         // 占い処理完了後、DivinationProcessingフェーズに移行
                         if self.phase == GamePhase::Night {
@@ -743,7 +747,7 @@ impl Game {
 
                         println!("Target index for voting: {}", target_index);
 
-                        // 3. 該当するプレイヤーを死亡させる
+                        // 3. Kill the corresponding player
                         self.players[target_index].is_dead = true;
 
                         println!(
@@ -753,7 +757,7 @@ impl Game {
 
                         // 投票結果をログに追加
                         self.chat_log.add_system_message(format!(
-                            "投票結果: {}が処刑されました。",
+                            "Voting result: {} has been executed.",
                             self.players[target_index].name
                         ));
 
@@ -762,10 +766,10 @@ impl Game {
                             target_id
                         );
 
-                        // フェーズを更新
+                        // Update phase
                         self.change_phase(GamePhase::Result);
 
-                        // 4. 投票結果をクリア
+                        // 4. Clear vote results
                         self.vote_results.clear();
 
                         println!("Vote results cleared after processing.");
@@ -815,20 +819,20 @@ impl Game {
                             GameResult::VillagerWin
                         } else {
                             self.chat_log
-                                .add_system_message("ゲームはまだ続くようです。".to_string());
+                                .add_system_message("The game continues.".to_string());
                             GameResult::InProgress
                         };
 
                         if result != GameResult::InProgress {
                             let winner_message = match result {
-                                GameResult::VillagerWin => "村人陣営の勝利です！",
-                                GameResult::WerewolfWin => "人狼陣営の勝利です！",
+                                GameResult::VillagerWin => "Villagers win!",
+                                GameResult::WerewolfWin => "Werewolves win!",
                                 GameResult::InProgress => unreachable!(),
                             };
 
                             self.chat_log.add_message(ChatMessage::new(
                                 "system".to_string(),
-                                "システム".to_string(),
+                                "System".to_string(),
                                 format!("{}", winner_message),
                                 ChatMessageType::System,
                             ));
@@ -929,7 +933,7 @@ impl Game {
                         );
 
                         self.chat_log.add_system_message(format!(
-                            "役職が割り当てられました: {}。ゲームを開始します。",
+                            "Roles have been assigned: {}. Starting the game.",
                             self.players
                                 .iter()
                                 .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))

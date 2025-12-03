@@ -58,7 +58,7 @@ export const useComputationResults = (
       const customEvent = event as CustomEvent;
       const result: ComputationResult = customEvent.detail;
 
-      console.log(`計算結果受信: ${result.computationType}`, result);
+      console.log(`Computation result received: ${result.computationType}`, result);
 
       // 対象プレイヤーのチェック（指定がある場合）
       if (result.targetPlayerId && result.targetPlayerId !== playerId) {
@@ -77,13 +77,13 @@ export const useComputationResults = (
             const privateGameInfo = getPrivateGameInfo(roomId, playerId);
 
             if (privateGameInfo?.playerRole === "Seer") {
-              console.log("占い師として占い結果を復号化します");
+              console.log("Decrypting divination result as Seer");
 
               try {
                 // ElGamal秘密鍵をJSONファイルから読み取り
                 const secretKeyResponse = await fetch("/elgamal_secret_key.json");
                 if (!secretKeyResponse.ok) {
-                  throw new Error("ElGamal秘密鍵の読み込みに失敗しました");
+                  throw new Error("Failed to load ElGamal secret key");
                 }
 
                 const secretKeyText = await secretKeyResponse.text();
@@ -92,13 +92,13 @@ export const useComputationResults = (
                 // ElGamalパラメータをJSONファイルから読み取り
                 const paramsResponse = await fetch("/test_elgamal_params.json");
                 if (!paramsResponse.ok) {
-                  throw new Error("ElGamalパラメータの読み込みに失敗しました");
+                  throw new Error("Failed to load ElGamal parameters");
                 }
 
                 const paramsText = await paramsResponse.text();
                 const elgamalParams = JSONbigNative.parse(paramsText);
 
-                console.log("占い結果の復号化を開始:", {
+                console.log("Starting divination result decryption:", {
                   ciphertext: result.resultData.ciphertext,
                   secretKey: secretKey,
                   elgamalParams: elgamalParams,
@@ -112,7 +112,7 @@ export const useComputationResults = (
                 };
 
                 const decryptedResult = await MPCEncryption.decryptElGamal(decryptInput);
-                console.log("復号化結果:", decryptedResult);
+                console.log("Decryption result:", decryptedResult);
 
                 const notWerewolf = {
                   x: [["0", "0", "0", "0"], null],
@@ -145,48 +145,48 @@ export const useComputationResults = (
                 } else if (decryptedStr === werewolfStr) {
                   isWerewolf = true;
                 } else {
-                  console.warn("占い結果が期待値と一致しません", decryptedResult);
+                  console.warn("Divination result does not match expected values", decryptedResult);
                   addMessage({
                     id: Date.now().toString(),
-                    sender: "システム",
-                    message: "占い結果が正しくありません。",
+                    sender: "System",
+                    message: "Divination result is not valid.",
                     timestamp: new Date().toISOString(),
                     type: "system",
                   });
                   return;
                 }
 
-                console.log("占い結果(復号化):", decryptedResult);
-                console.log("判定:", isWerewolf ? "人狼です" : "人狼ではありません");
+                console.log("Divination result (decrypted):", decryptedResult);
+                console.log("Judgment:", isWerewolf ? "Werewolf" : "Not werewolf");
                 if (result.targetPlayerId) {
-                  console.log("対象プレイヤーID:", result.targetPlayerId);
+                  console.log("Target player ID:", result.targetPlayerId);
                 }
 
                 addMessage({
                   id: Date.now().toString(),
-                  sender: "システム",
-                  message: `占い結果: ${isWerewolf ? "人狼です" : "人狼ではありません"}`,
+                  sender: "System",
+                  message: `Divination result: ${isWerewolf ? "Werewolf" : "Not werewolf"}`,
                   timestamp: new Date().toISOString(),
                   type: "system",
                 });
 
                 // 占い処理完了をグローバルイベントで通知
                 window.dispatchEvent(new CustomEvent("divinationCompleted"));
-                console.log("占い処理完了イベントを発行しました");
+                console.log("Divination completion event dispatched");
 
                 addMessage({
                   id: Date.now().toString(),
-                  sender: "システム",
-                  message: `占い結果を復号化しました: ${JSON.stringify(decryptedResult)}`,
+                  sender: "System",
+                  message: `Divination result decrypted: ${JSON.stringify(decryptedResult)}`,
                   timestamp: new Date().toISOString(),
                   type: "system",
                 });
               } catch (error) {
-                console.error("占い結果の復号化エラー:", error);
+                console.error("Divination result decryption error:", error);
                 addMessage({
                   id: Date.now().toString(),
-                  sender: "システム",
-                  message: `占い結果の復号化に失敗しました: ${error}`,
+                  sender: "System",
+                  message: `Divination result decryption failed: ${error}`,
                   timestamp: new Date().toISOString(),
                   type: "system",
                 });
@@ -194,8 +194,8 @@ export const useComputationResults = (
             } else {
               addMessage({
                 id: Date.now().toString(),
-                sender: "システム",
-                message: "占い結果が準備されました。",
+                sender: "System",
+                message: "Divination result is ready.",
                 timestamp: new Date().toISOString(),
                 type: "system",
               });
@@ -205,13 +205,13 @@ export const useComputationResults = (
             setRoleAssignmentResult(result.resultData);
 
             // ダミーコード: gameInfoから役職を取得してprivateGameInfoを更新
-            console.log("役職配布結果を受信、gameInfoから役職を取得します");
+            console.log("Role assignment result received, retrieving role from gameInfo");
 
             if (gameInfo && gameInfo.players) {
               const currentPlayer = gameInfo.players.find((player: any) => player.id === playerId);
 
               if (currentPlayer && currentPlayer.role) {
-                console.log("gameInfoから取得した役職:", currentPlayer.role);
+                console.log("Role retrieved from gameInfo:", currentPlayer.role);
 
                 // privateGameInfoを更新
                 const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
@@ -219,37 +219,37 @@ export const useComputationResults = (
                 });
 
                 if (updatedInfo) {
-                  console.log("privateGameInfo更新 (gameInfoベース):", updatedInfo);
+                  console.log("privateGameInfo updated (gameInfo based):", updatedInfo);
 
                   addMessage({
                     id: Date.now().toString(),
-                    sender: "システム",
-                    message: `あなたの役職は「${currentPlayer.role}」です。`,
+                    sender: "System",
+                    message: `Your role is "${currentPlayer.role}"`,
                     timestamp: new Date().toISOString(),
                     type: "system",
                   });
                 } else {
-                  console.warn("privateGameInfoの更新に失敗しました。初期化されていない可能性があります。");
+                  console.warn("Failed to update privateGameInfo. It may not be initialized.");
 
                   addMessage({
                     id: Date.now().toString(),
-                    sender: "システム",
-                    message: "役職情報の更新に失敗しました。ゲームを再開してください。",
+                    sender: "System",
+                    message: "Failed to update role information. Please restart the game.",
                     timestamp: new Date().toISOString(),
                     type: "system",
                   });
                 }
               } else {
-                console.warn("gameInfoから役職情報を取得できませんでした");
+                console.warn("Could not retrieve role information from gameInfo");
               }
             } else {
-              console.warn("gameInfoが利用できません");
+              console.warn("gameInfo is not available");
             }
 
             addMessage({
               id: Date.now().toString(),
-              sender: "システム",
-              message: "役職配布が完了しました。",
+              sender: "System",
+              message: "Role assignment completed.",
               timestamp: new Date().toISOString(),
               type: "system",
             });
@@ -258,10 +258,10 @@ export const useComputationResults = (
             setWinningJudgeResult(result.resultData);
             if (result.resultData.game_result !== "InProgress") {
               const resultMessage =
-                result.resultData.game_result === "VillagerWin" ? "村人陣営の勝利です！" : "人狼陣営の勝利です！";
+                result.resultData.game_result === "VillagerWin" ? "Villagers win!" : "Werewolves win!";
               addMessage({
                 id: Date.now().toString(),
-                sender: "システム",
+                sender: "System",
                 message: resultMessage,
                 timestamp: new Date().toISOString(),
                 type: "system",
@@ -272,8 +272,8 @@ export const useComputationResults = (
             setVotingResult(result.resultData);
             addMessage({
               id: Date.now().toString(),
-              sender: "システム",
-              message: `${result.resultData.executed_player_name}が処刑されました。`,
+              sender: "System",
+              message: `${result.resultData.executed_player_name} has been executed.`,
               timestamp: new Date().toISOString(),
               type: "system",
             });
@@ -282,11 +282,11 @@ export const useComputationResults = (
             console.warn("Unknown computation type:", result.computationType);
         }
       } catch (error) {
-        console.error("計算結果の処理エラー:", error);
+        console.error("Computation result processing error:", error);
         addMessage({
           id: Date.now().toString(),
-          sender: "システム",
-          message: `計算結果の処理に失敗しました: ${result.computationType}`,
+          sender: "System",
+          message: `Computation result processing failed: ${result.computationType}`,
           timestamp: new Date().toISOString(),
           type: "system",
         });
@@ -311,41 +311,41 @@ export const useComputationResults = (
       const privateGameInfo = getPrivateGameInfo(roomId, playerId);
 
       if (privateGameInfo?.playerRole === "Seer") {
-        console.log("占い師として占い結果を復号化します");
+        console.log("Decrypting divination result as Seer");
 
         try {
           // ElGamal秘密鍵をJSONファイルから読み取り
           const secretKeyResponse = await fetch("/elgamal_secret_key.json");
           if (!secretKeyResponse.ok) {
-            throw new Error("ElGamal秘密鍵の読み込みに失敗しました");
+            throw new Error("Failed to load ElGamal secret key");
           }
 
           const secretKeyText = await secretKeyResponse.text();
           const secretKey = JSONbigNative.parse(secretKeyText);
 
-          console.log("占い結果の復号化を開始:", {
+          console.log("Starting divination result decryption:", {
             ciphertext: data.ciphertext,
             secretKey: secretKey,
           });
 
-          // TODO: 実際の復号化処理を実装
-          // 現在は復号化ロジックの代わりに暗号文と秘密鍵をログ出力
-          console.log("暗号文:", data.ciphertext);
-          console.log("秘密鍵:", secretKey);
+          // TODO: Implement actual decryption process
+          // Currently logging ciphertext and secret key instead of decryption logic
+          console.log("Ciphertext:", data.ciphertext);
+          console.log("Secret key:", secretKey);
 
           addMessage({
             id: Date.now().toString(),
-            sender: "システム",
-            message: "占い結果を復号化しました。（詳細はコンソールログを確認してください）",
+            sender: "System",
+            message: "Divination result decrypted. (Check console log for details)",
             timestamp: new Date().toISOString(),
             type: "system",
           });
         } catch (error) {
-          console.error("占い結果の復号化エラー:", error);
+          console.error("Divination result decryption error:", error);
           addMessage({
             id: Date.now().toString(),
-            sender: "システム",
-            message: `占い結果の復号化に失敗しました: ${error}`,
+            sender: "System",
+            message: `Divination result decryption failed: ${error}`,
             timestamp: new Date().toISOString(),
             type: "system",
           });
@@ -353,8 +353,8 @@ export const useComputationResults = (
       } else {
         addMessage({
           id: Date.now().toString(),
-          sender: "システム",
-          message: "占い結果が準備されました。",
+          sender: "System",
+          message: "Divination result is ready.",
           timestamp: new Date().toISOString(),
           type: "system",
         });
@@ -369,8 +369,8 @@ export const useComputationResults = (
       setRoleAssignmentResult(data);
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: "役職配布が完了しました。",
+        sender: "System",
+        message: "Role assignment completed.",
         timestamp: new Date().toISOString(),
         type: "system",
       });
@@ -384,11 +384,11 @@ export const useComputationResults = (
       setWinningJudgeResult(data);
 
       if (data.game_result !== "InProgress") {
-        const resultMessage = data.game_result === "VillagerWin" ? "村人陣営の勝利です！" : "人狼陣営の勝利です！";
+        const resultMessage = data.game_result === "VillagerWin" ? "Villagers win!" : "Werewolves win!";
 
         addMessage({
           id: Date.now().toString(),
-          sender: "システム",
+          sender: "System",
           message: resultMessage,
           timestamp: new Date().toISOString(),
           type: "system",
@@ -404,8 +404,8 @@ export const useComputationResults = (
       setVotingResult(data);
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: `${data.executed_player_name}が処刑されました。`,
+        sender: "System",
+        message: `${data.executed_player_name} has been executed.`,
         timestamp: new Date().toISOString(),
         type: "system",
       });
@@ -417,7 +417,7 @@ export const useComputationResults = (
   const decryptDivinationResult = useCallback(
     async (privateKey: string) => {
       if (!divinationResult) {
-        throw new Error("占い結果がありません");
+        throw new Error("No divination result available");
       }
 
       try {
@@ -433,22 +433,22 @@ export const useComputationResults = (
         });
 
         if (!response.ok) {
-          throw new Error(`復号化に失敗しました: ${response.statusText}`);
+          throw new Error(`Decryption failed: ${response.statusText}`);
         }
 
         const decryptedResult = await response.json();
 
         addMessage({
           id: Date.now().toString(),
-          sender: "システム",
-          message: `占い結果: ${decryptedResult.is_werewolf ? "人狼です" : "人狼ではありません"}`,
+          sender: "System",
+          message: `Divination result: ${decryptedResult.is_werewolf ? "Werewolf" : "Not werewolf"}`,
           timestamp: new Date().toISOString(),
           type: "system",
         });
 
         return decryptedResult;
       } catch (error) {
-        console.error("復号化エラー:", error);
+        console.error("Decryption error:", error);
         throw error;
       }
     },

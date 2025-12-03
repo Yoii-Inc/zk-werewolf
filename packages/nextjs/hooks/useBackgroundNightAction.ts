@@ -103,10 +103,10 @@ export const useBackgroundNightAction = () => {
       });
 
       if (!response.ok) {
-        throw new Error("夜の行動の送信に失敗しました");
+        throw new Error("Failed to send night action");
       }
     } catch (error) {
-      console.error("バックグラウンド夜行動エラー:", error);
+      console.error("Background night action error:", error);
     }
   }, []);
 

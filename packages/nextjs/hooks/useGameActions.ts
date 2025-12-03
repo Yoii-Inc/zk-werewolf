@@ -24,10 +24,10 @@ export const useGameActions = (
         method: "POST",
       });
       if (!response.ok) {
-        throw new Error("ゲームの開始に失敗しました");
+        throw new Error("Failed to start game");
       }
 
-      // ゲーム開始時にPrivateGameInfoを役職null（未決定）で初期化
+      // Initialize PrivateGameInfo with null role (undetermined) when game starts
       if (userId) {
         try {
           initializePrivateGameInfo(roomId, userId);
@@ -35,19 +35,19 @@ export const useGameActions = (
 
           addMessage({
             id: Date.now().toString(),
-            sender: "システム",
-            message: "ゲームが開始されました。役職配布をお待ちください...",
+            sender: "System",
+            message: "Game has started. Please wait for role assignment...",
             timestamp: new Date().toISOString(),
             type: "system",
           });
         } catch (storageError) {
-          console.error("PrivateGameInfo初期化エラー:", storageError);
+          console.error("PrivateGameInfo initialization error:", storageError);
         }
       }
 
       return true;
     } catch (error) {
-      console.error("ゲーム開始エラー:", error);
+      console.error("Game start error:", error);
       return false;
     } finally {
       setIsStarting(false);
@@ -161,12 +161,12 @@ export const useGameActions = (
       });
 
       if (!response.ok) {
-        throw new Error("役職の変更に失敗しました");
+        throw new Error("Failed to change role");
       }
 
-      // 自分自身の役職が変更された場合は、privateGameInfoも更新する
+      // If own role is changed, update privateGameInfo as well
       if (playerId === userId) {
-        // 文字列の役職名をPrivateGameInfoの型に変換
+        // Convert string role name to PrivateGameInfo type
         const roleType = (() => {
           switch (newRole) {
             case "Seer":
@@ -185,15 +185,15 @@ export const useGameActions = (
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}の役職が${newRole}に変更されました`,
+        sender: "System",
+        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}'s role changed to ${newRole}`,
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("役職変更エラー:", error);
+      console.error("Role change error:", error);
       return false;
     }
   };
@@ -215,15 +215,15 @@ export const useGameActions = (
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: "フェーズが進行しました",
+        sender: "System",
+        message: "Phase advanced successfully",
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("フェーズ進行エラー:", error);
+      console.error("Phase progress error:", error);
       return false;
     }
   };
@@ -245,15 +245,15 @@ export const useGameActions = (
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: "Game has been reset",
+        sender: "System",
+        message: "Game has been reset successfully",
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("ゲームリセットエラー:", error);
+      console.error("Game reset error:", error);
       return false;
     }
   };
@@ -264,22 +264,22 @@ export const useGameActions = (
         method: "POST",
       });
       if (!response.ok) {
-        throw new Error("バッチリクエストのリセットに失敗しました");
+        throw new Error("Failed to reset batch request");
       }
 
       const result = await response.json();
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: `バッチリクエストがリセットされました (新しいバッチID: ${result.batch_id})`,
+        sender: "System",
+        message: `Batch request has been reset (new batch ID: ${result.batch_id})`,
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("バッチリクエストリセットエラー:", error);
+      console.error("Batch request reset error:", error);
       return false;
     }
   };

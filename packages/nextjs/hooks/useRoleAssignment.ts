@@ -26,11 +26,11 @@ export const useRoleAssignment = () => {
 
         console.log(roleAssignmentData);
 
-        // 役職配布データの暗号化（MPCノードの公開鍵を使用）
+        // Encrypt role assignment data (using MPC node public key)
         const encryptedRoleAssignment: RoleAssignmentOutput =
           await MPCEncryption.encryptRoleAssignment(roleAssignmentData);
 
-        console.log("役職配布リクエストを送信します。");
+        console.log("Sending role assignment request.");
 
         const requestBody = {
           proof_type: "RoleAssignment",
@@ -54,7 +54,7 @@ export const useRoleAssignment = () => {
         if (!newProofId.ok) {
           const errorData = await newProofId.json();
           console.error("Error message:", errorData);
-          throw new Error("役職配布データの送信に失敗しました");
+          throw new Error("Failed to send role assignment data");
         }
 
         console.log("proof request is accepted. batch_id is ", await newProofId.json());

@@ -33,7 +33,7 @@ export const useGameInfo = (
         const data = await response.json();
         setRoomInfo(data);
       } catch (error) {
-        console.error("ルーム情報の取得エラー:", error);
+        console.error("Room info get error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -113,7 +113,7 @@ export const useGameInfo = (
           setMessages(prev => [...messages]);
         }
       } catch (error) {
-        console.error("ゲーム情報の取得エラー:", error);
+        console.error("Game info get error:", error);
       } finally {
         setIsLoading(false);
       }

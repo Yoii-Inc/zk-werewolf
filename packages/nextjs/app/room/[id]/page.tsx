@@ -58,7 +58,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       if (success) {
         setNewMessage("");
       } else {
-        console.error("メッセージの送信に失敗しました");
+        console.error("Failed to send message");
       }
     }
   };
@@ -77,12 +77,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const handleKeyGeneration = async () => {
     try {
       if (!gameInfo || !user) {
-        console.error("ゲーム情報またはユーザー情報が利用できません");
+        console.error("Game info or user info not available");
         return;
       }
       const playerId = gameInfo.players.find(player => player.name === user?.username)?.id;
       if (!playerId) {
-        console.error("ユーザーIDが利用できません");
+        console.error("User ID not available");
         return;
       }
       console.log("Generating keys for player:", playerId);
@@ -97,8 +97,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         console.log("Public key verified:", keyManager.getPublicKey());
         addMessage({
           id: Date.now().toString(),
-          sender: "システム",
-          message: "鍵ペアが生成されました",
+          sender: "System",
+          message: "Key pair generated successfully",
           timestamp: new Date().toISOString(),
           type: "system",
         });
@@ -107,8 +107,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       console.error("Error managing keys:", error);
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: "鍵ペアの生成に失敗しました",
+        sender: "System",
+        message: "Failed to generate key pair",
         timestamp: new Date().toISOString(),
         type: "system",
       });
@@ -159,13 +159,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         const role = gameInfo.players.find(player => player.name === user?.username)?.role;
                         switch (role) {
                           case "Seer":
-                            return "占い師";
+                            return "Seer";
                           case "Werewolf":
-                            return "人狼";
+                            return "Werewolf";
                           case "Villager":
-                            return "村人";
+                            return "Villager";
                           default:
-                            return "不明";
+                            return "Unknown";
                         }
                       })()}
                     </span>
@@ -177,7 +177,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                           onClick={async () => {
                             const success = await nextPhase();
                             if (!success) {
-                              console.error("フェーズの進行に失敗しました");
+                              console.error("Failed to advance phase");
                             }
                           }}
                           className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm border border-gray-300 transition-colors"
@@ -193,7 +193,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2 text-indigo-700">
                   <Users size={18} />
                   <span>
-                    {roomInfo.players.length}/{roomInfo.max_players}人
+                    {roomInfo.players.length}/{roomInfo.max_players} players
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-indigo-700">
@@ -270,7 +270,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {roomInfo.status === "InProgress" && (
                       <div className="mt-2 flex gap-1 text-xs">
                         <button
-                          onClick={() => handleChangeRole(player.id, "村人")}
+                          onClick={() => handleChangeRole(player.id, "Villager")}
                           className={`px-2 py-1 rounded transition-colors ${
                             player.role === "Villager"
                               ? "bg-gray-300 text-gray-800 font-medium border-gray-500 border-2"
@@ -280,7 +280,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                           Villager
                         </button>
                         <button
-                          onClick={() => handleChangeRole(player.id, "人狼")}
+                          onClick={() => handleChangeRole(player.id, "Werewolf")}
                           className={`px-2 py-1 rounded transition-colors ${
                             player.role === "Werewolf"
                               ? "bg-red-300 text-red-800 font-medium border-red-500 border-2"
@@ -290,7 +290,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                           Werewolf
                         </button>
                         <button
-                          onClick={() => handleChangeRole(player.id, "占い師")}
+                          onClick={() => handleChangeRole(player.id, "Seer")}
                           className={`px-2 py-1 rounded transition-colors ${
                             player.role === "Seer"
                               ? "bg-blue-300 text-blue-800 font-medium border-blue-500 border-2"
@@ -307,7 +307,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
               <div>
                 {/* webscoket関連(デバッグ用)とかく */}
                 <div className="p-4 border-b border-indigo-100">
-                  <h2 className="text-lg font-semibold text-indigo-900">Websocket関連(デバッグ用)</h2>
+                  <h2 className="text-lg font-semibold text-indigo-900">WebSocket (Debug)</h2>
                   <div className="text-indigo-700">WebSocket URL: ws://localhost:8080/api/room/ws</div>
                   <div className="text-indigo-700">WebSocket ReadyState: {websocketRef.current?.readyState}</div>
                   <div className="text-indigo-700">WebSocket Status: {websocketStatus}</div>
@@ -318,29 +318,29 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   disabled={websocketStatus === "connected" || websocketStatus === "connecting"}
                   className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
                 >
-                  {websocketStatus === "connecting" ? "接続中..." : "WebSocket接続"}
+                  {websocketStatus === "connecting" ? "Connecting..." : "Connect WebSocket"}
                 </button>
                 <button
                   onClick={disconnectWebSocket}
                   disabled={websocketStatus === "disconnected"}
                   className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
                 >
-                  WebSocket切断
+                  Disconnect WebSocket
                 </button>
 
                 {/* 鍵生成デバッグ用 */}
                 <div className="p-4 border-b border-indigo-100">
-                  <h2 className="text-lg font-semibold text-indigo-900">鍵生成(デバッグ用)</h2>
+                  <h2 className="text-lg font-semibold text-indigo-900">Key Generation (Debug)</h2>
                   <button
                     onClick={async () => {
                       try {
                         if (!gameInfo || !user) {
-                          console.error("ゲーム情報またはユーザー情報が利用できません");
+                          console.error("Game info or user info not available");
                           return;
                         }
                         const playerId = gameInfo.players.find(player => player.name === user?.username)?.id;
                         if (!playerId) {
-                          console.error("ユーザーIDが利用できません");
+                          console.error("User ID not available");
                           return;
                         }
                         console.log("Generating keys for player:", playerId);
@@ -356,8 +356,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                           // システムメッセージを追加
                           const message: ChatMessage = {
                             id: Date.now().toString(),
-                            sender: "システム",
-                            message: "鍵ペアが生成されました",
+                            sender: "System",
+                            message: "Key pair generated successfully",
                             timestamp: new Date().toISOString(),
                             type: "system",
                           };
@@ -368,8 +368,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         // エラーメッセージを追加
                         const message: ChatMessage = {
                           id: Date.now().toString(),
-                          sender: "システム",
-                          message: "鍵ペアの生成に失敗しました",
+                          sender: "System",
+                          message: "Failed to generate key pair",
                           timestamp: new Date().toISOString(),
                           type: "system",
                         };
@@ -379,20 +379,20 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     disabled={!user?.id}
                     className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mt-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
-                    鍵生成と保存
+                    Generate & Save Keys
                   </button>
                 </div>
 
                 {/* ゲームリセット(デバッグ用) */}
                 <div className="p-4 border-b border-indigo-100">
-                  <h2 className="text-lg font-semibold text-indigo-900">ゲームリセット(デバッグ用)</h2>
+                  <h2 className="text-lg font-semibold text-indigo-900">Game Reset (Debug)</h2>
                   <button
                     onClick={async () => {
                       const success = await resetGame();
                       if (success) {
                         addMessage({
                           id: Date.now().toString(),
-                          sender: "システム",
+                          sender: "System",
                           message: "Game has been reset",
                           timestamp: new Date().toISOString(),
                           type: "system",
@@ -401,21 +401,21 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     }}
                     className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mt-2"
                   >
-                    ゲームをリセット
+                    Reset Game
                   </button>
                 </div>
 
                 {/* バッチリクエストリセット(デバッグ用) */}
                 <div className="p-4 border-b border-indigo-100">
-                  <h2 className="text-lg font-semibold text-indigo-900">バッチリクエストリセット(デバッグ用)</h2>
+                  <h2 className="text-lg font-semibold text-indigo-900">Batch Request Reset (Debug)</h2>
                   <button
                     onClick={async () => {
                       const success = await resetBatchRequest();
                       if (!success) {
                         addMessage({
                           id: Date.now().toString(),
-                          sender: "システム",
-                          message: "バッチリクエストのリセットに失敗しました",
+                          sender: "System",
+                          message: "Failed to reset batch request",
                           timestamp: new Date().toISOString(),
                           type: "system",
                         });
@@ -423,7 +423,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     }}
                     className="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded mt-2"
                   >
-                    バッチリクエストをリセット
+                    Reset Batch Request
                   </button>
                 </div>
               </div>
@@ -463,7 +463,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     type="text"
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
-                    placeholder="メッセージを入力..."
+                    placeholder="Enter message..."
                     className="flex-1 border border-indigo-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm"
                   />
                   <button
@@ -471,7 +471,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     className="bg-indigo-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
                   >
                     <Send size={20} />
-                    送信
+                    Send
                   </button>
                 </div>
               </div>
@@ -480,7 +480,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-xl text-red-600">ルーム情報の取得に失敗しました。</div>
+          <div className="text-xl text-red-600">Failed to retrieve room information.</div>
         </div>
       )}
 
@@ -488,16 +488,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       <div className="w-80 bg-white/80 backdrop-blur-sm border-l border-indigo-100 flex flex-col">
         <div className="p-4 border-b border-indigo-100 flex items-center gap-2">
           <StickyNote size={20} className="text-indigo-600" />
-          <h2 className="text-lg font-semibold text-indigo-900">メモ</h2>
+          <h2 className="text-lg font-semibold text-indigo-900">Notes</h2>
         </div>
         <textarea
           value={notes}
           onChange={e => setNotes(e.target.value)}
-          placeholder="メモを入力..."
+          placeholder="Enter notes..."
           className="flex-1 p-4 resize-none focus:outline-none bg-transparent"
         />
         <div className="p-4 border-t border-indigo-100">
-          <h2 className="text-lg font-semibold text-indigo-900">デバッグ情報</h2>
+          <h2 className="text-lg font-semibold text-indigo-900">Debug Info</h2>
           <pre className="text-sm text-gray-700 bg-gray-100 p-2 rounded overflow-x-auto">
             username = {user?.username}
           </pre>

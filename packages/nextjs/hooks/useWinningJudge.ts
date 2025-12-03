@@ -24,10 +24,10 @@ export const useWinningJudge = () => {
           throw new Error("MPC node public keys are not properly configured");
         }
 
-        // 勝利判定データの暗号化（MPCノードの公開鍵を使用）
+        // Encrypt winning judge data (using MPC node public key)
         const encryptedWinningJudge = await MPCEncryption.encryptWinningJudgement(winningJudgeData);
 
-        // 勝利判定証明のリクエスト送信
+        // Send winning judge proof request
         const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
           method: "POST",
           headers: {
@@ -46,7 +46,7 @@ export const useWinningJudge = () => {
         if (!newProofId.ok) {
           const errorData = await newProofId.json();
           console.error("Error message:", errorData);
-          throw new Error("勝利判定データの送信に失敗しました");
+          throw new Error("Failed to send winning judge data");
         }
 
         console.log("proof request is accepted. batch_id is ", await newProofId.json());

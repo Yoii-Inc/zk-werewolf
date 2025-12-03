@@ -91,7 +91,7 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
       //   await onSubmit(selectedPlayerId);
       onClose();
     } catch (err) {
-      console.error("投票に失敗しました:", err);
+      console.error("Voting failed:", err);
     } finally {
       setIsSubmitting(false);
     }

@@ -173,7 +173,7 @@ pub async fn batch_proof_handling(
     }
 
     game.chat_log
-        .add_system_message(format!("{}が証明リクエストを送信しました。", user_id));
+        .add_system_message(format!("{} has sent a proof request.", user_id));
 
     // バッチリクエストに追加
     let batch_id = game.add_request(request.clone(), &state).await;

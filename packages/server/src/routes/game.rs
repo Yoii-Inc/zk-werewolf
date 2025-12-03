@@ -149,9 +149,9 @@ async fn check_winner_handler(
 ) -> impl IntoResponse {
     match game_service::check_winner(state, &room_id).await {
         Ok(winner) => match winner {
-            GameResult::InProgress => (StatusCode::OK, Json("ゲーム進行中".to_string())),
-            GameResult::VillagerWin => (StatusCode::OK, Json("村人陣営の勝利".to_string())),
-            GameResult::WerewolfWin => (StatusCode::OK, Json("人狼陣営の勝利".to_string())),
+            GameResult::InProgress => (StatusCode::OK, Json("Game in progress".to_string())),
+            GameResult::VillagerWin => (StatusCode::OK, Json("Villagers team wins".to_string())),
+            GameResult::WerewolfWin => (StatusCode::OK, Json("Werewolves team wins".to_string())),
         },
         Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
     }
@@ -168,9 +168,9 @@ pub async fn change_player_role(
         if let Some(player) = game.players.iter_mut().find(|p| p.id == payload.player_id) {
             // 文字列から Role を変換
             let new_role = match payload.new_role.as_str() {
-                "村人" => Some(Role::Villager),
-                "人狼" => Some(Role::Werewolf),
-                "占い師" => Some(Role::Seer),
+                "Villager" => Some(Role::Villager),
+                "Werewolf" => Some(Role::Werewolf),
+                "Seer" => Some(Role::Seer),
                 _ => None,
             };
 
@@ -283,7 +283,7 @@ async fn reset_game_handler(
         // システムメッセージを追加
         reset_game
             .chat_log
-            .add_system_message("ゲームがリセットされました".to_string());
+            .add_system_message("Game has been reset".to_string());
 
         // ゲームを更新
         *game = reset_game;
@@ -293,7 +293,7 @@ async fn reset_game_handler(
             room.status = RoomStatus::Open;
             room.chat_log.messages.clear();
             room.chat_log
-                .add_system_message("ルームがリセットされました".to_string());
+                .add_system_message("Room has been reset".to_string());
         }
 
         (
@@ -326,7 +326,7 @@ async fn reset_batch_request_handler(
 
         // システムメッセージを追加
         game.chat_log
-            .add_system_message("バッチリクエストがリセットされました".to_string());
+            .add_system_message("Batch request has been reset".to_string());
 
         (
             StatusCode::OK,

@@ -56,11 +56,11 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
         let seer_exists = game.players.iter().any(|p| p.role == Some(Role::Seer));
 
         let mut start_message = format!(
-            "ゲームを開始します。{}人のプレイヤーが参加し、その中に{}人の人狼がいます。",
+            "Starting the game. {} players have joined, including {} werewolves.",
             player_count, werewolf_count
         );
         if seer_exists {
-            start_message.push_str(" 占い師も村を守るために協力してくれるでしょう。");
+            start_message.push_str(" The seer will also help protect the village.");
         }
 
         game.chat_log.add_system_message(start_message);
@@ -428,13 +428,13 @@ pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, 
         if result != GameResult::InProgress {
             let (winner_message, details) = match result {
                 GameResult::VillagerWin => (
-                    "村人陣営の勝利です！",
-                    format!("残りの村人: {}人", alive_villagers),
+                    "Villagers team wins!",
+                    format!("Remaining villagers: {}", alive_villagers),
                 ),
                 GameResult::WerewolfWin => (
-                    "人狼陣営の勝利です！",
+                    "Werewolves team wins!",
                     format!(
-                        "残りの人狼: {}人、残りの村人: {}人",
+                        "Remaining werewolves: {}, Remaining villagers: {}",
                         alive_werewolves, alive_villagers
                     ),
                 ),
@@ -443,7 +443,7 @@ pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, 
 
             game.chat_log.add_message(ChatMessage::new(
                 "system".to_string(),
-                "システム".to_string(),
+                "System".to_string(),
                 format!("{} {}", winner_message, details),
                 ChatMessageType::System,
             ));
@@ -459,7 +459,7 @@ pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, 
 // 役職の振り分け
 pub fn assign_roles(players_count: usize) -> Result<Vec<Role>, String> {
     if players_count < 4 {
-        return Err("最低4人のプレイヤーが必要です".to_string());
+        return Err("At least 4 players are required".to_string());
     }
 
     let mut roles = Vec::new();

@@ -40,7 +40,7 @@ export const useGamePhase = (
       const customEvent = event as CustomEvent;
       const { fromPhase, toPhase, requiresDummyRequest } = customEvent.detail;
 
-      console.log(`WebSocketフェーズ変更通知受信: ${fromPhase} → ${toPhase}`);
+      //   console.log(`WebSocketフェーズ変更通知受信: ${fromPhase} → ${toPhase}`);
 
       if (!gameInfo || !username) return;
 
@@ -52,7 +52,7 @@ export const useGamePhase = (
 
       // hasActedをリセット
       updateHasActed(roomId, currentPlayer.id, false);
-      console.log(`WebSocket通知によりhasActedをリセット: ${fromPhase} → ${toPhase}`);
+      console.log(`Reset hasActed by WebSocket notification: ${fromPhase} → ${toPhase}`);
 
       // 処理の優先順位を明確にした順次実行
       const processingSteps: (() => Promise<void>)[] = [];
@@ -66,26 +66,26 @@ export const useGamePhase = (
         !currentPlayer.is_dead
       ) {
         processingSteps.push(async () => {
-          console.log(`Step 1: 占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
+          console.log(`Step 1: Non-Seer player ${username} sending dummy request.`);
 
           try {
             await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
 
             addMessage({
               id: Date.now().toString(),
-              sender: "システム",
-              message: "ダミーリクエストを送信しました",
+              sender: "System",
+              message: "Dummy request sent",
               timestamp: new Date().toISOString(),
               type: "system",
             });
 
-            console.log("Step 1: ダミーリクエスト送信完了");
+            console.log("Step 1: Dummy request completed");
           } catch (error) {
-            console.error("Step 1: ダミーリクエスト送信エラー:", error);
+            console.error("Step 1: Dummy request error:", error);
             addMessage({
               id: Date.now().toString(),
-              sender: "システム",
-              message: "ダミーリクエストの送信に失敗しました",
+              sender: "System",
+              message: "Failed to send dummy request",
               timestamp: new Date().toISOString(),
               type: "system",
             });
@@ -99,13 +99,13 @@ export const useGamePhase = (
         (fromPhase === "Voting" && toPhase === "Result")
       ) {
         processingSteps.push(async () => {
-          console.log(`Step 2: 勝利判定処理開始: ${fromPhase} → ${toPhase}`);
+          console.log(`Step 2: Starting winning judgement process: ${fromPhase} → ${toPhase}`);
 
           if (handleGameResultCheckRef.current) {
             handleGameResultCheckRef.current(transitionId);
           }
 
-          console.log("Step 2: 勝利判定処理完了");
+          console.log("Step 2: Winning judgement process completed");
         });
       }
 
@@ -116,7 +116,7 @@ export const useGamePhase = (
           // 各ステップ間に少し遅延を入れてサーバー側の処理順序を保証
           await new Promise(resolve => setTimeout(resolve, 300));
         } catch (error) {
-          console.error("処理ステップでエラーが発生:", error);
+          console.error("Error occurred in processing step:", error);
         }
       }
     };
@@ -131,13 +131,13 @@ export const useGamePhase = (
   // 占い完了イベントを監視
   useEffect(() => {
     const handleDivinationCompleted = () => {
-      console.log("占い処理完了イベントを受信しました");
+      console.log("Divination completion event received");
       divinationCompletedRef.current = true;
 
       // 一定時間後にフラグをリセット
       const resetTimer = setTimeout(() => {
         divinationCompletedRef.current = false;
-        console.log("占い完了フラグをリセットしました");
+        console.log("Divination completion flag reset");
       }, 30000); // 30秒後にリセット
 
       return () => clearTimeout(resetTimer);
@@ -153,7 +153,7 @@ export const useGamePhase = (
   // 占いステータスを監視（従来の仕組みも残す）
   useEffect(() => {
     if (proofStatus === "completed") {
-      console.log("占い結果の検証が完了しました（proofStatus経由）");
+      console.log("Divination result verification completed (via proofStatus)");
       divinationCompletedRef.current = true;
 
       // 一定時間後にフラグをリセット
@@ -173,7 +173,7 @@ export const useGamePhase = (
 
       // 占い師の結果を待つ処理
       const waitForDivination = () => {
-        // 占い師以外のプレイヤーはすぐに勝敗判定を行う
+        // Non-Seer players proceed immediately with winning judgement
         const currentPlayer = gameInfo.players.find(player => player.name === username);
         if (!currentPlayer || currentPlayer.role !== "Seer") {
           return Promise.resolve();
@@ -188,13 +188,13 @@ export const useGamePhase = (
             const elapsedTime = Date.now() - startTime;
 
             if (divinationCompletedRef.current) {
-              console.log("占い結果の処理が完了したため、勝敗判定を実行します");
+              console.log("Divination processing completed, executing winning judgement");
               resolve();
             } else if (elapsedTime >= maxWaitTime) {
-              console.log("占い結果の待機がタイムアウトしました。勝敗判定を続行します");
+              console.log("Divination wait timeout. Continuing with winning judgement");
               resolve();
             } else {
-              console.log(`占い結果の処理待機中... (${Math.round(elapsedTime / 1000)}秒経過)`);
+              console.log(`Waiting for divination processing... (${Math.round(elapsedTime / 1000)} seconds elapsed)`);
               setTimeout(checkDivination, 1000); // 1秒ごとにチェック
             }
           };
@@ -206,9 +206,9 @@ export const useGamePhase = (
       try {
         // このフェーズ変更での勝敗判定をすでに実行済みとマーク
         winningJudgementSentRef.current = phaseTransitionId;
-        console.log(`勝敗判定処理を開始します。トランジションID: ${phaseTransitionId}`);
+        console.log(`Starting winning judgement process. Transition ID: ${phaseTransitionId}`);
 
-        // 占い結果を待つ
+        // Wait for divination results
         await waitForDivination();
         const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
 
@@ -281,9 +281,9 @@ export const useGamePhase = (
 
         console.log(`Player ${myId} is sending winning judgement proof request`);
         await submitWinningJudge(roomId, winningJudgeData, alivePlayersCount);
-        console.log(`Player ${myId} の勝敗判定リクエスト送信完了`);
+        console.log(`Player ${myId} winning judgement request completed`);
       } catch (error) {
-        console.error("勝利判定処理エラー:", error);
+        console.error("Winning judgement process error:", error);
         // エラー時もフラグをリセット（一定時間後）
         const resetTimer = setTimeout(() => {
           if (winningJudgementSentRef.current === phaseTransitionId) {
@@ -378,30 +378,30 @@ export const useGamePhase = (
 
           addMessage({
             id: Date.now().toString(),
-            sender: "システム",
-            message: "役職配布処理を開始しました",
+            sender: "System",
+            message: "Role assignment process started",
             timestamp: new Date().toISOString(),
             type: "system",
           });
         } catch (error) {
-          console.error("役職配布処理エラー:", error);
+          console.error("Role assignment process error:", error);
 
           // サーバー側エラーメッセージをチェック
           const errorMessage = error instanceof Error ? error.message : String(error);
           if (errorMessage.includes("Role assignment has already been completed")) {
-            console.log("役職配布はすでに完了済みです");
+            console.log("Role assignment already completed");
             addMessage({
               id: Date.now().toString(),
-              sender: "システム",
-              message: "役職配布はすでに完了しています",
+              sender: "System",
+              message: "Role assignment already completed",
               timestamp: new Date().toISOString(),
               type: "system",
             });
           } else {
             addMessage({
               id: Date.now().toString(),
-              sender: "システム",
-              message: "役職配布処理に失敗しました",
+              sender: "System",
+              message: "Role assignment process failed",
               timestamp: new Date().toISOString(),
               type: "system",
             });
@@ -423,7 +423,7 @@ export const useGamePhase = (
 
     // フェーズが変わった時のログ出力のみ
     if (prevPhase && prevPhase !== gameInfo.phase) {
-      console.log(`フェーズ変更を検知: ${prevPhase} → ${gameInfo.phase}`);
+      console.log(`Phase change detected: ${prevPhase} → ${gameInfo.phase}`);
     }
   }, [gameInfo?.phase]);
 
