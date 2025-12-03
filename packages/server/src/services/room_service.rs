@@ -46,7 +46,7 @@ pub async fn join_room(state: AppState, room_id: &str, player_id: &str, player_n
         let player = Player {
             id: player_id.to_string(),
             name: player_name.to_string(),
-            role: Some(Role::Villager),
+            role: None,
             is_dead: false,
             is_ready: false,
         };

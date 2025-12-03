@@ -12,7 +12,7 @@ export const getPrivateGameInfo = (roomId: string, playerId: string): PrivateGam
     if (!storedData) return null;
     return JSON.parse(storedData) as PrivateGameInfo;
   } catch (error) {
-    console.error("PrivateGameInfo取得エラー:", error);
+    console.error("PrivateGameInfo get error:", error);
     return null;
   }
 };
@@ -26,7 +26,7 @@ export const setPrivateGameInfo = (roomId: string, privateGameInfo: PrivateGameI
   try {
     sessionStorage.setItem(`game_${roomId}_player_${privateGameInfo.playerId}`, JSON.stringify(privateGameInfo));
   } catch (error) {
-    console.error("PrivateGameInfo保存エラー:", error);
+    console.error("PrivateGameInfo save error:", error);
   }
 };
 
@@ -50,7 +50,7 @@ export const updatePrivateGameInfo = (
     setPrivateGameInfo(roomId, updatedInfo);
     return updatedInfo;
   } catch (error) {
-    console.error("PrivateGameInfo更新エラー:", error);
+    console.error("PrivateGameInfo update error:", error);
     return null;
   }
 };
@@ -66,6 +66,20 @@ export const updateHasActed = (roomId: string, playerId: string, hasActed: boole
 };
 
 /**
+ * ゲーム開始時にPrivateGameInfoを初期化（役職はnull）
+ * @param roomId ルームID
+ * @param playerId プレイヤーID
+ */
+export const initializePrivateGameInfo = (roomId: string, playerId: string): void => {
+  const initialPrivateInfo: PrivateGameInfo = {
+    playerId,
+    playerRole: null, // 役職は未決定状態で初期化
+    hasActed: false,
+  };
+  setPrivateGameInfo(roomId, initialPrivateInfo);
+};
+
+/**
  * セッションストレージからPrivateGameInfoを削除
  * @param roomId ルームID
  * @param playerId プレイヤーID
@@ -74,6 +88,6 @@ export const clearPrivateGameInfo = (roomId: string, playerId: string): void => 
   try {
     sessionStorage.removeItem(`game_${roomId}_player_${playerId}`);
   } catch (error) {
-    console.error("PrivateGameInfo削除エラー:", error);
+    console.error("PrivateGameInfo delete error:", error);
   }
 };

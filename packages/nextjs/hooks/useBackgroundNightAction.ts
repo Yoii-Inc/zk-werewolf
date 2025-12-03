@@ -22,19 +22,27 @@ export const useBackgroundNightAction = () => {
       const commitment = await commitres.text();
       const parsedCommitment = JSONbigNative.parse(commitment);
 
-      const elgamalparamres = await fetch("/test_elgamal_params.json");
+      const elgamalparamres = await fetch("/elgamal_params.json");
       const elgamalparam = await elgamalparamres.text();
       const parsedElgamalParam = JSONbigNative.parse(elgamalparam);
 
-      const elgamalpubkeyres = await fetch("/test_elgamal_pubkey.json");
+      const elgamalpubkeyres = await fetch("/elgamal_public_key.json");
       const elgamalpubkey = await elgamalpubkeyres.text();
       const parsedElgamalPubkey = JSONbigNative.parse(elgamalpubkey);
 
       // ダミーのプライベート入力を作成
+      // Determine whether the current player (by myId) is a Werewolf using the players array
+      const amWerewolfValues =
+        players.find(player => player.id === myId)?.role === "Werewolf"
+          ? JSONbigNative.parse(
+              '["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"]',
+            )
+          : JSONbigNative.parse('["0", "0", "0", "0"]');
+
       const privateInput = {
         id: players.findIndex(player => player.id === myId),
         isTarget: players.map(() => [JSONbigNative.parse('["0","0","0","0"]'), null]),
-        isWerewolf: [JSONbigNative.parse('["0","0","0","0"]'), null],
+        isWerewolf: [amWerewolfValues, null],
         randomness: parsedRandomness,
       };
 
@@ -95,10 +103,10 @@ export const useBackgroundNightAction = () => {
       });
 
       if (!response.ok) {
-        throw new Error("夜の行動の送信に失敗しました");
+        throw new Error("Failed to send night action");
       }
     } catch (error) {
-      console.error("バックグラウンド夜行動エラー:", error);
+      console.error("Background night action error:", error);
     }
   }, []);
 

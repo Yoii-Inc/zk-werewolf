@@ -1027,8 +1027,13 @@ impl DivinationCircuit<mm::MpcField<Fr>> {
             .collect::<Vec<_>>();
 
         let mut sum = mm::MpcField::<Fr>::default();
-        for (t, w) in is_target_vec.iter().zip(is_werewolf_vec.iter()) {
-            sum += t.iter().fold(mm::MpcField::<Fr>::zero(), |acc, x| acc + x) * w;
+
+        for i in 0..self.private_input.len() {
+            let mut tmp = mm::MpcField::<Fr>::default();
+            for j in 0..self.private_input.len() {
+                tmp += self.private_input[j].is_target[i];
+            }
+            sum += tmp * self.private_input[i].is_werewolf;
         }
 
         let pub_key = self.public_input.pub_key;

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, WebSocketMessage } from "~~/types/game";
 
+interface ComputationResult {
+  computationType: string;
+  resultData: any;
+  targetPlayerId?: string;
+  batchId: string;
+  timestamp: string;
+}
+
 export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
   const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected");
@@ -11,31 +19,47 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
     const ws = new WebSocket(`ws://localhost:8080/api/room/${roomId}/ws`);
 
     ws.onopen = () => {
-      console.log("WebSocket接続が確立されました");
+      console.log("WebSocket connection established");
       setWebsocketStatus("connected");
     };
 
     ws.onmessage = event => {
-      console.log("メッセージを受信しました:", event.data);
+      console.log("Message received:", event.data);
       const data = JSON.parse(event.data);
 
       // フェーズ変更通知の場合
       if (data.message_type === "phase_change") {
-        console.log(`フェーズ変更通知を受信: ${data.from_phase} → ${data.to_phase}`);
+        console.log(`Phase change notification received: ${data.from_phase} → ${data.to_phase}`);
 
-        // Night → Discussion の場合、ダミーリクエストが必要な通知を発行
-        if (data.requires_dummy_request) {
-          // カスタムイベントを発行してuseGamePhaseフックに通知
-          window.dispatchEvent(
-            new CustomEvent("phaseChangeNotification", {
-              detail: {
-                fromPhase: data.from_phase,
-                toPhase: data.to_phase,
-                requiresDummyRequest: true,
-              },
-            }),
-          );
-        }
+        // カスタムイベントを発行してuseGamePhaseフックに通知
+        window.dispatchEvent(
+          new CustomEvent("phaseChangeNotification", {
+            detail: {
+              fromPhase: data.from_phase,
+              toPhase: data.to_phase,
+              requiresDummyRequest: data.requires_dummy_request,
+            },
+          }),
+        );
+        return;
+      }
+
+      // For computation result notification
+      if (data.message_type === "computation_result") {
+        console.log(`Computation result notification received: ${data.computation_type}`);
+
+        // カスタムイベントを発行
+        window.dispatchEvent(
+          new CustomEvent("computationResultNotification", {
+            detail: {
+              computationType: data.computation_type,
+              resultData: data.result_data,
+              targetPlayerId: data.target_player_id,
+              batchId: data.batch_id,
+              timestamp: data.timestamp,
+            },
+          }),
+        );
         return;
       }
 
@@ -55,13 +79,13 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
     };
 
     ws.onclose = event => {
-      console.log("WebSocket接続が閉じられました", event);
+      console.log("WebSocket connection closed", event);
       setWebsocketStatus("disconnected");
       websocketRef.current = null;
     };
 
     ws.onerror = error => {
-      console.error("WebSocketエラーが発生しました:", error);
+      console.error("WebSocket error occurred:", error);
       setWebsocketStatus("error");
       websocketRef.current = null;
     };
@@ -80,7 +104,7 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
       const websocketMessage: WebSocketMessage = {
         message_type: "normal",
         player_id: Date.now().toString(),
-        player_name: "プレイヤー",
+        player_name: "Player",
         content: message,
         timestamp: new Date().toISOString(),
         room_id: roomId,

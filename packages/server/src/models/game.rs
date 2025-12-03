@@ -11,6 +11,7 @@ use ark_bls12_377::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::CanonicalDeserialize;
+use chrono::{DateTime, Utc};
 use derivative::Derivative;
 use mpc_algebra_wasm::*;
 use reqwest::Client;
@@ -28,6 +29,7 @@ pub struct Game {
     pub max_players: usize,
     pub roles: Vec<String>,
     pub phase: GamePhase,
+    pub day_count: u32,
     pub result: GameResult,
     pub night_actions: NightActions,
     pub vote_results: HashMap<String, Vote>,
@@ -35,23 +37,65 @@ pub struct Game {
     pub chat_log: super::chat::ChatLog,
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
-    pub divination_result: Option<DivinationResult>,
+    pub divination_results: Vec<DivinationResult>,
+    pub computation_results: ComputationResults,
+    pub started_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DivinationResult {
     pub ciphertext:
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
+    pub phase: GamePhase,
+    pub day_count: u32,
+    pub performed_at: DateTime<Utc>,
+}
+
+// 計算結果を管理する構造体群
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ComputationResults {
+    pub role_assignment: Option<ComputationEntry<RoleAssignmentComputationResult>>,
+}
+
+impl Default for ComputationResults {
+    fn default() -> Self {
+        ComputationResults {
+            role_assignment: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputationEntry<T> {
+    pub id: String,
+    pub computed_at: DateTime<Utc>,
+    pub initiated_by: String,
+    pub phase: GamePhase,
+    pub day_count: u32,
+    pub result: T,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoleAssignmentComputationResult {
+    pub player_roles: Vec<PlayerRoleAssignment>,
+    pub proof_data: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerRoleAssignment {
+    pub player_id: String,
+    pub role: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum GamePhase {
-    Waiting,    // ゲーム開始前
-    Night,      // 夜フェーズ
-    Discussion, // 議論フェーズ
-    Voting,     // 投票フェーズ
-    Result,     // 結果発表フェーズ
-    Finished,   // ゲーム終了
+    Waiting,              // ゲーム開始前
+    Night,                // 夜フェーズ
+    DivinationProcessing, // 占い結果処理フェーズ
+    Discussion,           // 議論フェーズ
+    Voting,               // 投票フェーズ
+    Result,               // 結果発表フェーズ
+    Finished,             // ゲーム終了
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -256,20 +300,111 @@ impl Game {
             max_players: 9,
             roles: vec![],
             phase: GamePhase::Waiting,
+            day_count: 1,
             result: GameResult::InProgress,
             night_actions: NightActions::default(),
             vote_results: HashMap::new(),
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
             batch_request: BatchRequest::new(),
-            divination_result: None,
+            divination_results: Vec::new(),
+            computation_results: ComputationResults::default(),
+            started_at: Some(Utc::now()),
         }
+    }
+
+    // 計算結果チェック用のメソッド
+    pub fn has_role_assignment(&self) -> bool {
+        self.computation_results.role_assignment.is_some()
+    }
+
+    pub fn has_divination_for_current_phase(&self) -> bool {
+        // 現在のフェーズ・日数での占い結果が存在するかチェック
+        self.divination_results
+            .iter()
+            .any(|result| result.phase == self.phase && result.day_count == self.day_count)
+    }
+
+    // 特定のフェーズ・日数の占い結果を取得
+    pub fn get_divination_for_phase(
+        &self,
+        phase: &GamePhase,
+        day_count: u32,
+    ) -> Option<&DivinationResult> {
+        self.divination_results
+            .iter()
+            .find(|result| result.phase == *phase && result.day_count == day_count)
+    }
+
+    // 占い結果を履歴に追加
+    pub fn add_divination_result(&mut self, result: DivinationResult) {
+        self.divination_results.push(result);
+    }
+
+    // より厳密な占い可能性チェック
+    pub fn can_perform_divination(&self) -> bool {
+        self.phase == GamePhase::Night && !self.has_divination_for_current_phase()
+    }
+
+    // DivinationProcessing フェーズから Discussion フェーズへの遷移を管理
+    pub async fn complete_divination_processing(&mut self, app_state: &crate::state::AppState) {
+        if self.phase == GamePhase::DivinationProcessing {
+            println!("Divination processing completed. Moving to Discussion phase.");
+
+            self.change_phase(GamePhase::Discussion);
+
+            // フェーズ変更をWebSocketで通知
+            if let Err(e) = app_state
+                .broadcast_phase_change(&self.room_id, "DivinationProcessing", "Discussion")
+                .await
+            {
+                println!("Failed to broadcast phase change: {}", e);
+            }
+        }
+    }
+
+    // 次の日に進む（day_countを増やす）
+    pub fn advance_to_next_day(&mut self) {
+        self.day_count += 1;
+        println!("Day count advanced to: {}", self.day_count);
+    }
+
+    // フェーズを変更し、必要に応じてday_countを増やす
+    pub fn change_phase(&mut self, new_phase: GamePhase) {
+        let old_phase = self.phase.clone();
+
+        // Resultフェーズから次のNightフェーズに移る場合は新しい日
+        if old_phase == GamePhase::Result && new_phase == GamePhase::Night {
+            self.advance_to_next_day();
+        }
+
+        self.phase = new_phase.clone();
+        self.add_phase_change_message(old_phase, new_phase);
+    }
+    pub fn save_role_assignment_result(
+        &mut self,
+        id: String,
+        initiated_by: String,
+        player_roles: Vec<PlayerRoleAssignment>,
+        proof_data: serde_json::Value,
+    ) {
+        self.computation_results.role_assignment = Some(ComputationEntry {
+            id,
+            computed_at: Utc::now(),
+            phase: self.phase.clone(),
+            day_count: self.day_count,
+            initiated_by,
+            result: RoleAssignmentComputationResult {
+                player_roles,
+                proof_data,
+            },
+        });
     }
 
     // 夜アクション関連の実装
     pub fn register_attack(&mut self, target_id: &str) -> Result<(), String> {
         if !self.players.iter().any(|p| p.id.to_string() == target_id) {
-            return Err("対象プレイヤーが見つかりません".to_string());
+            return Err("Target player not found".to_string());
         }
         self.night_actions.attacks.push(target_id.to_string());
         Ok(())
@@ -280,17 +415,17 @@ impl Game {
             .players
             .iter()
             .find(|p| p.id.to_string() == target_id)
-            .ok_or("対象プレイヤーが見つかりません")?;
+            .ok_or("Target player not found")?;
 
         match &target.role {
             Some(role) => Ok(role.to_string()),
-            None => Ok("不明".to_string()),
+            None => Ok("Unknown".to_string()),
         }
     }
 
     pub fn register_guard(&mut self, target_id: &str) -> Result<(), String> {
         if !self.players.iter().any(|p| p.id.to_string() == target_id) {
-            return Err("対象プレイヤーが見つかりません".to_string());
+            return Err("Target player not found".to_string());
         }
         self.night_actions.guards.push(target_id.to_string());
         Ok(())
@@ -319,16 +454,16 @@ impl Game {
     pub fn cast_vote(&mut self, voter_id: &str, target_id: &str) -> Result<(), String> {
         // プレイヤーの存在確認
         if !self.players.iter().any(|p| p.id == voter_id) {
-            return Err("投票者が見つかりません".to_string());
+            return Err("Voter not found".to_string());
         }
         if !self.players.iter().any(|p| p.id == target_id) {
-            return Err("投票対象が見つかりません".to_string());
+            return Err("Vote target not found".to_string());
         }
 
         // 死亡プレイヤーのチェック
         if let Some(voter) = self.players.iter().find(|p| p.id == voter_id) {
             if voter.is_dead {
-                return Err("死亡したプレイヤーは投票できません".to_string());
+                return Err("Dead players cannot vote".to_string());
             }
         }
 
@@ -338,7 +473,7 @@ impl Game {
             .values()
             .any(|v| v.voters.contains(&voter_id.to_string()))
         {
-            return Err("既に投票済みです".to_string());
+            return Err("Already voted".to_string());
         }
 
         self.vote_results
@@ -371,28 +506,37 @@ impl Game {
     pub fn add_phase_change_message(&mut self, from_phase: GamePhase, to_phase: GamePhase) {
         let message = match to_phase {
             GamePhase::Night => {
-                "夜になりました。人狼は獲物を選び、占い師は占う相手を選んでください。"
+                "Night has fallen. Werewolves, choose your prey. Seer, choose your target."
             }
-            GamePhase::Discussion => "朝になりました。昨晩の出来事について話し合いましょう。",
-            GamePhase::Voting => "投票の時間です。最も疑わしい人物に投票してください。",
-            GamePhase::Result => "投票が終了しました。結果を発表します。",
+            GamePhase::DivinationProcessing => {
+                "Processing divination results. Please wait a moment."
+            }
+            GamePhase::Discussion => "Morning has come. Let's discuss what happened last night.",
+            GamePhase::Voting => {
+                "It's time to vote. Cast your vote for the most suspicious person."
+            }
+            GamePhase::Result => "Voting has ended. Announcing results.",
             GamePhase::Finished => match self.result {
-                GameResult::VillagerWin => "村人陣営の勝利です！",
-                GameResult::WerewolfWin => "人狼陣営の勝利です！",
-                GameResult::InProgress => "ゲームが終了しました。",
+                GameResult::VillagerWin => "Villagers win!",
+                GameResult::WerewolfWin => "Werewolves win!",
+                GameResult::InProgress => "Game has ended.",
             },
-            GamePhase::Waiting => "ゲームの開始を待っています。",
+            GamePhase::Waiting => "Waiting for game to start.",
         };
 
         self.chat_log.add_message(super::chat::ChatMessage::new(
             "system".to_string(),
-            "システム".to_string(),
+            "System".to_string(),
             message.to_string(),
             super::chat::ChatMessageType::System,
         ));
     }
 
-    pub async fn add_request(&mut self, request: ClientRequestType) -> String {
+    pub async fn add_request(
+        &mut self,
+        request: ClientRequestType,
+        app_state: &crate::state::AppState,
+    ) -> String {
         // let mut batch_request = &self.batch_request;
         let size_limit = request.get_prover_count();
 
@@ -418,7 +562,7 @@ impl Game {
                 //     // ...
                 // }
 
-                self.process_batch().await;
+                self.process_batch(app_state).await;
                 // });
 
                 // 新しいバッチを作成
@@ -433,7 +577,7 @@ impl Game {
         }
     }
 
-    async fn process_batch(&mut self) {
+    async fn process_batch(&mut self, app_state: &crate::state::AppState) {
         self.batch_request.status = BatchStatus::Processing;
 
         // requsets: Vec<ClientRequestType>をCircuitEncryptedInputIdentifierに変換
@@ -483,30 +627,90 @@ impl Game {
                 match identifier {
                     CircuitEncryptedInputIdentifier::Divination(items) => {
                         // itemsを処理する
-                        let divination_result: DivinationResult = match output.value {
+                        let divination_ciphertext = match output.value {
                             Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
-                                Ok(result) => DivinationResult { ciphertext: result },
+                                Ok(result) => result,
                                 Err(e) => {
                                     println!("Failed to deserialize divination result: {}", e);
                                     self.chat_log.add_system_message(
-                                        "占い結果の処理に失敗しました。".to_string(),
+                                        "Failed to process divination result.".to_string(),
                                     );
                                     return;
                                 }
                             },
                             None => {
                                 println!("No output value found");
-                                self.chat_log.add_system_message(
-                                    "占い結果が見つかりませんでした。".to_string(),
-                                );
+                                self.chat_log
+                                    .add_system_message("Divination result not found.".to_string());
                                 return;
                             }
                         };
 
-                        self.divination_result = Some(divination_result);
-                        println!("占い結果が正常に処理されました。");
-                        self.chat_log
-                            .add_system_message("占い結果が生成されました。".to_string());
+                        // フェーズとday_count情報を含む占い結果を作成
+                        let divination_result = DivinationResult {
+                            ciphertext: divination_ciphertext,
+                            phase: self.phase.clone(),
+                            day_count: self.day_count,
+                            performed_at: Utc::now(),
+                        };
+
+                        self.add_divination_result(divination_result.clone());
+                        println!("Divination result processed successfully.");
+                        self.chat_log.add_system_message(
+                            "Divination result has been generated.".to_string(),
+                        );
+
+                        // 占い処理完了後、DivinationProcessingフェーズに移行
+                        if self.phase == GamePhase::Night {
+                            // self.change_phase(GamePhase::DivinationProcessing);
+
+                            // フェーズ変更をWebSocketで通知
+                            if let Err(e) = app_state
+                                .broadcast_phase_change(
+                                    &self.room_id,
+                                    "Night",
+                                    "DivinationProcessing",
+                                )
+                                .await
+                            {
+                                println!("Failed to broadcast phase change: {}", e);
+                            }
+
+                            // 3秒後にDiscussionフェーズに自動遷移
+                            let room_id = self.room_id.clone();
+                            let app_state_clone = app_state.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+                                // ゲーム状態を取得してDiscussionフェーズに遷移
+                                let mut games = app_state_clone.games.lock().await;
+                                if let Some(game) = games.get_mut(&room_id) {
+                                    game.complete_divination_processing(&app_state_clone).await;
+                                }
+                            });
+                        }
+
+                        // 全プレイヤーに占い結果を通知
+                        let result_data = serde_json::json!({
+                            "ciphertext": serde_json::to_value(&divination_result.ciphertext).unwrap_or_default(),
+                            "phase": divination_result.phase,
+                            "day_count": divination_result.day_count,
+                            "performed_at": divination_result.performed_at,
+                            "status": "ready"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "divination",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast divination result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
                         println!("AnonymousVoting process is starting...");
@@ -543,7 +747,7 @@ impl Game {
 
                         println!("Target index for voting: {}", target_index);
 
-                        // 3. 該当するプレイヤーを死亡させる
+                        // 3. Kill the corresponding player
                         self.players[target_index].is_dead = true;
 
                         println!(
@@ -551,9 +755,9 @@ impl Game {
                             self.players[target_index].name
                         );
 
-                        // 5. 投票結果をログに追加
+                        // 投票結果をログに追加
                         self.chat_log.add_system_message(format!(
-                            "投票結果: {}が処刑されました。",
+                            "Voting result: {} has been executed.",
                             self.players[target_index].name
                         ));
 
@@ -562,15 +766,33 @@ impl Game {
                             target_id
                         );
 
-                        // フェーズを更新
-                        let from_phase = self.phase.clone();
-                        self.phase = GamePhase::Result;
-                        self.add_phase_change_message(from_phase, self.phase.clone());
+                        // Update phase
+                        self.change_phase(GamePhase::Result);
 
-                        // 4. 投票結果をクリア
+                        // 4. Clear vote results
                         self.vote_results.clear();
 
                         println!("Vote results cleared after processing.");
+
+                        // 全プレイヤーに投票結果を通知
+                        let result_data = serde_json::json!({
+                            "executed_player_id": target_id.into_repr().to_string(),
+                            "executed_player_name": self.players[target_index].name,
+                            "status": "completed"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "anonymous_voting",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast voting result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::WinningJudge(items) => {
                         // itemsを処理する
@@ -597,28 +819,56 @@ impl Game {
                             GameResult::VillagerWin
                         } else {
                             self.chat_log
-                                .add_system_message("ゲームはまだ続くようです。".to_string());
+                                .add_system_message("The game continues.".to_string());
                             GameResult::InProgress
                         };
 
                         if result != GameResult::InProgress {
                             let winner_message = match result {
-                                GameResult::VillagerWin => "村人陣営の勝利です！",
-                                GameResult::WerewolfWin => "人狼陣営の勝利です！",
+                                GameResult::VillagerWin => "Villagers win!",
+                                GameResult::WerewolfWin => "Werewolves win!",
                                 GameResult::InProgress => unreachable!(),
                             };
 
                             self.chat_log.add_message(ChatMessage::new(
                                 "system".to_string(),
-                                "システム".to_string(),
+                                "System".to_string(),
                                 format!("{}", winner_message),
                                 ChatMessageType::System,
                             ));
 
-                            self.phase = GamePhase::Finished;
+                            self.change_phase(GamePhase::Finished);
                         }
 
                         self.result = result.clone();
+
+                        // 全プレイヤーに勝利判定結果を通知
+                        let alive_players: Vec<String> = self
+                            .players
+                            .iter()
+                            .filter(|p| !p.is_dead)
+                            .map(|p| p.id.clone())
+                            .collect();
+
+                        let result_data = serde_json::json!({
+                            "game_result": result,
+                            "alive_players": alive_players,
+                            "game_state_value": game_state.into_repr().to_string(),
+                            "status": "completed"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "winning_judge",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast winning judge result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
                         // itemsを処理する
@@ -637,8 +887,9 @@ impl Game {
                         };
 
                         // role_resultをゲームの結果に反映
+                        let mut player_role_assignments = Vec::new();
                         for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
-                            player.role = if *role == Fr::from(0u32) {
+                            let assigned_role = if *role == Fr::from(0u32) {
                                 Some(Role::Villager)
                             } else if *role == Fr::from(1u32) {
                                 Some(Role::Seer)
@@ -647,16 +898,79 @@ impl Game {
                             } else {
                                 None
                             };
+
+                            player.role = assigned_role.clone();
+
+                            if let Some(role) = assigned_role {
+                                player_role_assignments.push(PlayerRoleAssignment {
+                                    player_id: player.id.clone(),
+                                    role: format!("{:?}", role),
+                                });
+                            }
                         }
 
+                        // 計算結果を保存
+                        let initiated_by = self
+                            .batch_request
+                            .requests
+                            .first()
+                            .and_then(|req| match req {
+                                ClientRequestType::RoleAssignment(role_req) => {
+                                    Some(role_req.user_id.clone())
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or_else(|| "system".to_string());
+
+                        self.save_role_assignment_result(
+                            self.batch_request.batch_id.clone(),
+                            initiated_by,
+                            player_role_assignments.clone(),
+                            serde_json::json!({
+                                "raw_role_result": role_result.iter().map(|r| r.into_repr().to_string()).collect::<Vec<_>>(),
+                                "computation_time": chrono::Utc::now().to_rfc3339()
+                            })
+                        );
+
                         self.chat_log.add_system_message(format!(
-                            "役職が割り当てられました: {}。ゲームを開始します。",
+                            "Roles have been assigned: {}. Starting the game.",
                             self.players
                                 .iter()
-                                .map(|p| format!("{}: {}", p.name, p.role.as_ref().unwrap()))
+                                .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         ));
+
+                        // 全プレイヤーに役職配布結果を通知
+                        let role_assignments: Vec<_> = self
+                            .players
+                            .iter()
+                            .map(|p| {
+                                serde_json::json!({
+                                    "player_id": p.id,
+                                    "player_name": p.name,
+                                    "role": p.role
+                                })
+                            })
+                            .collect();
+
+                        let result_data = serde_json::json!({
+                            "role_assignments": role_assignments,
+                            "status": "completed"
+                        });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "role_assignment",
+                                result_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast role assignment result: {}", e);
+                        }
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
                         // itemsを処理する

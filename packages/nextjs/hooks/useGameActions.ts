@@ -3,6 +3,7 @@ import { NightAction, NightActionRequest } from "~~/app/room/types";
 import type { ChatMessage, GameInfo, PrivateGameInfo } from "~~/types/game";
 import {
   clearPrivateGameInfo,
+  initializePrivateGameInfo,
   setPrivateGameInfo as saveToStorage,
   updateHasActed,
   updatePrivateGameInfo,
@@ -23,56 +24,30 @@ export const useGameActions = (
         method: "POST",
       });
       if (!response.ok) {
-        throw new Error("ゲームの開始に失敗しました");
+        throw new Error("Failed to start game");
       }
 
-      // ゲーム開始時にPrivateGameInfoを初期化してセッションストレージに保存
+      // Initialize PrivateGameInfo with null role (undetermined) when game starts
       if (userId) {
         try {
-          // ゲーム情報を取得して初期化
-          const gameResponse = await fetch(`http://localhost:8080/api/game/${roomId}/state`);
-          if (gameResponse.ok) {
-            const gameData: GameInfo = await gameResponse.json();
-            const currentPlayer = gameData.players.find(player => player.id === userId);
+          initializePrivateGameInfo(roomId, userId);
+          console.log("PrivateGameInfo initialized with null role in session storage");
 
-            if (currentPlayer) {
-              const privateGameInfo: PrivateGameInfo = {
-                playerId: userId,
-                playerRole: (() => {
-                  switch (currentPlayer.role) {
-                    case "Seer":
-                      return "占い師";
-                    case "Werewolf":
-                      return "人狼";
-                    default:
-                      return "村人";
-                  }
-                })(),
-                hasActed: false,
-              };
-
-              // セッションストレージに保存
-              saveToStorage(roomId, privateGameInfo);
-
-              console.log("PrivateGameInfo initialized and stored in session storage", privateGameInfo);
-
-              addMessage({
-                id: Date.now().toString(),
-                sender: "システム",
-                message: "あなたの役職情報がセットアップされました",
-                timestamp: new Date().toISOString(),
-                type: "system",
-              });
-            }
-          }
+          addMessage({
+            id: Date.now().toString(),
+            sender: "System",
+            message: "Game has started. Please wait for role assignment...",
+            timestamp: new Date().toISOString(),
+            type: "system",
+          });
         } catch (storageError) {
-          console.error("PrivateGameInfo初期化エラー:", storageError);
+          console.error("PrivateGameInfo initialization error:", storageError);
         }
       }
 
       return true;
     } catch (error) {
-      console.error("ゲーム開始エラー:", error);
+      console.error("Game start error:", error);
       return false;
     } finally {
       setIsStarting(false);
@@ -186,20 +161,20 @@ export const useGameActions = (
       });
 
       if (!response.ok) {
-        throw new Error("役職の変更に失敗しました");
+        throw new Error("Failed to change role");
       }
 
-      // 自分自身の役職が変更された場合は、privateGameInfoも更新する
+      // If own role is changed, update privateGameInfo as well
       if (playerId === userId) {
-        // 文字列の役職名をPrivateGameInfoの型に変換
+        // Convert string role name to PrivateGameInfo type
         const roleType = (() => {
           switch (newRole) {
-            case "占い師":
-              return "占い師";
-            case "人狼":
-              return "人狼";
+            case "Seer":
+              return "Seer";
+            case "Werewolf":
+              return "Werewolf";
             default:
-              return "村人";
+              return "Villager";
           }
         })();
 
@@ -210,15 +185,15 @@ export const useGameActions = (
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}の役職が${newRole}に変更されました`,
+        sender: "System",
+        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}'s role changed to ${newRole}`,
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("役職変更エラー:", error);
+      console.error("Role change error:", error);
       return false;
     }
   };
@@ -240,15 +215,15 @@ export const useGameActions = (
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: "フェーズが進行しました",
+        sender: "System",
+        message: "Phase advanced successfully",
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("フェーズ進行エラー:", error);
+      console.error("Phase progress error:", error);
       return false;
     }
   };
@@ -270,15 +245,15 @@ export const useGameActions = (
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: "Game has been reset",
+        sender: "System",
+        message: "Game has been reset successfully",
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("ゲームリセットエラー:", error);
+      console.error("Game reset error:", error);
       return false;
     }
   };
@@ -289,22 +264,22 @@ export const useGameActions = (
         method: "POST",
       });
       if (!response.ok) {
-        throw new Error("バッチリクエストのリセットに失敗しました");
+        throw new Error("Failed to reset batch request");
       }
 
       const result = await response.json();
 
       addMessage({
         id: Date.now().toString(),
-        sender: "システム",
-        message: `バッチリクエストがリセットされました (新しいバッチID: ${result.batch_id})`,
+        sender: "System",
+        message: `Batch request has been reset (new batch ID: ${result.batch_id})`,
         timestamp: new Date().toISOString(),
         type: "system",
       });
 
       return true;
     } catch (error) {
-      console.error("バッチリクエストリセットエラー:", error);
+      console.error("Batch request reset error:", error);
       return false;
     }
   };

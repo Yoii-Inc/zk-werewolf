@@ -33,7 +33,7 @@ export const useGameInfo = (
         const data = await response.json();
         setRoomInfo(data);
       } catch (error) {
-        console.error("ルーム情報の取得エラー:", error);
+        console.error("Room info get error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -79,16 +79,7 @@ export const useGameInfo = (
             // PrivateGameInfoを初期化
             const newPrivateInfo: PrivateGameInfo = {
               playerId: userId,
-              playerRole: (() => {
-                switch (currentPlayer.role) {
-                  case "Seer":
-                    return "占い師";
-                  case "Werewolf":
-                    return "人狼";
-                  default:
-                    return "村人";
-                }
-              })(),
+              playerRole: currentPlayer.role, // 役職を設定
               hasActed: false,
             };
 
@@ -122,7 +113,7 @@ export const useGameInfo = (
           setMessages(prev => [...messages]);
         }
       } catch (error) {
-        console.error("ゲーム情報の取得エラー:", error);
+        console.error("Game info get error:", error);
       } finally {
         setIsLoading(false);
       }

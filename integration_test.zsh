@@ -39,7 +39,7 @@ run_server_node_tests() {
     # サーバーのビルドと起動（release mode）
     cd ./packages/server
     cargo build --release
-    ./target/release/server &
+    ./../../target/release/server &
     SERVER_PID=$!
 
     # サーバーの起動を待機
@@ -55,11 +55,11 @@ run_server_node_tests() {
     cargo run --release keygen --id 2
 
     # 3つのノードを起動（それぞれ異なるポートで）
-    ./target/release/zk-mpc-node start --id 0 --input ./address/localhost3 &
+    ./../../target/release/zk-mpc-node start --id 0 --input ./address/localhost3 &
     NODE0_PID=$!
-    ./target/release/zk-mpc-node start --id 1 --input ./address/localhost3 &
+    ./../../target/release/zk-mpc-node start --id 1 --input ./address/localhost3 &
     NODE1_PID=$!
-    ./target/release/zk-mpc-node start --id 2 --input ./address/localhost3 &
+    ./../../target/release/zk-mpc-node start --id 2 --input ./address/localhost3 &
     NODE2_PID=$!
 
     # ノードの起動を待機

@@ -108,6 +108,34 @@ pub fn winning_judgement(input: JsValue) -> Result<JsValue, JsValue> {
     Ok(JsValue::from_str(&json_str))
 }
 
+type ElGamalSecretKey = <ElGamalScheme as AsymmetricEncryptionScheme>::SecretKey;
+type ElGamalCiphertext = <ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext;
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ElGamalDecryptInput {
+    pub elgamal_params: ElGamalParam,
+    pub secret_key: ElGamalSecretKey,
+    pub ciphertext: ElGamalCiphertext,
+}
+
+#[wasm_bindgen]
+pub fn elgamal_decrypt(input: JsValue) -> Result<JsValue, JsValue> {
+    // Deserialize input from JS
+    let input: ElGamalDecryptInput = serde_wasm_bindgen::from_value(input)
+        .map_err(|e| JsValue::from_str(&format!("Deserialize error: {}", e)))?;
+
+    // Perform decryption
+    let plaintext =
+        ElGamalScheme::decrypt(&input.elgamal_params, &input.secret_key, &input.ciphertext)
+            .map_err(|e| JsValue::from_str(&format!("Decrypt error: {}", e)))?;
+
+    // Serialize plaintext to JSON string and return as JsValue
+    let json_str = serde_json::to_string(&plaintext)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

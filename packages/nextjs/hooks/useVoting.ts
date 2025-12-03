@@ -49,7 +49,7 @@ export const useVoting = () => {
       if (!newProofId.ok) {
         const errorData = await newProofId.json();
         console.error("Error message:", errorData);
-        throw new Error("投票の送信に失敗しました");
+        throw new Error("Failed to send vote");
       }
 
       console.log("proof request is accepted. batch_id is ", await newProofId.json());

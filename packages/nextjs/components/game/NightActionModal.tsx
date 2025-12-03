@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { Player } from "../../app/types";
+import type { Player, Role } from "../../app/types";
 import JSONbig from "json-bigint";
 import { useBackgroundNightAction } from "~~/hooks/useBackgroundNightAction";
 import { useDivination } from "~~/hooks/useDivination";
@@ -7,7 +7,7 @@ import { DivinationInput, DivinationPublicInput, NodeKey, SecretSharingScheme } 
 
 interface NightActionModalProps {
   players: Player[];
-  role: "Seer" | "Werewolf" | "Villager";
+  role: Role;
   onSubmit: (targetPlayerId: string) => void;
   onClose: () => void;
   roomId: string;
@@ -43,11 +43,11 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
         const commitment = await commitres.text();
         const parsedCommitment = JSONbigNative.parse(commitment);
 
-        const elgamalparamres = await fetch("/test_elgamal_params.json");
+        const elgamalparamres = await fetch("/elgamal_params.json");
         const elgamalparam = await elgamalparamres.text();
         const parsedElgamalParam = JSONbigNative.parse(elgamalparam);
 
-        const elgamalpubkeyres = await fetch("/test_elgamal_pubkey.json");
+        const elgamalpubkeyres = await fetch("/elgamal_public_key.json");
         const elgamalpubkey = await elgamalpubkeyres.text();
         const parsedElgamalPubkey = JSONbigNative.parse(elgamalpubkey);
 
@@ -56,7 +56,9 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
           isWerewolf: [JSONbigNative.parse('["0","0","0","0"]'), null],
           isTarget: players.map(player => [
             player.id === selectedPlayer
-              ? JSONbigNative.parse('["0","0","0","1"]')
+              ? JSONbigNative.parse(
+                  '["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]',
+                )
               : JSONbigNative.parse('["0","0","0","0"]'),
             null,
           ]),
@@ -100,19 +102,20 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
 
         const alivePlayerCount = players.filter(player => !player.is_dead).length;
 
-        console.log("占いを実行します。");
+        console.log("Executing divination.");
         await submitDivination(roomId, votingData, alivePlayerCount);
-      } else {
-        // 占い師以外のプレイヤーの場合、ダミーリクエストを送信
-        console.log("ダミーリクエストを送信します。");
-        await handleBackgroundNightAction(roomId, myId, players);
       }
+      //   else {
+      //     // 占い師以外のプレイヤーの場合、ダミーリクエストを送信
+      //     console.log("ダミーリクエストを送信します。");
+      //     await handleBackgroundNightAction(roomId, myId, players);
+      //   }
 
       // 親コンポーネントのonSubmit関数を呼び出す
       await onSubmit(selectedPlayer);
       onClose();
     } catch (err) {
-      console.error(`${role === "Seer" ? "占い" : "夜の行動"}に失敗しました:`, err);
+      console.error(`${role === "Seer" ? "Divination" : "Night action"} failed:`, err);
     } finally {
       setIsSubmitting(false);
     }
@@ -160,7 +163,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
             disabled={!selectedPlayer || isSubmitting}
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? "処理中..." : "Confirm"}
+            {isSubmitting ? "Processing..." : "Confirm"}
           </button>
         </div>
       </div>

@@ -73,15 +73,15 @@ export interface PedersenParam {
 }
 
 export interface PedersenCommitment {
-  x: (number[] | null)[];
-  y: (number[] | null)[];
+  x: (bigint[] | null)[];
+  y: (bigint[] | null)[];
   _params: null;
 }
 
 export interface AnonymousVotingPrivateInput {
   id: number;
   //   isTargetId: string[];
-  isTargetId: (number[] | null)[][];
+  isTargetId: (bigint[] | null)[][];
   playerRandomness: (number[] | null)[];
 }
 export interface AnonymousVotingPublicInput {
@@ -144,10 +144,20 @@ export interface DivinationPublicInput {
 
 export interface WinningJudgementPrivateInput {
   id: number;
-  amWerewolf: (number[] | null)[];
-  playerRandomness: (number[] | null)[];
+  amWerewolf: (bigint[] | null)[];
+  playerRandomness: (bigint[] | null)[];
 }
 export interface WinningJudgementPublicInput {
   pedersenParam: PedersenParam;
   playerCommitment: PedersenCommitment[];
+}
+
+export interface ElGamalDecryptInput {
+  elgamalParams: any;
+  secretKey: any;
+  ciphertext: any;
+}
+
+export interface ElGamalDecryptOutput {
+  plaintext: any;
 }

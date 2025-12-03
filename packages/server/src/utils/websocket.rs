@@ -34,6 +34,17 @@ struct PhaseChangeNotification {
     requires_dummy_request: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct ComputationResultNotification {
+    message_type: String,
+    computation_type: String, // "divination", "role_assignment", "winning_judge", "anonymous_voting"
+    result_data: serde_json::Value,
+    room_id: String,
+    target_player_id: Option<String>, // 特定のプレイヤーのみに送信する場合
+    timestamp: String,
+    batch_id: String,
+}
+
 impl WebSocketMessage {
     fn to_chat_message(&self) -> ChatMessage {
         let message_type = match self.message_type.as_str() {

@@ -4,8 +4,8 @@ import type { ChatMessage, RoomInfo } from "~~/types/game";
 const mockMessages: ChatMessage[] = [
   {
     id: "1",
-    sender: "システム",
-    message: "これはデフォルトメッセージです。",
+    sender: "System",
+    message: "This is the default message.",
     timestamp: new Date().toISOString(),
     type: "system",
   },
@@ -34,8 +34,8 @@ export const useGameChat = (roomId: string, roomInfo: RoomInfo | null) => {
       setMessages([
         {
           id: Date.now().toString(),
-          sender: "システム",
-          message: "新しい部屋が作成されました",
+          sender: "System",
+          message: "New room created",
           timestamp: new Date().toISOString(),
           type: "system",
         },
@@ -52,8 +52,8 @@ export const useGameChat = (roomId: string, roomInfo: RoomInfo | null) => {
     setMessages([
       {
         id: Date.now().toString(),
-        sender: "システム",
-        message: "ゲームが開始されました",
+        sender: "System",
+        message: "Game has started",
         timestamp: new Date().toISOString(),
         type: "system",
       },
