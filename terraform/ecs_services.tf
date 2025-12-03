@@ -144,17 +144,6 @@ resource "aws_ecs_task_definition" "mpc_node" {
       
       command = ["start", "--id", "${count.index}", "--input", "./address/3"]
       
-      portMappings = [
-        {
-          containerPort = 9000
-          protocol      = "tcp"
-        },
-        {
-          containerPort = 8000 + count.index
-          protocol      = "tcp"
-        }
-      ]
-      
       environment = [
         {
           name  = "RUST_LOG"
@@ -225,14 +214,14 @@ resource "aws_security_group" "mpc_nodes" {
 
   ingress {
     from_port = 9000
-    to_port   = 9002
+    to_port   = 9000
     protocol  = "tcp"
     self      = true
   }
 
   ingress {
     from_port       = 9000
-    to_port         = 9002
+    to_port         = 9000
     protocol        = "tcp"
     security_groups = [aws_security_group.backend.id]
   }
