@@ -1,0 +1,46 @@
+# Git
+.git/
+.github/
+
+# Node.js
+node_modules/
+.yarn/
+
+# Rust
+target/
+
+# Application code (not needed for Terraform)
+packages/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Local files
+*.local.md
+CLAUDE.local.md
+
+# Docker
+docker-compose.yml
+
+# Scripts (not needed for Terraform Cloud)
+scripts/
+
+# Other
+*.lock
+!terraform/.terraform.lock.hcl
+Cargo.toml
+Cargo.lock
+yarn.lock
+package.json
+README.md
+LICENCE
+integration_test.zsh
+.husky/
+.lintstagedrc.js
+.dockerignore
+.gitmodules
+.yarnrc.yml
