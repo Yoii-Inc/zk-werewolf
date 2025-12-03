@@ -157,9 +157,10 @@ case $SERVICE in
         ;;
     all)
         update_service "backend"
-        # Uncomment when frontend and mpc-node services are deployed
-        # update_service "frontend"
-        # update_service "mpc-node"
+        update_service "frontend"
+        update_service "mpc-node-0"
+        update_service "mpc-node-1"
+        update_service "mpc-node-2"
         ;;
     *)
         log_error "Unknown service: ${SERVICE}. Valid options: backend, frontend, mpc-node, all"

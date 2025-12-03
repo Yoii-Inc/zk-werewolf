@@ -37,44 +37,25 @@ provider "aws" {
 
 locals {
   name = "zk-werewolf-dev"
-
-  # Load secrets from SOPS encrypted file if it exists
-  secrets_file_exists = fileexists("${path.module}/secrets.enc.yaml")
 }
 
-# SOPS data source (only if secrets file exists)
+# Validate that secrets file exists
+resource "terraform_data" "secrets_validation" {
+  lifecycle {
+    precondition {
+      condition     = fileexists("${path.module}/secrets.enc.yaml")
+      error_message = "secrets.enc.yaml file is required. Please create it using SOPS. See README for instructions."
+    }
+  }
+}
+
+# SOPS data source
 data "sops_file" "secrets" {
-  count = local.secrets_file_exists ? 1 : 0
   source_file = "${path.module}/secrets.enc.yaml"
 }
 
 locals {
-  # Parse secrets if file exists, otherwise use empty map
-  secrets = local.secrets_file_exists ? yamldecode(data.sops_file.secrets[0].raw) : {
-    backend = {
-      supabase_url = ""
-      supabase_key = ""
-      jwt_secret   = ""
-    }
-    mpc_nodes = {
-      node_0 = {
-        private_key = ""
-      }
-      node_1 = {
-        private_key = ""
-      }
-      node_2 = {
-        private_key = ""
-      }
-    }
-    database = {
-      host     = ""
-      port     = ""
-      username = ""
-      password = ""
-      database = ""
-    }
-  }
+  secrets = yamldecode(data.sops_file.secrets.raw)
 }
 
 # KMS key for SOPS encryption
@@ -166,14 +147,14 @@ module "alb" {
 module "backend_service" {
   source = "../../modules/ecs-service"
 
-  service_name       = "${local.name}-backend"
-  cluster_id         = module.ecs_cluster.cluster_id
-  container_image    = "${module.ecr.backend_repository_url}:latest"
-  container_port     = 8080
-  cpu                = "512"
-  memory             = "1024"
-  desired_count      = 1
-  launch_type        = null # Use capacity provider strategy
+  service_name    = "${local.name}-backend"
+  cluster_id      = module.ecs_cluster.cluster_id
+  container_image = "${module.ecr.backend_repository_url}:latest"
+  container_port  = 8080
+  cpu             = "512"
+  memory          = "1024"
+  desired_count   = 1
+  launch_type     = null # Use capacity provider strategy
 
   capacity_provider_strategy = [
     {
@@ -196,7 +177,7 @@ module "backend_service" {
   task_role_arn      = module.ecs_cluster.task_role_arn
   log_group_name     = module.ecs_cluster.cloudwatch_log_group_name
 
-  environment_variables = concat([
+  environment_variables = [
     {
       name  = "PORT"
       value = "8080"
@@ -204,8 +185,7 @@ module "backend_service" {
     {
       name  = "ENVIRONMENT"
       value = "dev"
-    }
-  ], local.secrets_file_exists ? [
+    },
     {
       name  = "SUPABASE_URL"
       value = local.secrets.backend.supabase_url
@@ -218,7 +198,7 @@ module "backend_service" {
       name  = "JWT_SECRET"
       value = local.secrets.backend.jwt_secret
     }
-  ] : [])
+  ]
 
   health_check_grace_period = 60
   enable_execute_command    = true
@@ -231,14 +211,14 @@ module "backend_service" {
 module "frontend_service" {
   source = "../../modules/ecs-service"
 
-  service_name       = "${local.name}-frontend"
-  cluster_id         = module.ecs_cluster.cluster_id
-  container_image    = "${module.ecr.frontend_repository_url}:latest"
-  container_port     = 3000
-  cpu                = "256"
-  memory             = "512"
-  desired_count      = 1
-  launch_type        = null
+  service_name    = "${local.name}-frontend"
+  cluster_id      = module.ecs_cluster.cluster_id
+  container_image = "${module.ecr.frontend_repository_url}:latest"
+  container_port  = 3000
+  cpu             = "256"
+  memory          = "512"
+  desired_count   = 1
+  launch_type     = null
 
   capacity_provider_strategy = [
     {
@@ -278,4 +258,239 @@ module "frontend_service" {
 
   health_check_grace_period = 60
   enable_execute_command    = true
+}
+
+# =============================================================================
+# Service Discovery for MPC Nodes
+# =============================================================================
+
+module "mpc_service_discovery" {
+  source = "../../modules/service-discovery"
+
+  name           = "${local.name}-mpc"
+  vpc_id         = module.vpc.vpc_id
+  namespace_name = "mpc.local"
+
+  services = {
+    "mpc-node-0" = { dns_ttl = 10 }
+    "mpc-node-1" = { dns_ttl = 10 }
+    "mpc-node-2" = { dns_ttl = 10 }
+  }
+}
+
+# =============================================================================
+# MPC Node ECS Services
+# =============================================================================
+
+module "mpc_node_0" {
+  source = "../../modules/ecs-service"
+
+  service_name    = "${local.name}-mpc-node-0"
+  cluster_id      = module.ecs_cluster.cluster_id
+  container_image = "${module.ecr.mpc_node_repository_url}:latest"
+  container_port  = 9000
+  cpu             = "512"
+  memory          = "1024"
+  desired_count   = 1
+  launch_type     = null
+
+  capacity_provider_strategy = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 100
+      base              = 1
+    }
+  ]
+
+  subnet_ids         = module.vpc.public_subnets
+  security_group_ids = [module.security_groups.ecs_tasks_security_group_id]
+  assign_public_ip   = true
+
+  execution_role_arn   = module.ecs_cluster.task_execution_role_arn
+  task_role_arn        = module.ecs_cluster.task_role_arn
+  log_group_name       = module.ecs_cluster.cloudwatch_log_group_name
+  service_registry_arn = module.mpc_service_discovery.service_arns["mpc-node-0"]
+
+  environment_variables = [
+    {
+      name  = "MPC_NODE_ID"
+      value = "0"
+    },
+    {
+      name  = "MPC_NODE_PORT"
+      value = "9000"
+    },
+    {
+      name  = "MPC_NODE_0_ADDR"
+      value = "mpc-node-0.mpc.local:9000"
+    },
+    {
+      name  = "MPC_NODE_1_ADDR"
+      value = "mpc-node-1.mpc.local:9001"
+    },
+    {
+      name  = "MPC_NODE_2_ADDR"
+      value = "mpc-node-2.mpc.local:9002"
+    },
+    {
+      name  = "MPC_NODE_0_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_0.public_key
+    },
+    {
+      name  = "MPC_NODE_1_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_1.public_key
+    },
+    {
+      name  = "MPC_NODE_2_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_2.public_key
+    },
+    {
+      name  = "MPC_PRIVATE_KEY"
+      value = local.secrets.mpc_nodes.node_0.private_key
+    }
+  ]
+
+  enable_execute_command = true
+}
+
+module "mpc_node_1" {
+  source = "../../modules/ecs-service"
+
+  service_name    = "${local.name}-mpc-node-1"
+  cluster_id      = module.ecs_cluster.cluster_id
+  container_image = "${module.ecr.mpc_node_repository_url}:latest"
+  container_port  = 9001
+  cpu             = "512"
+  memory          = "1024"
+  desired_count   = 1
+  launch_type     = null
+
+  capacity_provider_strategy = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 100
+      base              = 1
+    }
+  ]
+
+  subnet_ids         = module.vpc.public_subnets
+  security_group_ids = [module.security_groups.ecs_tasks_security_group_id]
+  assign_public_ip   = true
+
+  execution_role_arn   = module.ecs_cluster.task_execution_role_arn
+  task_role_arn        = module.ecs_cluster.task_role_arn
+  log_group_name       = module.ecs_cluster.cloudwatch_log_group_name
+  service_registry_arn = module.mpc_service_discovery.service_arns["mpc-node-1"]
+
+  environment_variables = [
+    {
+      name  = "MPC_NODE_ID"
+      value = "1"
+    },
+    {
+      name  = "MPC_NODE_PORT"
+      value = "9001"
+    },
+    {
+      name  = "MPC_NODE_0_ADDR"
+      value = "mpc-node-0.mpc.local:9000"
+    },
+    {
+      name  = "MPC_NODE_1_ADDR"
+      value = "mpc-node-1.mpc.local:9001"
+    },
+    {
+      name  = "MPC_NODE_2_ADDR"
+      value = "mpc-node-2.mpc.local:9002"
+    },
+    {
+      name  = "MPC_NODE_0_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_0.public_key
+    },
+    {
+      name  = "MPC_NODE_1_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_1.public_key
+    },
+    {
+      name  = "MPC_NODE_2_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_2.public_key
+    },
+    {
+      name  = "MPC_PRIVATE_KEY"
+      value = local.secrets.mpc_nodes.node_1.private_key
+    }
+  ]
+
+  enable_execute_command = true
+}
+
+module "mpc_node_2" {
+  source = "../../modules/ecs-service"
+
+  service_name    = "${local.name}-mpc-node-2"
+  cluster_id      = module.ecs_cluster.cluster_id
+  container_image = "${module.ecr.mpc_node_repository_url}:latest"
+  container_port  = 9002
+  cpu             = "512"
+  memory          = "1024"
+  desired_count   = 1
+  launch_type     = null
+
+  capacity_provider_strategy = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 100
+      base              = 1
+    }
+  ]
+
+  subnet_ids         = module.vpc.public_subnets
+  security_group_ids = [module.security_groups.ecs_tasks_security_group_id]
+  assign_public_ip   = true
+
+  execution_role_arn   = module.ecs_cluster.task_execution_role_arn
+  task_role_arn        = module.ecs_cluster.task_role_arn
+  log_group_name       = module.ecs_cluster.cloudwatch_log_group_name
+  service_registry_arn = module.mpc_service_discovery.service_arns["mpc-node-2"]
+
+  environment_variables = [
+    {
+      name  = "MPC_NODE_ID"
+      value = "2"
+    },
+    {
+      name  = "MPC_NODE_PORT"
+      value = "9002"
+    },
+    {
+      name  = "MPC_NODE_0_ADDR"
+      value = "mpc-node-0.mpc.local:9000"
+    },
+    {
+      name  = "MPC_NODE_1_ADDR"
+      value = "mpc-node-1.mpc.local:9001"
+    },
+    {
+      name  = "MPC_NODE_2_ADDR"
+      value = "mpc-node-2.mpc.local:9002"
+    },
+    {
+      name  = "MPC_NODE_0_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_0.public_key
+    },
+    {
+      name  = "MPC_NODE_1_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_1.public_key
+    },
+    {
+      name  = "MPC_NODE_2_PUBLIC_KEY"
+      value = local.secrets.mpc_nodes.node_2.public_key
+    },
+    {
+      name  = "MPC_PRIVATE_KEY"
+      value = local.secrets.mpc_nodes.node_2.private_key
+    }
+  ]
+
+  enable_execute_command = true
 }
