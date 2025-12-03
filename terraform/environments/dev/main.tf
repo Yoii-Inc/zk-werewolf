@@ -326,11 +326,11 @@ module "mpc_node_0" {
     },
     {
       name  = "MPC_NODE_1_ADDR"
-      value = "mpc-node-1.mpc.local:9001"
+      value = "mpc-node-1.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_2_ADDR"
-      value = "mpc-node-2.mpc.local:9002"
+      value = "mpc-node-2.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_0_PUBLIC_KEY"
@@ -359,7 +359,7 @@ module "mpc_node_1" {
   service_name    = "${local.name}-mpc-node-1"
   cluster_id      = module.ecs_cluster.cluster_id
   container_image = "${module.ecr.mpc_node_repository_url}:latest"
-  container_port  = 9001
+  container_port  = 9000
   cpu             = "512"
   memory          = "1024"
   desired_count   = 1
@@ -389,7 +389,7 @@ module "mpc_node_1" {
     },
     {
       name  = "MPC_NODE_PORT"
-      value = "9001"
+      value = "9000"
     },
     {
       name  = "MPC_NODE_0_ADDR"
@@ -397,11 +397,11 @@ module "mpc_node_1" {
     },
     {
       name  = "MPC_NODE_1_ADDR"
-      value = "mpc-node-1.mpc.local:9001"
+      value = "mpc-node-1.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_2_ADDR"
-      value = "mpc-node-2.mpc.local:9002"
+      value = "mpc-node-2.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_0_PUBLIC_KEY"
@@ -430,7 +430,7 @@ module "mpc_node_2" {
   service_name    = "${local.name}-mpc-node-2"
   cluster_id      = module.ecs_cluster.cluster_id
   container_image = "${module.ecr.mpc_node_repository_url}:latest"
-  container_port  = 9002
+  container_port  = 9000
   cpu             = "512"
   memory          = "1024"
   desired_count   = 1
@@ -460,7 +460,7 @@ module "mpc_node_2" {
     },
     {
       name  = "MPC_NODE_PORT"
-      value = "9002"
+      value = "9000"
     },
     {
       name  = "MPC_NODE_0_ADDR"
@@ -468,11 +468,11 @@ module "mpc_node_2" {
     },
     {
       name  = "MPC_NODE_1_ADDR"
-      value = "mpc-node-1.mpc.local:9001"
+      value = "mpc-node-1.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_2_ADDR"
-      value = "mpc-node-2.mpc.local:9002"
+      value = "mpc-node-2.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_0_PUBLIC_KEY"
