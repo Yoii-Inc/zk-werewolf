@@ -130,5 +130,9 @@ jobs:
       - name: Setup SOPS
         uses: mdgreenwald/mozilla-sops-action@v1.6.0
 
+      - name: Terraform Init
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
+        run: terraform init
+
       - name: Update ECS Services
         run: ./scripts/update-ecs-service.sh ${{ env.ENVIRONMENT }} ${{ env.SERVICE }} --wait
