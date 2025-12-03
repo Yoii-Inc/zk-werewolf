@@ -57,15 +57,18 @@ jobs:
 
       - name: Post Plan to PR
         uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         with:
           script: |
-            const output = `#### Terraform Plan 📖
+            const outcome = '${{ steps.plan.outcome }}';
+            const icon = outcome === 'success' ? '✅' : '❌';
+            const output = `#### Terraform Plan ${icon}
 
             <details><summary>Show Plan</summary>
 
             \`\`\`
             ${{ steps.plan.outputs.stdout }}
+            ${{ steps.plan.outputs.stderr }}
             \`\`\`
 
             </details>
@@ -78,3 +81,7 @@ jobs:
               repo: context.repo.repo,
               body: output
             })
+
+      - name: Check Plan Result
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
