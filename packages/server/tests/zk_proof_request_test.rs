@@ -282,7 +282,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         encrypted_data: serde_json::to_string(&input_vec[0]).unwrap(),
     };
     let request1 = ClientRequestType::AnonymousVoting(prover_info_1);
-    let batch_id1 = game.add_request(request1).await;
+    let batch_id1 = game.add_request(request1, &state).await;
 
     // 2つ目のリクエストを追加
     let prover_info_2 = ProverInfo {
@@ -291,7 +291,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         encrypted_data: serde_json::to_string(&input_vec[1]).unwrap(),
     };
     let request2 = ClientRequestType::AnonymousVoting(prover_info_2);
-    let batch_id2 = game.add_request(request2).await;
+    let batch_id2 = game.add_request(request2, &state).await;
 
     // 3つ目のリクエストを追加（これでバッチサイズに達する）
     let prover_info_3 = ProverInfo {
@@ -300,7 +300,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         encrypted_data: serde_json::to_string(&input_vec[2]).unwrap(),
     };
     let request3 = ClientRequestType::AnonymousVoting(prover_info_3);
-    let batch_id3 = game.add_request(request3).await;
+    let batch_id3 = game.add_request(request3, &state).await;
 
     // 同じバッチIDであることを確認
     assert_eq!(batch_id1, batch_id2);
@@ -311,7 +311,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
 
     // 新しいリクエストは新しいバッチIDを取得することを確認
     let request4 = setup_voting_dummy();
-    let batch_id4 = game.add_request(request4).await;
+    let batch_id4 = game.add_request(request4, &state).await;
     assert_ne!(batch_id1, batch_id4);
 
     sleep(Duration::from_secs(30)).await; // バッチ処理が完了するのを待つ

@@ -131,6 +131,17 @@ async fn test_complete_game_flow() {
         result_text
     );
 
+    // 占い結果処理フェーズへ
+    let to_divination_processing = game_service::advance_game_phase(state.clone(), &room_id).await;
+    assert!(to_divination_processing.is_ok());
+    assert_eq!(
+        game_service::get_game_state(state.clone(), room_id.clone())
+            .await
+            .unwrap()
+            .phase,
+        GamePhase::DivinationProcessing
+    );
+
     // 議論フェーズへ
     let to_discussion = game_service::advance_game_phase(state.clone(), &room_id).await;
     assert!(to_discussion.is_ok());
