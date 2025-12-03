@@ -55,16 +55,14 @@ jobs:
         continue-on-error: true
         id: plan
 
-      - name: Post Plan to PR
+      - name: Post Plan Failure to PR
         uses: actions/github-script@v7
-        if: always() && github.event_name == 'pull_request'
+        if: steps.plan.outcome == 'failure' && github.event_name == 'pull_request'
         with:
           script: |
-            const outcome = '${{ steps.plan.outcome }}';
-            const icon = outcome === 'success' ? '✅' : '❌';
-            const output = `#### Terraform Plan ${icon}
+            const output = `#### Terraform Plan ❌ Failed
 
-            <details><summary>Show Plan</summary>
+            <details><summary>Show Error</summary>
 
             \`\`\`
             ${{ steps.plan.outputs.stdout }}
@@ -73,7 +71,7 @@ jobs:
 
             </details>
 
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            *Pushed by: @${{ github.actor }}*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
