@@ -2,7 +2,7 @@
 export type RoomStatus = "Open" | "InProgress" | "Closed";
 
 // Game Phase
-export type GamePhase = "Waiting" | "Night" | "Discussion" | "Voting" | "Result" | "Finished";
+export type GamePhase = "Waiting" | "Night" | "DivinationProcessing" | "Discussion" | "Voting" | "Result" | "Finished";
 
 export interface Room {
   id: string;

@@ -37,7 +37,7 @@ pub struct Game {
     pub chat_log: super::chat::ChatLog,
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
-    pub divination_result: Option<DivinationResult>,
+    pub divination_results: Vec<DivinationResult>,
     pub computation_results: ComputationResults,
     pub started_at: Option<DateTime<Utc>>,
 }
@@ -46,6 +46,9 @@ pub struct Game {
 pub struct DivinationResult {
     pub ciphertext:
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
+    pub phase: GamePhase,
+    pub day_count: u32,
+    pub performed_at: DateTime<Utc>,
 }
 
 // 計算結果を管理する構造体群
@@ -86,12 +89,13 @@ pub struct PlayerRoleAssignment {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum GamePhase {
-    Waiting,    // ゲーム開始前
-    Night,      // 夜フェーズ
-    Discussion, // 議論フェーズ
-    Voting,     // 投票フェーズ
-    Result,     // 結果発表フェーズ
-    Finished,   // ゲーム終了
+    Waiting,              // ゲーム開始前
+    Night,                // 夜フェーズ
+    DivinationProcessing, // 占い結果処理フェーズ
+    Discussion,           // 議論フェーズ
+    Voting,               // 投票フェーズ
+    Result,               // 結果発表フェーズ
+    Finished,             // ゲーム終了
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -303,7 +307,7 @@ impl Game {
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
             batch_request: BatchRequest::new(),
-            divination_result: None,
+            divination_results: Vec::new(),
             computation_results: ComputationResults::default(),
             started_at: Some(Utc::now()),
         }
@@ -315,7 +319,67 @@ impl Game {
     }
 
     pub fn has_divination_for_current_phase(&self) -> bool {
-        self.divination_result.is_some()
+        // 現在のフェーズ・日数での占い結果が存在するかチェック
+        self.divination_results
+            .iter()
+            .any(|result| result.phase == self.phase && result.day_count == self.day_count)
+    }
+
+    // 特定のフェーズ・日数の占い結果を取得
+    pub fn get_divination_for_phase(
+        &self,
+        phase: &GamePhase,
+        day_count: u32,
+    ) -> Option<&DivinationResult> {
+        self.divination_results
+            .iter()
+            .find(|result| result.phase == *phase && result.day_count == day_count)
+    }
+
+    // 占い結果を履歴に追加
+    pub fn add_divination_result(&mut self, result: DivinationResult) {
+        self.divination_results.push(result);
+    }
+
+    // より厳密な占い可能性チェック
+    pub fn can_perform_divination(&self) -> bool {
+        self.phase == GamePhase::Night && !self.has_divination_for_current_phase()
+    }
+
+    // DivinationProcessing フェーズから Discussion フェーズへの遷移を管理
+    pub async fn complete_divination_processing(&mut self, app_state: &crate::state::AppState) {
+        if self.phase == GamePhase::DivinationProcessing {
+            println!("占い処理が完了しました。議論フェーズに移行します。");
+
+            self.change_phase(GamePhase::Discussion);
+
+            // フェーズ変更をWebSocketで通知
+            if let Err(e) = app_state
+                .broadcast_phase_change(&self.room_id, "DivinationProcessing", "Discussion")
+                .await
+            {
+                println!("Failed to broadcast phase change: {}", e);
+            }
+        }
+    }
+
+    // 次の日に進む（day_countを増やす）
+    pub fn advance_to_next_day(&mut self) {
+        self.day_count += 1;
+        println!("Day count advanced to: {}", self.day_count);
+    }
+
+    // フェーズを変更し、必要に応じてday_countを増やす
+    pub fn change_phase(&mut self, new_phase: GamePhase) {
+        let old_phase = self.phase.clone();
+
+        // Resultフェーズから次のNightフェーズに移る場合は新しい日
+        if old_phase == GamePhase::Result && new_phase == GamePhase::Night {
+            self.advance_to_next_day();
+        }
+
+        self.phase = new_phase.clone();
+        self.add_phase_change_message(old_phase, new_phase);
     }
     pub fn save_role_assignment_result(
         &mut self,
@@ -444,6 +508,7 @@ impl Game {
             GamePhase::Night => {
                 "夜になりました。人狼は獲物を選び、占い師は占う相手を選んでください。"
             }
+            GamePhase::DivinationProcessing => "占い結果を処理しています。しばらくお待ちください。",
             GamePhase::Discussion => "朝になりました。昨晩の出来事について話し合いましょう。",
             GamePhase::Voting => "投票の時間です。最も疑わしい人物に投票してください。",
             GamePhase::Result => "投票が終了しました。結果を発表します。",
@@ -558,9 +623,9 @@ impl Game {
                 match identifier {
                     CircuitEncryptedInputIdentifier::Divination(items) => {
                         // itemsを処理する
-                        let divination_result: DivinationResult = match output.value {
+                        let divination_ciphertext = match output.value {
                             Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
-                                Ok(result) => DivinationResult { ciphertext: result },
+                                Ok(result) => result,
                                 Err(e) => {
                                     println!("Failed to deserialize divination result: {}", e);
                                     self.chat_log.add_system_message(
@@ -578,14 +643,55 @@ impl Game {
                             }
                         };
 
-                        self.divination_result = Some(divination_result.clone());
+                        // フェーズとday_count情報を含む占い結果を作成
+                        let divination_result = DivinationResult {
+                            ciphertext: divination_ciphertext,
+                            phase: self.phase.clone(),
+                            day_count: self.day_count,
+                            performed_at: Utc::now(),
+                        };
+
+                        self.add_divination_result(divination_result.clone());
                         println!("占い結果が正常に処理されました。");
                         self.chat_log
                             .add_system_message("占い結果が生成されました。".to_string());
 
+                        // 占い処理完了後、DivinationProcessingフェーズに移行
+                        if self.phase == GamePhase::Night {
+                            // self.change_phase(GamePhase::DivinationProcessing);
+
+                            // フェーズ変更をWebSocketで通知
+                            if let Err(e) = app_state
+                                .broadcast_phase_change(
+                                    &self.room_id,
+                                    "Night",
+                                    "DivinationProcessing",
+                                )
+                                .await
+                            {
+                                println!("Failed to broadcast phase change: {}", e);
+                            }
+
+                            // 3秒後にDiscussionフェーズに自動遷移
+                            let room_id = self.room_id.clone();
+                            let app_state_clone = app_state.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+                                // ゲーム状態を取得してDiscussionフェーズに遷移
+                                let mut games = app_state_clone.games.lock().await;
+                                if let Some(game) = games.get_mut(&room_id) {
+                                    game.complete_divination_processing(&app_state_clone).await;
+                                }
+                            });
+                        }
+
                         // 全プレイヤーに占い結果を通知
                         let result_data = serde_json::json!({
                             "ciphertext": serde_json::to_value(&divination_result.ciphertext).unwrap_or_default(),
+                            "phase": divination_result.phase,
+                            "day_count": divination_result.day_count,
+                            "performed_at": divination_result.performed_at,
                             "status": "ready"
                         });
 
@@ -657,9 +763,7 @@ impl Game {
                         );
 
                         // フェーズを更新
-                        let from_phase = self.phase.clone();
-                        self.phase = GamePhase::Result;
-                        self.add_phase_change_message(from_phase, self.phase.clone());
+                        self.change_phase(GamePhase::Result);
 
                         // 4. 投票結果をクリア
                         self.vote_results.clear();
@@ -729,7 +833,7 @@ impl Game {
                                 ChatMessageType::System,
                             ));
 
-                            self.phase = GamePhase::Finished;
+                            self.change_phase(GamePhase::Finished);
                         }
 
                         self.result = result.clone();

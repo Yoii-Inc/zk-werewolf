@@ -58,7 +58,13 @@ export const useGamePhase = (
       const processingSteps: (() => Promise<void>)[] = [];
 
       // Step 1: ダミーリクエスト送信
-      if (requiresDummyRequest && currentPlayer.role !== "Seer" && !currentPlayer.is_dead) {
+      if (
+        requiresDummyRequest &&
+        fromPhase === "Night" &&
+        toPhase === "DivinationProcessing" &&
+        currentPlayer.role !== "Seer" &&
+        !currentPlayer.is_dead
+      ) {
         processingSteps.push(async () => {
           console.log(`Step 1: 占い師以外のプレイヤー ${username} がダミーリクエストを送信します。`);
 
@@ -87,8 +93,11 @@ export const useGamePhase = (
         });
       }
 
-      // Step 2: 勝利判定実行
-      if ((fromPhase === "Night" && toPhase === "Discussion") || (fromPhase === "Voting" && toPhase === "Result")) {
+      // Step 2: 勝利判定実行（DivinationProcessing → Discussion または Voting → Result）
+      if (
+        (fromPhase === "DivinationProcessing" && toPhase === "Discussion") ||
+        (fromPhase === "Voting" && toPhase === "Result")
+      ) {
         processingSteps.push(async () => {
           console.log(`Step 2: 勝利判定処理開始: ${fromPhase} → ${toPhase}`);
 

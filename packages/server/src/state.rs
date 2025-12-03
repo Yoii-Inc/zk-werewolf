@@ -54,7 +54,7 @@ impl AppState {
             "to_phase": to_phase,
             "room_id": room_id,
             "timestamp": chrono::Utc::now().to_rfc3339(),
-            "requires_dummy_request": from_phase == "Night" && to_phase == "Discussion"
+            "requires_dummy_request": from_phase == "Night" && to_phase == "DivinationProcessing"
         });
 
         if let Ok(message_text) = serde_json::to_string(&phase_notification) {

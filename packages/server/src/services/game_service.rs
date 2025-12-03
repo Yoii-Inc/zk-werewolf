@@ -114,7 +114,8 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
 
     let next_phase = match current_phase {
         GamePhase::Waiting => GamePhase::Night,
-        GamePhase::Night => GamePhase::Discussion,
+        GamePhase::Night => GamePhase::DivinationProcessing,
+        GamePhase::DivinationProcessing => GamePhase::Discussion,
         GamePhase::Discussion => GamePhase::Voting,
         GamePhase::Voting => GamePhase::Result,
         GamePhase::Result => GamePhase::Night,

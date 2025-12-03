@@ -1,5 +1,6 @@
 use crate::models::game::{
-    BatchRequest, ChangeRoleRequest, ClientRequestType, GamePhase, GameResult, NightActionRequest,
+    BatchRequest, ChangeRoleRequest, ClientRequestType, ComputationResults, GamePhase, GameResult,
+    NightActionRequest,
 };
 use crate::models::role::Role;
 use crate::models::room::RoomStatus;
@@ -275,6 +276,9 @@ async fn reset_game_handler(
             // player.has_voted = false;
             // player.vote_count = 0;
         }
+
+        // computation_results をリセット
+        reset_game.computation_results = ComputationResults::default();
 
         // システムメッセージを追加
         reset_game
