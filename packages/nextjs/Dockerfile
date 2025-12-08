@@ -19,6 +19,9 @@ RUN wasm-pack build --target web --out-dir pkg
 # Stage 2: Dependencies & Builder
 FROM node:18-alpine AS deps
 
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 # Copy package.json files
@@ -45,27 +48,21 @@ ENV NODE_ENV=production
 RUN yarn workspace @se-2/nextjs build
 RUN yarn workspaces focus @se-2/nextjs --production
 
-# Stage 3: Runner - Production runtime
+# Stage 3: Runner - Production runtime (standalone)
 FROM node:18-alpine AS runner
 
 WORKDIR /app
 
-# copy workspace files
-COPY --from=deps /app/package.json ./package.json
-COPY --from=deps /app/yarn.lock ./yarn.lock
-COPY --from=deps /app/.yarnrc.yml ./.yarnrc.yml
-COPY --from=deps /app/.yarn ./.yarn
+# Copy standalone build (includes minimal node server)
+COPY --from=deps /app/packages/nextjs/.next/standalone ./
 
-# Copy built application from builder stage
-COPY --from=deps /app/packages/nextjs/.next ./packages/nextjs/.next
+# Copy static files
+COPY --from=deps /app/packages/nextjs/.next/static ./packages/nextjs/.next/static
 COPY --from=deps /app/packages/nextjs/public ./packages/nextjs/public
-COPY --from=deps /app/packages/nextjs/package.json ./packages/nextjs/package.json
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/nextjs/node_modules ./packages/nextjs/node_modules
 
 EXPOSE 3000
 
 ENV NODE_ENV=production
+ENV HOSTNAME="0.0.0.0"
 
-CMD ["yarn", "start"]
+CMD ["node", "packages/nextjs/server.js"]
