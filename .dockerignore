@@ -31,9 +31,6 @@ logs/
 **/build/
 **/.next/
 **/node_modules/
-**/.yarn/
-**/yarn.lock
-**/.yarnrc.yml
 
 # Environment files
 .env

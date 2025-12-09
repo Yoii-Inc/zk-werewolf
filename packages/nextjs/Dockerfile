@@ -6,41 +6,63 @@ RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
 WORKDIR /build
 
-# Copy entire workspace
-COPY . .
+# Create a minimal workspace for WASM build only
+RUN mkdir -p packages/mpc-algebra-wasm
 
-# Build WASM package
+# Copy mpc-algebra-wasm package
+COPY packages/mpc-algebra-wasm ./packages/mpc-algebra-wasm
+
+# Build WASM package directly without workspace
 WORKDIR /build/packages/mpc-algebra-wasm
 RUN wasm-pack build --target web --out-dir pkg
 
-# Stage 2: Build Next.js app
-FROM node:18
+# Stage 2: Dependencies & Builder
+FROM node:18-alpine AS deps
 
-WORKDIR /workspace
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
 
-# Copy workspace files
-COPY package.json package-lock.json* ./
-COPY packages ./packages
+WORKDIR /app
 
-# Copy built WASM from previous stage
-COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-node
+# Copy package.json files
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+COPY packages/nextjs/package.json ./packages/nextjs/
 
 # Install dependencies
-RUN npm install
+RUN yarn install
 
-# Set working directory to nextjs package
-WORKDIR /workspace/packages/nextjs
+# Copy source code to current directory
+COPY packages/nextjs ./packages/nextjs
+COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-node
 
-# Build arguments for NEXT_PUBLIC_* variables
+# Build arguments
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_WS_URL
 
 # Convert to environment variables for build
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+ENV NODE_ENV=production
 
-RUN npm run build
+RUN yarn workspace @se-2/nextjs build
+RUN yarn workspaces focus @se-2/nextjs --production
+
+# Stage 3: Runner - Production runtime (standalone)
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+# Copy standalone build (includes minimal node server)
+COPY --from=deps /app/packages/nextjs/.next/standalone ./
+
+# Copy static files
+COPY --from=deps /app/packages/nextjs/.next/static ./packages/nextjs/.next/static
+COPY --from=deps /app/packages/nextjs/public ./packages/nextjs/public
 
 EXPOSE 3000
 
-ENTRYPOINT ["npm", "run", "serve"]
+ENV NODE_ENV=production
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "packages/nextjs/server.js"]
