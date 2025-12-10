@@ -27,18 +27,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Public key: {}", keys.public_key);
             Ok(())
         }
-        Command::Start { id, input } => {
-            // 環境変数からサーバーURLを取得（デフォルト: localhost）
+        Command::Start { id } => {
+            // 環境変数からサーバーURLを取得
             let server_url =
                 env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
             println!("Using server URL: {}", server_url);
 
+            // 環境変数からMPCアドレスを取得
+            let addresses: Vec<String> = vec![
+                env::var("ZK_MPC_NODE_0_TCP").unwrap_or_else(|_| "localhost:8000".to_string()),
+                env::var("ZK_MPC_NODE_1_TCP").unwrap_or_else(|_| "localhost:8001".to_string()),
+                env::var("ZK_MPC_NODE_2_TCP").unwrap_or_else(|_| "localhost:8002".to_string()),
+            ];
+
+            println!("Using MPC addresses: {:?}", addresses);
+
             // Initialize ProofManager
             let proof_manager = Arc::new(ProofManager::new());
 
-            // Initialize the MPC network
-            let mut net = MPCNetConnection::init_from_path(&input, id);
+            // Initialize the MPC network from environment addresses
+            let mut net = MPCNetConnection::new(id, addresses).unwrap();
             net.listen().await.expect("Failed to listen");
             net.connect_to_all()
                 .await
@@ -63,9 +72,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             // Create a listener for client connections
-            let addr = SocketAddr::from(([0, 0, 0, 0], (9000 + id) as u16));
+            let http_port_base = env::var("MPC_HTTP_PORT")
+                .unwrap_or_else(|_| "9000".to_string())
+                .parse::<u16>()
+                .unwrap_or(9000);
 
-            println!("Listening on port {}", 9000 + id);
+            // Each node listens on a different port based on its ID
+            // e.g., node 0 -> 9000, node 1 -> 9001, node 2 -> 9002
+            let http_port = http_port_base + id as u16;
+            let addr = SocketAddr::from(([0, 0, 0, 0], http_port));
+
+            println!("Listening on port {}", http_port);
 
             run_server(&addr, state).await?;
 

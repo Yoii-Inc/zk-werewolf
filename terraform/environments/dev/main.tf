@@ -172,10 +172,11 @@ module "backend_service" {
   security_group_ids = [module.security_groups.ecs_tasks_security_group_id]
   assign_public_ip   = true # Required without NAT Gateway
 
-  target_group_arn   = module.alb.backend_target_group_arn
-  execution_role_arn = module.ecs_cluster.task_execution_role_arn
-  task_role_arn      = module.ecs_cluster.task_role_arn
-  log_group_name     = module.ecs_cluster.cloudwatch_log_group_name
+  target_group_arn     = module.alb.backend_target_group_arn
+  execution_role_arn   = module.ecs_cluster.task_execution_role_arn
+  task_role_arn        = module.ecs_cluster.task_role_arn
+  log_group_name       = module.ecs_cluster.cloudwatch_log_group_name
+  service_registry_arn = module.backend_service_discovery.service_arns["backend"]
 
   environment_variables = [
     {
@@ -185,6 +186,10 @@ module "backend_service" {
     {
       name  = "ENVIRONMENT"
       value = "dev"
+    },
+    {
+      name  = "RUST_LOG"
+      value = "info"
     },
     {
       name  = "SUPABASE_URL"
@@ -197,6 +202,18 @@ module "backend_service" {
     {
       name  = "JWT_SECRET"
       value = local.secrets.backend.jwt_secret
+    },
+    {
+      name  = "ZK_MPC_NODE_0_HTTP"
+      value = "http://mpc-node-0.mpc.local:9000"
+    },
+    {
+      name  = "ZK_MPC_NODE_1_HTTP"
+      value = "http://mpc-node-1.mpc.local:9000"
+    },
+    {
+      name  = "ZK_MPC_NODE_2_HTTP"
+      value = "http://mpc-node-2.mpc.local:9000"
     }
   ]
 
@@ -261,9 +278,23 @@ module "frontend_service" {
 }
 
 # =============================================================================
-# Service Discovery for MPC Nodes
+# Service Discovery
 # =============================================================================
 
+# Backend Service Discovery
+module "backend_service_discovery" {
+  source = "../../modules/service-discovery"
+
+  name           = "${local.name}-backend"
+  vpc_id         = module.vpc.vpc_id
+  namespace_name = "backend.local"
+
+  services = {
+    "backend" = { dns_ttl = 10 }
+  }
+}
+
+# MPC Nodes Service Discovery
 module "mpc_service_discovery" {
   source = "../../modules/service-discovery"
 
@@ -313,24 +344,28 @@ module "mpc_node_0" {
 
   environment_variables = [
     {
-      name  = "MPC_NODE_ID"
-      value = "0"
+      name  = "RUST_LOG"
+      value = "info"
     },
     {
-      name  = "MPC_NODE_PORT"
+      name  = "SERVER_URL"
+      value = "http://backend.backend.local:8080"
+    },
+    {
+      name  = "ZK_MPC_NODE_0_TCP"
+      value = "mpc-node-0.mpc.local:8000"
+    },
+    {
+      name  = "ZK_MPC_NODE_1_TCP"
+      value = "mpc-node-1.mpc.local:8000"
+    },
+    {
+      name  = "ZK_MPC_NODE_2_TCP"
+      value = "mpc-node-2.mpc.local:8000"
+    },
+    {
+      name  = "MPC_HTTP_PORT"
       value = "9000"
-    },
-    {
-      name  = "MPC_NODE_0_ADDR"
-      value = "mpc-node-0.mpc.local:9000"
-    },
-    {
-      name  = "MPC_NODE_1_ADDR"
-      value = "mpc-node-1.mpc.local:9000"
-    },
-    {
-      name  = "MPC_NODE_2_ADDR"
-      value = "mpc-node-2.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_0_PUBLIC_KEY"
@@ -384,24 +419,28 @@ module "mpc_node_1" {
 
   environment_variables = [
     {
-      name  = "MPC_NODE_ID"
-      value = "1"
+      name  = "RUST_LOG"
+      value = "info"
     },
     {
-      name  = "MPC_NODE_PORT"
+      name  = "SERVER_URL"
+      value = "http://backend.backend.local:8080"
+    },
+    {
+      name  = "ZK_MPC_NODE_0_TCP"
+      value = "mpc-node-0.mpc.local:8000"
+    },
+    {
+      name  = "ZK_MPC_NODE_1_TCP"
+      value = "mpc-node-1.mpc.local:8000"
+    },
+    {
+      name  = "ZK_MPC_NODE_2_TCP"
+      value = "mpc-node-2.mpc.local:8000"
+    },
+    {
+      name  = "MPC_HTTP_PORT"
       value = "9000"
-    },
-    {
-      name  = "MPC_NODE_0_ADDR"
-      value = "mpc-node-0.mpc.local:9000"
-    },
-    {
-      name  = "MPC_NODE_1_ADDR"
-      value = "mpc-node-1.mpc.local:9000"
-    },
-    {
-      name  = "MPC_NODE_2_ADDR"
-      value = "mpc-node-2.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_0_PUBLIC_KEY"
@@ -455,24 +494,28 @@ module "mpc_node_2" {
 
   environment_variables = [
     {
-      name  = "MPC_NODE_ID"
-      value = "2"
+      name  = "RUST_LOG"
+      value = "info"
     },
     {
-      name  = "MPC_NODE_PORT"
+      name  = "SERVER_URL"
+      value = "http://backend.backend.local:8080"
+    },
+    {
+      name  = "ZK_MPC_NODE_0_TCP"
+      value = "mpc-node-0.mpc.local:8000"
+    },
+    {
+      name  = "ZK_MPC_NODE_1_TCP"
+      value = "mpc-node-1.mpc.local:8000"
+    },
+    {
+      name  = "ZK_MPC_NODE_2_TCP"
+      value = "mpc-node-2.mpc.local:8000"
+    },
+    {
+      name  = "MPC_HTTP_PORT"
       value = "9000"
-    },
-    {
-      name  = "MPC_NODE_0_ADDR"
-      value = "mpc-node-0.mpc.local:9000"
-    },
-    {
-      name  = "MPC_NODE_1_ADDR"
-      value = "mpc-node-1.mpc.local:9000"
-    },
-    {
-      name  = "MPC_NODE_2_ADDR"
-      value = "mpc-node-2.mpc.local:9000"
     },
     {
       name  = "MPC_NODE_0_PUBLIC_KEY"

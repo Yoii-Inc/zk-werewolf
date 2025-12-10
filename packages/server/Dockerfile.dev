@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM rust:1.83 as builder
 
 RUN apt-get update && apt-get install -y \
@@ -8,12 +9,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/workspace
 
-# Copy all source code first
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+
+# Copy all source code
 COPY packages/ ./packages/
 
-# Build the application
+# Build the application with cache mounts
 WORKDIR /usr/src/workspace/packages/server
-RUN cargo build
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/usr/src/workspace/target \
+    cargo build && \
+    cp /usr/src/workspace/target/debug/server /tmp/server
 
 FROM debian:bookworm-slim
 
@@ -23,7 +31,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY --from=builder /usr/src/workspace/packages/server/target/debug/server /app/server
+COPY --from=builder /tmp/server /app/server
 RUN chmod +x /app/server
 
 EXPOSE 8080

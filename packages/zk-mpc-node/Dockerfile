@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM rust:1.83 AS builder
 
 RUN apt-get update && apt-get install -y \
@@ -14,8 +15,12 @@ COPY Cargo.toml Cargo.lock ./
 # Copy all source code
 COPY packages/ ./packages/
 
-# Build the application
-RUN cargo build --release --package zk-mpc-node --locked
+# Build the application with cache mounts
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/usr/src/workspace/target \
+    cargo build --release --package zk-mpc-node --locked && \
+    cp /usr/src/workspace/target/release/zk-mpc-node /tmp/zk-mpc-node
 
 FROM debian:bookworm-slim
 
@@ -25,7 +30,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY --from=builder /usr/src/workspace/target/release/zk-mpc-node /app/zk-mpc-node
+COPY --from=builder /tmp/zk-mpc-node /app/zk-mpc-node
 COPY packages/zk-mpc-node/address /app/address
 RUN chmod +x /app/zk-mpc-node
 

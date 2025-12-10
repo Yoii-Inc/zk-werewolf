@@ -84,9 +84,9 @@ async fn main() {
         "SUPABASE_URL",
         "SUPABASE_KEY",
         "JWT_SECRET",
-        "ZK_MPC_NODE_1",
-        "ZK_MPC_NODE_2",
-        "ZK_MPC_NODE_3",
+        "ZK_MPC_NODE_0_HTTP",
+        "ZK_MPC_NODE_1_HTTP",
+        "ZK_MPC_NODE_2_HTTP",
     ];
     let mut missing_vars = Vec::new();
 

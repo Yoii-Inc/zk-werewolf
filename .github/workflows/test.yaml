@@ -33,9 +33,20 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      ZK_MPC_NODE_1: http://localhost:9000
-      ZK_MPC_NODE_2: http://localhost:9001
-      ZK_MPC_NODE_3: http://localhost:9002
+
+      # MPC Node TCP address (for MPC Nodes)
+      ZK_MPC_NODE_0_TCP: localhost:8000
+      ZK_MPC_NODE_1_TCP: localhost:8001
+      ZK_MPC_NODE_2_TCP: localhost:8002
+
+      MPC_HTTP_PORT: 9000
+
+      # MPC Node HTTP API (for Backend)
+      ZK_MPC_NODE_0_HTTP: http://localhost:9000
+      ZK_MPC_NODE_1_HTTP: http://localhost:9001
+      ZK_MPC_NODE_2_HTTP: http://localhost:9002
+
+      SERVER_URL: http://localhost:8080
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
     steps:
       - name: Checkout code
