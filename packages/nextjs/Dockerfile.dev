@@ -1,0 +1,42 @@
+# Stage 1: Build WASM
+FROM rust:1.83 AS wasm-builder
+
+# Install wasm-pack
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+WORKDIR /build
+
+# Create a minimal workspace for WASM build only
+RUN mkdir -p packages/mpc-algebra-wasm
+
+# Copy mpc-algebra-wasm package
+COPY packages/mpc-algebra-wasm ./packages/mpc-algebra-wasm
+
+# Build WASM package directly without workspace
+WORKDIR /build/packages/mpc-algebra-wasm
+RUN wasm-pack build --target web --out-dir pkg
+
+FROM node:18-alpine
+
+WORKDIR /workspace
+
+# Copy workspace root files
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
+
+# Copy all package.json files to set up workspace structure
+COPY packages/nextjs/package.json ./packages/nextjs/
+
+# Install all dependencies
+RUN corepack enable && yarn install
+
+COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-node
+
+# Set working directory to nextjs package
+WORKDIR /workspace/packages/nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Start development server
+CMD ["yarn", "start"]

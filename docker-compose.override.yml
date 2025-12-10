@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/nextjs/Dockerfile.dev
+    volumes:
+      - ./packages/nextjs:/workspace/packages/nextjs
+      - /workspace/node_modules
+      - /workspace/packages/nextjs/.next
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    command: ["yarn", "workspace", "@se-2/nextjs", "start"]
