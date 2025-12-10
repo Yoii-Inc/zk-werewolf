@@ -4,6 +4,7 @@ use crate::{
         role::Role,
     },
     services::zk_proof::check_status_with_retry,
+    utils::config::CONFIG,
 };
 
 use super::player::Player;
@@ -183,12 +184,6 @@ pub struct BatchRequest {
     pub status: BatchStatus,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
-
-const ZK_MPC_NODE_URL: [&str; 3] = [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002",
-];
 
 impl BatchRequest {
     pub fn new() -> Self {
@@ -599,9 +594,10 @@ impl Game {
         };
 
         // identifierをzk-mpc-nodeに送信するなどの処理を行う
-        for port in ZK_MPC_NODE_URL {
+        let node_urls = CONFIG.zk_mpc_node_urls();
+        for url in &node_urls {
             let response = client
-                .post(port)
+                .post(url)
                 .json(&req_to_node)
                 .send()
                 .await
@@ -609,9 +605,9 @@ impl Game {
             responses.push(response);
         }
 
-        for (port, response) in ZK_MPC_NODE_URL.iter().zip(responses) {
+        for (url, response) in node_urls.iter().zip(responses) {
             let response_body: serde_json::Value = response.unwrap().json().await.unwrap();
-            println!("Response from port {}: {:?}", port, response_body);
+            println!("Response from {}: {:?}", url, response_body);
         }
 
         // 3. 結果の確認（非同期で実行）
