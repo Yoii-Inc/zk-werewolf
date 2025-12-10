@@ -1014,6 +1014,7 @@ impl std::fmt::Display for Game {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct CryptoParameters {
     // public
     pub pedersen_param: <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Parameters,
@@ -1050,25 +1051,5 @@ impl Clone for CryptoParameters {
 impl std::fmt::Debug for CryptoParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unimplemented!("Debug not implemented for CryptoParameters");
-    }
-}
-
-impl Serialize for CryptoParameters {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Dummy implementation
-        unimplemented!("Serialization not implemented")
-    }
-}
-
-impl<'de> Deserialize<'de> for CryptoParameters {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // Dummy implementation
-        unimplemented!("Deserialization not implemented")
     }
 }

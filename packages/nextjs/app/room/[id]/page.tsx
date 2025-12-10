@@ -516,6 +516,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         <NightActionModal
           players={gameInfo.players}
           role={gameInfo.players.find(player => player.name === user?.username)?.role ?? "Villager"}
+          gameInfo={gameInfo}
+          username={user?.username ?? ""}
           onSubmit={(targetPlayerId: string) => {
             const userRole = gameInfo.players.find(player => player.name === user?.username)?.role;
             // handleNightAction(targetPlayerId, userRole);
@@ -531,6 +533,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           myId={gameInfo.players.find(player => player.name === user?.username)?.id ?? ""}
           roomId={gameInfo.room_id}
           players={gameInfo.players}
+          gameInfo={gameInfo}
+          username={user?.username ?? ""}
           onSubmit={(targetId: string) => {
             // handleVote(targetId);
             setShowVoteModal(false);

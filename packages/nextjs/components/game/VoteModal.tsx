@@ -1,94 +1,61 @@
 import React from "react";
 import { useState } from "react";
 import type { Player } from "../../app/types";
+import { useGameInputGenerator } from "../../hooks/useGameInputGenerator";
 import { useVoting } from "../../hooks/useVoting";
-import JSONbig from "json-bigint";
-import { AnonymousVotingInput, AnonymousVotingPublicInput, NodeKey, SecretSharingScheme } from "~~/utils/crypto/type";
+import type { GameInfo } from "~~/types/game";
 
 interface VoteModalProps {
   myId: string;
   players: Player[];
   roomId: string;
+  gameInfo: GameInfo;
+  username: string;
   onSubmit: (targetId: string) => void;
   onClose: () => void;
 }
 
-const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClose, myId }) => {
+const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, gameInfo, username, onSubmit, onClose, myId }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitVote, error, proofStatus } = useVoting();
 
-  const JSONbigNative = JSONbig({ useNativeBigInt: true });
+  // React Hooksは条件分岐の前に呼び出す必要がある
+  const { inputGenerator, isReady } = useGameInputGenerator(roomId, username, gameInfo);
+
+  // 必要なデータが揃っているかチェック
+  if (!username || !gameInfo) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="text-center">
+            <p className="text-gray-600">Loading Data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPlayerId) return;
-
-    const res = await fetch("/pedersen_params2.json");
-    const params = await res.text();
-
-    const parsedParams = JSONbigNative.parse(params);
-
-    const randres = await fetch("/pedersen_randomness_0.json");
-    const randomness = await randres.text();
-    const parsedRandomness = JSONbigNative.parse(randomness);
-
-    const commitres = await fetch("/pedersen_commitment_0.json");
-    const commitment = await commitres.text();
-    const parsedCommitment = JSONbigNative.parse(commitment);
-
-    const privateInput = {
-      id: players.findIndex(player => player.id === myId),
-      isTargetId: players.map(player => [
-        player.id === selectedPlayerId
-          ? JSONbigNative.parse(
-              '["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]',
-            )
-          : JSONbigNative.parse('["0","0","0","0"]'),
-        null,
-      ]),
-      playerRandomness: parsedRandomness,
-    };
-    const publicInput: AnonymousVotingPublicInput = {
-      pedersenParam: parsedParams,
-      playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment], // 配列の長さはプレイヤー数に合わせて調整
-      playerNum: players.length, // プレイヤー数を設定
-    };
-    const nodeKeys: NodeKey[] = [
-      {
-        nodeId: "0",
-        publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
-      },
-      {
-        nodeId: "1",
-        publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
-      },
-      {
-        nodeId: "2",
-        publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
-      },
-    ];
-
-    console.log(randomness);
-    const scheme: SecretSharingScheme = {
-      totalShares: 3, // dummy
-      modulus: 97, // dummy
-    };
-
-    const votingData: AnonymousVotingInput = {
-      privateInput,
-      publicInput,
-      nodeKeys,
-      scheme,
-    };
-
-    const alivePlayerCount = players.filter(player => !player.is_dead).length;
+    if (!selectedPlayerId || !inputGenerator || !isReady) {
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      // データ型は要修正
+      // inputGeneratorを使用して投票データを生成
+      const { input: votingData } = await inputGenerator.getVotingInput(selectedPlayerId);
+
+      if (!votingData) {
+        throw new Error("Failed to generate voting data");
+      }
+
+      const alivePlayerCount = players.filter(player => !player.is_dead).length;
+
+      // 投票データを送信
       await submitVote(roomId, votingData, alivePlayerCount);
-      //   await onSubmit(selectedPlayerId);
+      await onSubmit(selectedPlayerId);
       onClose();
     } catch (err) {
       console.error("Voting failed:", err);
@@ -100,8 +67,8 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h2 className="text-xl font-bold mb-4 text-gray-900">投票</h2>
-        <p className="mb-4 text-gray-600">処刑する対象を選択してください</p>
+        <h2 className="text-xl font-bold mb-4 text-gray-900">Vote</h2>
+        <p className="mb-4 text-gray-600">Please select a target to execute.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-3">
@@ -131,21 +98,21 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, onSubmit, onClos
               onClick={onClose}
               className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
-              キャンセル
+              Cancel
             </button>
             <button
               type="submit"
-              disabled={!selectedPlayerId || isSubmitting}
+              disabled={!selectedPlayerId || isSubmitting || !isReady}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? "投票中..." : "投票する"}
+              {isSubmitting ? "Voting..." : !isReady ? "Preparing..." : "Vote"}
             </button>
           </div>
         </form>
 
         {proofStatus && (
           <div className="mt-4 p-3 bg-gray-100 rounded text-sm text-gray-600">
-            <p>証明状態: {proofStatus}</p>
+            <p>Proof Status: {proofStatus}</p>
           </div>
         )}
       </div>

@@ -46,6 +46,9 @@ pub fn routes(state: AppState) -> Router {
                         .route("/night-action", post(night_action_handler)),
                 )
                 .route("/proof", post(proof_handler))
+                // 暗号パラメータとコミットメント管理
+                .route("/crypto-params", get(get_crypto_params))
+                .route("/commitment", post(submit_commitment))
                 // デバッグ用エンドポイント
                 .route("/debug/change-role", post(change_player_role))
                 .route("/debug/reset", post(reset_game_handler))
@@ -105,7 +108,7 @@ async fn night_action_handler(
 async fn cast_vote_handler(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
-    Json(vote_action): Json<VoteAction>,
+    Json(_vote_action): Json<VoteAction>,
 ) -> impl IntoResponse {
     match game_service::handle_vote(
         state,
@@ -351,7 +354,6 @@ mod tests {
     use super::*;
     use crate::{models::game::BatchStatus, utils::test_setup::setup_test_env};
     use axum::{body::Body, http::Request};
-    use chrono::format;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -500,5 +502,106 @@ mod tests {
         // バッチリクエストが新しく作成されていることを確認
         assert!(game.batch_request.requests.is_empty());
         assert_eq!(game.batch_request.status, BatchStatus::Collecting);
+    }
+}
+
+// 暗号パラメータを取得
+async fn get_crypto_params(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+) -> impl IntoResponse {
+    // NOTE: このエンドポイントは現在使用されていません。
+    // クライアント側では、暗号パラメータを静的ファイル(/public/*.json)から読み込んでいます。
+    // 将来的に、ゲームごとの暗号パラメータをシリアライズして返す必要が生じた場合に実装予定です。
+    // CryptoParametersのSerialize/Deserialize実装が完了したら、このエンドポイントで動的に返すことを検討してください。
+
+    let games = state.games.lock().await;
+
+    if let Some(game) = games.get(&room_id) {
+        if let Some(_crypto_params) = &game.crypto_parameters {
+            // CryptoParametersから必要な情報を抽出してJSONで返す
+            // TODO: CryptoParametersのSerialize実装完了後に実装
+            let params = json!({
+                "pedersenParam": null, // crypto_params.pedersen_paramをシリアライズ
+                "elgamalParam": null, // crypto_params.elgamal_paramをシリアライズ
+                "playerCommitments": [], // crypto_params.player_commitmentをシリアライズ
+                "gameId": room_id,
+                "createdAt": game.started_at.map(|t| t.to_rfc3339()),
+            });
+
+            (StatusCode::OK, Json(params))
+        } else {
+            // 暗号パラメータがまだ生成されていない場合
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "error": "Crypto parameters not yet initialized"
+                })),
+            )
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "Game not found"
+            })),
+        )
+    }
+}
+
+// コミットメントを受信
+#[derive(Debug, Serialize, Deserialize)]
+struct CommitmentRequest {
+    player_id: i32,
+    commitment: Vec<String>,
+    created_at: String,
+}
+
+async fn submit_commitment(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+    Json(commitment_req): Json<CommitmentRequest>,
+) -> impl IntoResponse {
+    let mut games = state.games.lock().await;
+
+    if let Some(game) = games.get_mut(&room_id) {
+        if let Some(ref mut _crypto_params) = game.crypto_parameters {
+            // TODO: commitment文字列をPedersenCommitment型にデシリアライズして保存
+            // 現状はプレイヤーIDと対応づけてログに記録
+            tracing::info!(
+                "Received commitment from player {} in room {}: {:?}",
+                commitment_req.player_id,
+                room_id,
+                commitment_req.commitment
+            );
+
+            // 将来的には以下のように保存:
+            // let commitment_obj = deserialize_commitment(&commitment_req.commitment)?;
+            // crypto_params.player_commitment.push(commitment_obj);
+
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "success": true,
+                    "message": "Commitment received and logged (storage pending serialization implementation)"
+                })),
+            )
+        } else {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "success": false,
+                    "message": "Crypto parameters not initialized for this game"
+                })),
+            )
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "success": false,
+                "message": "Game not found"
+            })),
+        )
     }
 }

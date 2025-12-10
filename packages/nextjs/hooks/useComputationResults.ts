@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useGameCrypto } from "./useGameInputGenerator";
 import JSONbig from "json-bigint";
 import type { ChatMessage } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
@@ -46,6 +47,7 @@ export const useComputationResults = (
   addMessage: (message: ChatMessage) => void,
   gameInfo?: any,
 ) => {
+  const { cryptoParams } = useGameCrypto(roomId);
   const [divinationResult, setDivinationResult] = useState<DivinationResult | null>(null);
   const [roleAssignmentResult, setRoleAssignmentResult] = useState<RoleAssignmentResult | null>(null);
   const [winningJudgeResult, setWinningJudgeResult] = useState<WinningJudgeResult | null>(null);
@@ -89,14 +91,18 @@ export const useComputationResults = (
                 const secretKeyText = await secretKeyResponse.text();
                 const secretKey = JSONbigNative.parse(secretKeyText);
 
-                // ElGamalパラメータをJSONファイルから読み取り
-                const paramsResponse = await fetch("/test_elgamal_params.json");
-                if (!paramsResponse.ok) {
-                  throw new Error("Failed to load ElGamal parameters");
+                // ElGamalパラメータを取得（フォールバック: 静的ファイル）
+                let elgamalParams;
+                if (cryptoParams?.elgamalParam) {
+                  elgamalParams = cryptoParams.elgamalParam;
+                } else {
+                  const paramsResponse = await fetch("/test_elgamal_params.json");
+                  if (!paramsResponse.ok) {
+                    throw new Error("Failed to load ElGamal parameters");
+                  }
+                  const paramsText = await paramsResponse.text();
+                  elgamalParams = JSONbigNative.parse(paramsText);
                 }
-
-                const paramsText = await paramsResponse.text();
-                const elgamalParams = JSONbigNative.parse(paramsText);
 
                 console.log("Starting divination result decryption:", {
                   ciphertext: result.resultData.ciphertext,

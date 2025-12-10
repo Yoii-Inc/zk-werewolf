@@ -1,4 +1,12 @@
 import { Role } from "~~/app/types";
+import {
+  ElGamalParam,
+  ElGamalPublicKey,
+  ElGamalSecretKey,
+  Field,
+  PedersenCommitment,
+  PedersenParam,
+} from "~~/utils/crypto/type";
 
 export interface RoomInfo {
   room_id: string;
@@ -10,6 +18,16 @@ export interface RoomInfo {
   players: Player[];
 }
 
+// 暗号パラメータの型定義（サーバー側のCryptoParametersに対応）
+export interface CryptoParameters {
+  pedersen_param: PedersenParam; // Pedersenコミットメントパラメータ
+  player_commitment: PedersenCommitment[]; // プレイヤーのコミットメント配列
+  fortune_teller_public_key: ElGamalPublicKey; // 占い師の公開鍵
+  elgamal_param: ElGamalParam; // ElGamal暗号化パラメータ
+  player_randomness: Field[]; // プレイヤーのランダムネス配列(本来は含めるべきでない)
+  secret_key: ElGamalSecretKey; // 秘密鍵（注意: 本来は含めるべきでない）
+}
+
 export interface GameInfo {
   room_id: string;
   phase: "Waiting" | "Night" | "Discussion" | "Voting" | "Result" | "Finished";
@@ -17,6 +35,7 @@ export interface GameInfo {
   playerRole: Role;
   hasActed: boolean;
   result: "InProgress" | "VillagerWin" | "WerewolfWin";
+  crypto_parameters?: CryptoParameters;
   chat_log?: {
     messages: Array<{
       id: any;

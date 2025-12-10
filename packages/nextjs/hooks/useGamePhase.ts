@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useBackgroundNightAction } from "./useBackgroundNightAction";
 import { useDivination } from "./useDivination";
+import { useGameInputGenerator } from "./useGameInputGenerator";
 import { useRoleAssignment } from "./useRoleAssignment";
 import { useWinningJudge } from "./useWinningJudge";
 import JSONbig from "json-bigint";
@@ -29,6 +30,7 @@ export const useGamePhase = (
   const { submitRoleAssignment } = useRoleAssignment();
   const { handleBackgroundNightAction } = useBackgroundNightAction();
   const { proofStatus } = useDivination();
+  const { inputGenerator, isReady } = useGameInputGenerator(roomId, username || "", gameInfo);
   const phaseTransitionProcessedRef = useRef<string | null>(null);
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
@@ -69,7 +71,19 @@ export const useGamePhase = (
           console.log(`Step 1: Non-Seer player ${username} sending dummy request.`);
 
           try {
-            await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
+            if (!inputGenerator) {
+              console.error("inputGenerator is null. Cannot send dummy request.");
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: "Failed to send dummy request: inputGenerator is null",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+              return;
+            }
+
+            await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players, inputGenerator);
 
             addMessage({
               id: Date.now().toString(),
@@ -212,65 +226,14 @@ export const useGamePhase = (
         await waitForDivination();
         const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
 
-        const res = await fetch("/pedersen_params2.json");
-        const params = await res.text();
-        const parsedParams = JSONbigNative.parse(params);
+        if (!inputGenerator || !isReady) {
+          throw new Error("Input generator not ready");
+        }
 
-        const randres = await fetch("/pedersen_randomness_0.json");
-        const randomness = await randres.text();
-        const parsedRandomness = JSONbigNative.parse(randomness);
-
-        const commitres = await fetch("/pedersen_commitment_0.json");
-        const commitment = await commitres.text();
-        const parsedCommitment = JSONbigNative.parse(commitment);
-
-        const players = gameInfo.players;
+        // const players = gameInfo.players;
         const myId = gameInfo.players.find(player => player.name === username)?.id ?? "";
 
-        const amWerewolfValues =
-          gameInfo.players.find(player => player.name === username)?.role === "Werewolf"
-            ? JSONbigNative.parse(
-                '["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"]',
-              )
-            : JSONbigNative.parse('["0", "0", "0", "0"]');
-
-        const privateInput = {
-          id: players.findIndex(player => player.id === myId),
-          amWerewolf: [amWerewolfValues, null],
-          playerRandomness: parsedRandomness,
-        };
-
-        const publicInput: WinningJudgementPublicInput = {
-          pedersenParam: parsedParams,
-          playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
-        };
-
-        const nodeKeys: NodeKey[] = [
-          {
-            nodeId: "0",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "1",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "2",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
-          },
-        ];
-
-        const scheme: SecretSharingScheme = {
-          totalShares: 3,
-          modulus: 97,
-        };
-
-        const winningJudgeData: WinningJudgementInput = {
-          privateInput,
-          publicInput,
-          nodeKeys,
-          scheme,
-        };
+        const { input: winningJudgeData } = await inputGenerator.getWinningJudgementInput();
 
         // Only proceed if the player is alive
         const isPlayerAlive = gameInfo.players.find(player => player.name === username)?.is_dead === false;
@@ -295,7 +258,7 @@ export const useGamePhase = (
         return () => clearTimeout(resetTimer);
       }
     },
-    [gameInfo, roomId, username, submitWinningJudge],
+    [gameInfo, roomId, username, submitWinningJudge, inputGenerator, isReady],
   );
 
   // handleGameResultCheckをuseRefに設定
@@ -305,70 +268,12 @@ export const useGamePhase = (
 
   // 役職配布の処理
   useEffect(() => {
-    if (gameInfo?.phase === "Night" && gameInfo.players.some(p => p.role === null)) {
+    if (gameInfo?.phase === "Night" && gameInfo.players.some(p => p.role === null) && inputGenerator && isReady) {
       const handleRoleAssignment = async () => {
         try {
           const playerCount = gameInfo.players.length;
-          // 型エラーを避けるため、コメントアウト
 
-          const res = await fetch("/pedersen-params.json");
-          const params = await res.text();
-          const parsedParams = JSONbigNative.parse(params);
-
-          const commitres = await fetch("/pedersen_commitment_0.json");
-          const commitment = await commitres.text();
-          const parsedCommitment = JSONbigNative.parse(commitment);
-
-          //   const privateInput: RoleAssignmentPrivateInput = {
-          //     id: gameInfo.players.findIndex(player => player.name === username),
-          //     shuffleMatrices: null,
-          //     randomness: null,
-          //     playerRandomness: parsedParams,
-          //   };
-
-          const publicInput: RoleAssignmentPublicInput = {
-            numPlayers: 3,
-            maxGroupSize: 3,
-            pedersenParam: parsedParams,
-            tauMatrix: null,
-            roleCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
-            playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
-            groupingParameter: {
-              Villager: [2, false],
-              FortuneTeller: [1, false],
-              Werewolf: [1, false],
-            },
-          };
-
-          const rinputres = await fetch("/test_role_assignment_input2.json");
-          const rinput = await rinputres.text();
-          const parsedRinput: RoleAssignmentInput = JSONbigNative.parse(rinput);
-
-          const roleAssignmentData: RoleAssignmentInput = {
-            privateInput: parsedRinput.privateInput,
-            publicInput: parsedRinput.publicInput,
-            // publicInput,
-            nodeKeys: [
-              {
-                nodeId: "0",
-                publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
-              },
-              {
-                nodeId: "1",
-                publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
-              },
-              {
-                nodeId: "2",
-                publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
-              },
-            ],
-            scheme: {
-              totalShares: 3,
-              modulus: 97,
-            },
-          };
-
-          roleAssignmentData.privateInput.id = gameInfo.players.findIndex(player => player.name === username);
+          const { input: roleAssignmentData } = await inputGenerator.getRoleAssignmentInput();
 
           console.log(
             `Player ${username} (ID: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
@@ -412,7 +317,7 @@ export const useGamePhase = (
       handleRoleAssignment();
     }
     //   }, [gameInfo?.phase, roomId, username, addMessage, submitRoleAssignment]);
-  }, [gameInfo?.phase, roomId, username, gameInfo?.players]);
+  }, [gameInfo?.phase, roomId, username, gameInfo?.players, inputGenerator, isReady]);
 
   // フェーズ変更の検出（基本的な更新のみ）
   useEffect(() => {
