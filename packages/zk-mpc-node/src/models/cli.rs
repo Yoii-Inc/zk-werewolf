@@ -17,8 +17,5 @@ pub enum Command {
         /// node ID
         #[structopt(long)]
         id: u32,
-        /// path to the address file
-        #[structopt(long, parse(from_os_str))]
-        input: PathBuf,
     },
 }

@@ -29,3 +29,5 @@ secrets.yaml
 
 # Keep encrypted version in git
 !secrets.enc.yaml
+
+.env
