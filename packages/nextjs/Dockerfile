@@ -46,7 +46,6 @@ ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NODE_ENV=production
 
 RUN yarn workspace @se-2/nextjs build
-RUN yarn workspaces focus @se-2/nextjs --production
 
 # Stage 3: Runner - Production runtime (standalone)
 FROM node:18-alpine AS runner
