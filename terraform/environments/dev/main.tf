@@ -324,6 +324,7 @@ module "mpc_node_0" {
   memory          = "1024"
   desired_count   = 1
   launch_type     = null
+  command         = ["./zk-mpc-node", "start", "--id", "0"]
 
   capacity_provider_strategy = [
     {
@@ -399,6 +400,7 @@ module "mpc_node_1" {
   memory          = "1024"
   desired_count   = 1
   launch_type     = null
+  command         = ["./zk-mpc-node", "start", "--id", "1"]
 
   capacity_provider_strategy = [
     {
@@ -474,6 +476,7 @@ module "mpc_node_2" {
   memory          = "1024"
   desired_count   = 1
   launch_type     = null
+  command         = ["./zk-mpc-node", "start", "--id", "2"]
 
   capacity_provider_strategy = [
     {

@@ -103,6 +103,12 @@ variable "environment_variables" {
   default = []
 }
 
+variable "command" {
+  description = "Command to override the container's default command"
+  type        = list(string)
+  default     = null
+}
+
 variable "health_check" {
   description = "Container health check configuration"
   type = object({
@@ -157,6 +163,7 @@ resource "aws_ecs_task_definition" "main" {
       name      = var.service_name
       image     = var.container_image
       essential = true
+      command   = var.command
 
       portMappings = [
         {
