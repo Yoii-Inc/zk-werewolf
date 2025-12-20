@@ -324,6 +324,7 @@ module "mpc_node_0" {
   memory          = "1024"
   desired_count   = 1
   launch_type     = null
+  command         = ["start", "--id", "0"]
 
   capacity_provider_strategy = [
     {
@@ -357,11 +358,11 @@ module "mpc_node_0" {
     },
     {
       name  = "ZK_MPC_NODE_1_TCP"
-      value = "mpc-node-1.mpc.local:8000"
+      value = "mpc-node-1.mpc.local:8001"
     },
     {
       name  = "ZK_MPC_NODE_2_TCP"
-      value = "mpc-node-2.mpc.local:8000"
+      value = "mpc-node-2.mpc.local:8002"
     },
     {
       name  = "MPC_HTTP_PORT"
@@ -399,6 +400,7 @@ module "mpc_node_1" {
   memory          = "1024"
   desired_count   = 1
   launch_type     = null
+  command         = ["start", "--id", "1"]
 
   capacity_provider_strategy = [
     {
@@ -432,11 +434,11 @@ module "mpc_node_1" {
     },
     {
       name  = "ZK_MPC_NODE_1_TCP"
-      value = "mpc-node-1.mpc.local:8000"
+      value = "mpc-node-1.mpc.local:8001"
     },
     {
       name  = "ZK_MPC_NODE_2_TCP"
-      value = "mpc-node-2.mpc.local:8000"
+      value = "mpc-node-2.mpc.local:8002"
     },
     {
       name  = "MPC_HTTP_PORT"
@@ -474,6 +476,7 @@ module "mpc_node_2" {
   memory          = "1024"
   desired_count   = 1
   launch_type     = null
+  command         = ["start", "--id", "2"]
 
   capacity_provider_strategy = [
     {
@@ -507,11 +510,11 @@ module "mpc_node_2" {
     },
     {
       name  = "ZK_MPC_NODE_1_TCP"
-      value = "mpc-node-1.mpc.local:8000"
+      value = "mpc-node-1.mpc.local:8001"
     },
     {
       name  = "ZK_MPC_NODE_2_TCP"
-      value = "mpc-node-2.mpc.local:8000"
+      value = "mpc-node-2.mpc.local:8002"
     },
     {
       name  = "MPC_HTTP_PORT"

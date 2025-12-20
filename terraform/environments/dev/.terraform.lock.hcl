@@ -5,6 +5,7 @@ provider "registry.terraform.io/carlpett/sops" {
   version     = "1.3.0"
   constraints = "~> 1.0"
   hashes = [
+    "h1:+Bj5ltdWM6meWwhluEj+vUEFiknEyL2a+sVIOSREVZQ=",
     "h1:qbWqo3SFGJhoiLKlq583fSRU05H0QShgqYcZypUoda4=",
     "zh:3ea1911d6e5f45aa4f3cadc4457a69c57af599df7ee12c7f46977212f1477e06",
     "zh:54a0c509596392908213ccde07c9be140fc707dbd8699bb68a5d248e1c454ee8",
@@ -20,6 +21,7 @@ provider "registry.terraform.io/hashicorp/aws" {
   version     = "5.100.0"
   constraints = ">= 4.66.1, ~> 5.0, >= 5.79.0, >= 5.93.0"
   hashes = [
+    "h1:H3mU/7URhP0uCRGK8jeQRKxx2XFzEqLiOq/L2Bbiaxs=",
     "h1:Ijt7pOlB7Tr7maGQIqtsLFbl7pSMIj06TVdkoSBcYOw=",
     "zh:054b8dd49f0549c9a7cc27d159e45327b7b65cf404da5e5a20da154b90b8a644",
     "zh:0b97bf8d5e03d15d83cc40b0530a1f84b459354939ba6f135a0086c20ebbe6b2",

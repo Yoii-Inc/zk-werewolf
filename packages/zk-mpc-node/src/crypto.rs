@@ -94,6 +94,21 @@ impl KeyManager {
         Ok(keys)
     }
 
+    pub async fn set_keys_from_base64_bytes(
+        &self,
+        private_key_bytes: Vec<u8>,
+        public_key_bytes: Vec<u8>,
+    ) -> Result<NodeKeys, CryptoError> {
+        // バイトデータをBase64エンコード
+        let keys = NodeKeys {
+            public_key: encode(&public_key_bytes),
+            secret_key: encode(&private_key_bytes),
+        };
+
+        *self.keys.write().await = Some(keys.clone());
+        Ok(keys)
+    }
+
     pub fn write_keys_to_file(id: u32, keys: crate::NodeKeys, file_path: Option<String>) {
         // NodeKeysをjsonにシリアライズしてファイルに保存する
         let keys_json = serde_json::to_string(&keys).expect("Failed to serialize keys");
