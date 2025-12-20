@@ -104,7 +104,13 @@ async fn get_proof_output(
     //         )),
     //     )
     // }
-    todo!()
+    (
+        http::StatusCode::NOT_IMPLEMENTED,
+        axum::Json(json!({
+            "error": "get_proof_output is not yet implemented",
+            "proof_id": proof_id
+        })),
+    )
 }
 
 async fn get_proof_status(
