@@ -26,8 +26,8 @@ services:
     environment:
       - RUST_LOG=debug
       - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
-      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8000
-      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8000
+      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8001
+      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
       - MPC_HTTP_PORT=9000
       - SERVER_URL=http://backend:8080
     volumes:
@@ -43,8 +43,8 @@ services:
     environment:
       - RUST_LOG=debug
       - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
-      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8000
-      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8000
+      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8001
+      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
       - MPC_HTTP_PORT=9000
       - SERVER_URL=http://backend:8080
     volumes:
@@ -60,8 +60,8 @@ services:
     environment:
       - RUST_LOG=debug
       - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
-      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8000
-      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8000
+      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8001
+      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
       - MPC_HTTP_PORT=9000
       - SERVER_URL=http://backend:8080
     volumes:
