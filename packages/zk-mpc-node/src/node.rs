@@ -29,11 +29,34 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         key_manager: Arc<KeyManager>,
         server_url: String, // 追加
     ) -> Self {
-        // load the keypair from file
-        key_manager
-            .load_keypair(id)
-            .await
-            .expect("Failed to load keypair");
+        // 環境変数から秘密鍵と公開鍵を取得（優先）、なければファイルから読込
+        if let Ok(private_key_base64) = std::env::var("MPC_PRIVATE_KEY") {
+            // 本番環境：環境変数から取得
+            let public_key_env_name = format!("MPC_NODE_{}_PUBLIC_KEY", id);
+            if let Ok(public_key_base64) = std::env::var(&public_key_env_name) {
+                // Base64デコード
+                let private_key_bytes = base64::decode(&private_key_base64)
+                    .expect("Failed to decode MPC_PRIVATE_KEY from base64");
+                let public_key_bytes = base64::decode(&public_key_base64)
+                    .expect(&format!("Failed to decode {} from base64", public_key_env_name));
+
+                key_manager
+                    .set_keys_from_base64_bytes(private_key_bytes, public_key_bytes)
+                    .await
+                    .expect("Failed to set keys from environment variables");
+            } else {
+                panic!(
+                    "Environment variable {} not found. Please set both MPC_PRIVATE_KEY and {}",
+                    public_key_env_name, public_key_env_name
+                );
+            }
+        } else {
+            // 開発環境：ファイルから読込
+            key_manager
+                .load_keypair(id)
+                .await
+                .expect("Failed to load keypair from file");
+        }
 
         let api_client = Arc::new(ApiClient::new(server_url.clone()));
 
