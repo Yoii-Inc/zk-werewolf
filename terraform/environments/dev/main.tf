@@ -358,11 +358,11 @@ module "mpc_node_0" {
     },
     {
       name  = "ZK_MPC_NODE_1_TCP"
-      value = "mpc-node-1.mpc.local:8000"
+      value = "mpc-node-1.mpc.local:8001"
     },
     {
       name  = "ZK_MPC_NODE_2_TCP"
-      value = "mpc-node-2.mpc.local:8000"
+      value = "mpc-node-2.mpc.local:8002"
     },
     {
       name  = "MPC_HTTP_PORT"
@@ -434,11 +434,11 @@ module "mpc_node_1" {
     },
     {
       name  = "ZK_MPC_NODE_1_TCP"
-      value = "mpc-node-1.mpc.local:8000"
+      value = "mpc-node-1.mpc.local:8001"
     },
     {
       name  = "ZK_MPC_NODE_2_TCP"
-      value = "mpc-node-2.mpc.local:8000"
+      value = "mpc-node-2.mpc.local:8002"
     },
     {
       name  = "MPC_HTTP_PORT"
@@ -510,11 +510,11 @@ module "mpc_node_2" {
     },
     {
       name  = "ZK_MPC_NODE_1_TCP"
-      value = "mpc-node-1.mpc.local:8000"
+      value = "mpc-node-1.mpc.local:8001"
     },
     {
       name  = "ZK_MPC_NODE_2_TCP"
-      value = "mpc-node-2.mpc.local:8000"
+      value = "mpc-node-2.mpc.local:8002"
     },
     {
       name  = "MPC_HTTP_PORT"
