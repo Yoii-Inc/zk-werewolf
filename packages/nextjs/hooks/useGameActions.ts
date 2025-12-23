@@ -272,9 +272,12 @@ export const useGameActions = (
 
   const resetBatchRequest = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/game/${roomId}/debug/reset-batch`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/debug/reset-batch`,
+        {
+          method: "POST",
+        },
+      );
       if (!response.ok) {
         throw new Error("Failed to reset batch request");
       }
