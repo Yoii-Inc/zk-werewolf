@@ -132,6 +132,8 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
             game.resolve_night_actions();
         } else if current_phase == GamePhase::Voting {
             game.resolve_voting();
+        } else if current_phase == GamePhase::Result {
+            game.advance_to_next_day();
         }
         game.add_phase_change_message(current_phase.clone(), next_phase.clone());
         game.phase = next_phase.clone();

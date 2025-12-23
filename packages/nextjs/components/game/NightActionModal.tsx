@@ -30,7 +30,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitDivination, error, proofStatus } = useDivination();
   const { handleBackgroundNightAction } = useBackgroundNightAction();
-  const { inputGenerator, isReady } = useGameInputGenerator(roomId, username, gameInfo);
+  const { isReady, generateDivinationInput } = useGameInputGenerator(roomId, username, gameInfo);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,12 +41,12 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
     try {
       // もし占い師の場合は、占い処理を行う
       if (role === "Seer") {
-        if (!inputGenerator || !isReady) {
-          throw new Error("InputGenerator is not ready");
+        if (!isReady) {
+          throw new Error("Game crypto is not ready");
         }
 
-        // inputGeneratorを使用して占いデータを生成
-        const { input: divinationData } = await inputGenerator.getDivinationInput(selectedPlayer);
+        // 占いデータを生成
+        const divinationData = await generateDivinationInput(selectedPlayer, false);
 
         if (!divinationData) {
           throw new Error("Failed to generate divination data");
@@ -112,10 +112,10 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!selectedPlayer || isSubmitting || (role === "Seer" && !isReady)}
+            disabled={!selectedPlayer || isSubmitting}
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? "Processing..." : role === "Seer" && !isReady ? "Preparing..." : "Confirm"}
+            {isSubmitting ? "Processing..." : "Confirm"}
           </button>
         </div>
       </div>

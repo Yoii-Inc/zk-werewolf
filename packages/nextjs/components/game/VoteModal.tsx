@@ -21,7 +21,7 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, gameInfo, userna
   const { submitVote, error, proofStatus } = useVoting();
 
   // React Hooksは条件分岐の前に呼び出す必要がある
-  const { inputGenerator, isReady } = useGameInputGenerator(roomId, username, gameInfo);
+  const { isReady, generateVotingInput } = useGameInputGenerator(roomId, username, gameInfo);
 
   // 必要なデータが揃っているかチェック
   if (!username || !gameInfo) {
@@ -38,14 +38,14 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, gameInfo, userna
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPlayerId || !inputGenerator || !isReady) {
+    if (!selectedPlayerId || !isReady) {
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // inputGeneratorを使用して投票データを生成
-      const { input: votingData } = await inputGenerator.getVotingInput(selectedPlayerId);
+      // 投票データを生成
+      const votingData = await generateVotingInput(selectedPlayerId);
 
       if (!votingData) {
         throw new Error("Failed to generate voting data");
@@ -102,10 +102,10 @@ const VoteModal: React.FC<VoteModalProps> = ({ players, roomId, gameInfo, userna
             </button>
             <button
               type="submit"
-              disabled={!selectedPlayerId || isSubmitting || !isReady}
+              disabled={!selectedPlayerId || isSubmitting}
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isSubmitting ? "Voting..." : !isReady ? "Preparing..." : "Vote"}
+              {isSubmitting ? "Voting..." : "Vote"}
             </button>
           </div>
         </form>

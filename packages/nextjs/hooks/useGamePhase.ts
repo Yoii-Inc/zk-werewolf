@@ -19,6 +19,8 @@ import { updateHasActed } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const useGamePhase = (
   gameInfo: GameInfo | null,
   roomId: string,
@@ -30,7 +32,11 @@ export const useGamePhase = (
   const { submitRoleAssignment } = useRoleAssignment();
   const { handleBackgroundNightAction } = useBackgroundNightAction();
   const { proofStatus } = useDivination();
-  const { inputGenerator, isReady } = useGameInputGenerator(roomId, username || "", gameInfo);
+  const { isReady, generateRoleAssignmentInput, generateWinningJudgementInput } = useGameInputGenerator(
+    roomId,
+    username || "",
+    gameInfo,
+  );
   const phaseTransitionProcessedRef = useRef<string | null>(null);
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
@@ -59,6 +65,61 @@ export const useGamePhase = (
       // 処理の優先順位を明確にした順次実行
       const processingSteps: (() => Promise<void>)[] = [];
 
+      // Step 0: 役職配布リクエスト送信
+      if (fromPhase === "Waiting" && toPhase === "Night") {
+        const handleRoleAssignment = async () => {
+          try {
+            const playerCount = gameInfo.players.length;
+
+            if (!isReady) {
+              console.log("Game crypto is not ready. Cannot perform role assignment.");
+              return;
+            }
+
+            const roleAssignmentData = await generateRoleAssignmentInput();
+
+            console.log(
+              `Player ${username} (ID: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
+            );
+
+            await submitRoleAssignment(roomId, roleAssignmentData, playerCount);
+
+            addMessage({
+              id: Date.now().toString(),
+              sender: "System",
+              message: "Role assignment process started",
+              timestamp: new Date().toISOString(),
+              type: "system",
+            });
+          } catch (error) {
+            console.error("Role assignment process error:", error);
+
+            // サーバー側エラーメッセージをチェック
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (errorMessage.includes("Role assignment has already been completed")) {
+              console.log("Role assignment already completed");
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: "Role assignment already completed",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            } else {
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: "Role assignment process failed",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            }
+          }
+        };
+
+        handleRoleAssignment();
+      }
+
       // Step 1: ダミーリクエスト送信
       if (
         requiresDummyRequest &&
@@ -71,19 +132,19 @@ export const useGamePhase = (
           console.log(`Step 1: Non-Seer player ${username} sending dummy request.`);
 
           try {
-            if (!inputGenerator) {
-              console.error("inputGenerator is null. Cannot send dummy request.");
+            if (!isReady) {
+              console.error("Game crypto is not ready. Cannot send dummy request.");
               addMessage({
                 id: Date.now().toString(),
                 sender: "System",
-                message: "Failed to send dummy request: inputGenerator is null",
+                message: "Failed to send dummy request: crypto not ready",
                 timestamp: new Date().toISOString(),
                 type: "system",
               });
               return;
             }
 
-            await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players, inputGenerator);
+            await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players, username, gameInfo);
 
             addMessage({
               id: Date.now().toString(),
@@ -183,7 +244,8 @@ export const useGamePhase = (
   // 勝敗判定処理を行う関数
   const handleGameResultCheck = useCallback(
     async (phaseTransitionId: string) => {
-      if (!gameInfo || winningJudgementSentRef.current === phaseTransitionId) return;
+      //   if (!gameInfo || winningJudgementSentRef.current === phaseTransitionId) return;
+      if (!gameInfo) return;
 
       // 占い師の結果を待つ処理
       const waitForDivination = () => {
@@ -226,14 +288,14 @@ export const useGamePhase = (
         await waitForDivination();
         const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
 
-        if (!inputGenerator || !isReady) {
-          throw new Error("Input generator not ready");
+        if (!isReady) {
+          throw new Error("Game crypto not ready");
         }
 
         // const players = gameInfo.players;
         const myId = gameInfo.players.find(player => player.name === username)?.id ?? "";
 
-        const { input: winningJudgeData } = await inputGenerator.getWinningJudgementInput();
+        const winningJudgeData = await generateWinningJudgementInput();
 
         // Only proceed if the player is alive
         const isPlayerAlive = gameInfo.players.find(player => player.name === username)?.is_dead === false;
@@ -258,66 +320,13 @@ export const useGamePhase = (
         return () => clearTimeout(resetTimer);
       }
     },
-    [gameInfo, roomId, username, submitWinningJudge, inputGenerator, isReady],
+    [gameInfo, roomId, username, submitWinningJudge, isReady],
   );
 
   // handleGameResultCheckをuseRefに設定
   useEffect(() => {
     handleGameResultCheckRef.current = handleGameResultCheck;
   }, [handleGameResultCheck]);
-
-  // 役職配布の処理
-  useEffect(() => {
-    if (gameInfo?.phase === "Night" && gameInfo.players.some(p => p.role === null) && inputGenerator && isReady) {
-      const handleRoleAssignment = async () => {
-        try {
-          const playerCount = gameInfo.players.length;
-
-          const { input: roleAssignmentData } = await inputGenerator.getRoleAssignmentInput();
-
-          console.log(
-            `Player ${username} (ID: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
-          );
-
-          await submitRoleAssignment(roomId, roleAssignmentData, playerCount);
-
-          addMessage({
-            id: Date.now().toString(),
-            sender: "System",
-            message: "Role assignment process started",
-            timestamp: new Date().toISOString(),
-            type: "system",
-          });
-        } catch (error) {
-          console.error("Role assignment process error:", error);
-
-          // サーバー側エラーメッセージをチェック
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          if (errorMessage.includes("Role assignment has already been completed")) {
-            console.log("Role assignment already completed");
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Role assignment already completed",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
-          } else {
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Role assignment process failed",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
-          }
-        }
-      };
-
-      handleRoleAssignment();
-    }
-    //   }, [gameInfo?.phase, roomId, username, addMessage, submitRoleAssignment]);
-  }, [gameInfo?.phase, roomId, username, gameInfo?.players, inputGenerator, isReady]);
 
   // フェーズ変更の検出（基本的な更新のみ）
   useEffect(() => {
