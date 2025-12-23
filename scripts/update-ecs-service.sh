@@ -86,6 +86,7 @@ log_info "Cluster: ${CLUSTER_NAME}, Region: ${AWS_REGION}"
 # Function to update a service
 update_service() {
     local service=$1
+    local defer_wait=${2:-false}   # ★追加
     local service_name="zk-werewolf-${ENVIRONMENT}-${service}"
 
     log_info "==================================="
@@ -117,8 +118,8 @@ update_service() {
         log_error "Failed to update ${service_name}"
     fi
 
-    # Wait for deployment if requested
-    if [ "$WAIT" = true ]; then
+    # Wait for deployment if requested (★ defer_wait=false のときだけ待つ)
+    if [ "$WAIT" = true ] && [ "$defer_wait" != "true" ]; then
         log_info "Waiting for ${service_name} deployment to complete..."
         if aws ecs wait services-stable \
             --cluster "${CLUSTER_NAME}" \
@@ -144,6 +145,44 @@ update_service() {
     echo ""
 }
 
+update_mpc_nodes_together() {
+    local nodes=("mpc-node-0" "mpc-node-1" "mpc-node-2")
+    local pids=()
+    local full_service_names=()
+
+    log_info "Triggering MPC nodes deployments in parallel..."
+
+    for n in "${nodes[@]}"; do
+        full_service_names+=("zk-werewolf-${ENVIRONMENT}-${n}")
+        # ★ waitは後回しにするので defer_wait=true
+        ( update_service "$n" true ) &
+        pids+=("$!")
+    done
+
+    # 並列トリガの結果を回収
+    local fail=0
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            fail=1
+        fi
+    done
+    if [ "$fail" -ne 0 ]; then
+        log_error "One or more MPC node deployments failed to trigger"
+    fi
+
+    # ★最後にまとめて wait（これで node0 だけで詰まらない）
+    if [ "$WAIT" = true ]; then
+        log_info "Waiting for MPC nodes to become stable together..."
+        if ! aws ecs wait services-stable \
+            --cluster "${CLUSTER_NAME}" \
+            --services "${full_service_names[@]}" \
+            --region "${AWS_REGION}"; then
+            log_error "MPC nodes failed or timed out while waiting for stability"
+        fi
+        log_info "MPC nodes are stable."
+    fi
+}
+
 # Update services based on selection
 case $SERVICE in
     backend)
@@ -152,15 +191,13 @@ case $SERVICE in
     frontend)
         update_service "frontend"
         ;;
-    mpc-node)
-        update_service "mpc-node"
+    mpc-node|mpc-nodes)
+        update_mpc_nodes_together
         ;;
     all)
         update_service "backend"
         update_service "frontend"
-        update_service "mpc-node-0"
-        update_service "mpc-node-1"
-        update_service "mpc-node-2"
+        update_mpc_nodes_together
         ;;
     *)
         log_error "Unknown service: ${SERVICE}. Valid options: backend, frontend, mpc-node, all"
