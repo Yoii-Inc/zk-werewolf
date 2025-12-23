@@ -30,21 +30,24 @@ export const useVoting = () => {
       const encryptedVote = await MPCEncryption.encryptAnonymousVoting(voteData);
 
       // 投票証明のリクエスト送信
-      const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          //   prover_num: "3",
-          proof_type: "AnonymousVoting",
-          data: {
-            user_id: String(voteData.privateInput.id),
-            prover_count: alivePlayerCount,
-            encrypted_data: encryptedVote,
+      const newProofId = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/proof`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            //   prover_num: "3",
+            proof_type: "AnonymousVoting",
+            data: {
+              user_id: String(voteData.privateInput.id),
+              prover_count: alivePlayerCount,
+              encrypted_data: encryptedVote,
+            },
+          }),
+        },
+      );
 
       if (!newProofId.ok) {
         const errorData = await newProofId.json();

@@ -20,9 +20,12 @@ export const useGameActions = (
   const startGame = async () => {
     setIsStarting(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${roomId}/start`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/start`,
+        {
+          method: "POST",
+        },
+      );
       if (!response.ok) {
         throw new Error("Failed to start game");
       }
@@ -149,16 +152,19 @@ export const useGameActions = (
 
   const handleChangeRole = async (playerId: string, newRole: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${roomId}/debug/change-role`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/debug/change-role`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            player_id: playerId,
+            new_role: newRole,
+          }),
         },
-        body: JSON.stringify({
-          player_id: playerId,
-          new_role: newRole,
-        }),
-      });
+      );
 
       if (!response.ok) {
         throw new Error("Failed to change role");
@@ -200,9 +206,12 @@ export const useGameActions = (
 
   const nextPhase = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${roomId}/phase/next`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/phase/next`,
+        {
+          method: "POST",
+        },
+      );
       if (!response.ok) {
         throw new Error("フェーズの進行に失敗しました");
       }
@@ -230,9 +239,12 @@ export const useGameActions = (
 
   const resetGame = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${roomId}/debug/reset`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/debug/reset`,
+        {
+          method: "POST",
+        },
+      );
       if (!response.ok) {
         throw new Error("ゲームのリセットに失敗しました");
       }
@@ -260,9 +272,12 @@ export const useGameActions = (
 
   const resetBatchRequest = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/api/game/${roomId}/debug/reset-batch`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/debug/reset-batch`,
+        {
+          method: "POST",
+        },
+      );
       if (!response.ok) {
         throw new Error("Failed to reset batch request");
       }

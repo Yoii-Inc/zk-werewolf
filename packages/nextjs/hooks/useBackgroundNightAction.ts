@@ -87,20 +87,23 @@ export const useBackgroundNightAction = () => {
       const alivePlayerCount = players.filter(player => !player.is_dead).length;
 
       // バックエンドにリクエスト送信
-      const response = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          proof_type: "Divination",
-          data: {
-            user_id: String(divinationData.privateInput.id),
-            prover_count: alivePlayerCount,
-            encrypted_data: encryptedDivination,
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/proof`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            proof_type: "Divination",
+            data: {
+              user_id: String(divinationData.privateInput.id),
+              prover_count: alivePlayerCount,
+              encrypted_data: encryptedDivination,
+            },
+          }),
+        },
+      );
 
       if (!response.ok) {
         throw new Error("Failed to send night action");
