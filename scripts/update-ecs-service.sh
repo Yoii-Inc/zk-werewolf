@@ -145,6 +145,7 @@ update_service() {
     echo ""
 }
 
+# Function to update all MPC node services together in parallel
 update_mpc_nodes_together() {
     local nodes=("mpc-node-0" "mpc-node-1" "mpc-node-2")
     local pids=()
