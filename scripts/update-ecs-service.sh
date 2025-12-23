@@ -86,6 +86,7 @@ log_info "Cluster: ${CLUSTER_NAME}, Region: ${AWS_REGION}"
 # Function to update a service
 update_service() {
     local service=$1
+    local defer_wait=${2:-false}
     local service_name="zk-werewolf-${ENVIRONMENT}-${service}"
 
     log_info "==================================="
@@ -117,8 +118,8 @@ update_service() {
         log_error "Failed to update ${service_name}"
     fi
 
-    # Wait for deployment if requested
-    if [ "$WAIT" = true ]; then
+    # Wait for deployment if requested (only when defer_wait=false)
+    if [ "$WAIT" = true ] && [ "$defer_wait" != "true" ]; then
         log_info "Waiting for ${service_name} deployment to complete..."
         if aws ecs wait services-stable \
             --cluster "${CLUSTER_NAME}" \
@@ -144,6 +145,65 @@ update_service() {
     echo ""
 }
 
+# Function to update all MPC node services together in parallel
+update_mpc_nodes_together() {
+    local nodes=("mpc-node-0" "mpc-node-1" "mpc-node-2")
+    local pids=()
+    local full_service_names=()
+
+    log_info "Triggering MPC nodes deployments in parallel..."
+
+    for n in "${nodes[@]}"; do
+        full_service_names+=("zk-werewolf-${ENVIRONMENT}-${n}")
+        # defer wait so pass defer_wait=true
+        ( update_service "$n" true ) &
+        pids+=("$!")
+    done
+
+    # Collect results of parallel triggers
+    local fail=0
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            fail=1
+        fi
+    done
+    if [ "$fail" -ne 0 ]; then
+        log_error "One or more MPC node deployments failed to trigger"
+    fi
+
+    # Service existence check: collect only existing services before running wait
+    local existing_services=()
+    for svc in "${full_service_names[@]}"; do
+        if aws ecs describe-services \
+            --cluster "${CLUSTER_NAME}" \
+            --services "${svc}" \
+            --region "${AWS_REGION}" \
+            --query 'services[0].serviceName' \
+            --output text 2>/dev/null | grep -q "${svc}"; then
+            existing_services+=("${svc}")
+        else
+            log_warn "Service ${svc} not found in cluster ${CLUSTER_NAME}; skipping wait for this service."
+        fi
+    done
+
+    if [ "${#existing_services[@]}" -eq 0 ]; then
+        log_warn "No MPC node services found in cluster ${CLUSTER_NAME}; nothing to wait for."
+        return 0
+    fi
+
+    # Finally wait together (wait only on existing services)
+    if [ "$WAIT" = true ]; then
+        log_info "Waiting for MPC nodes to become stable together: ${existing_services[*]}"
+        if ! aws ecs wait services-stable \
+            --cluster "${CLUSTER_NAME}" \
+            --services "${existing_services[@]}" \
+            --region "${AWS_REGION}"; then
+            log_error "MPC nodes failed or timed out while waiting for stability"
+        fi
+        log_info "MPC nodes are stable."
+    fi
+}
+
 # Update services based on selection
 case $SERVICE in
     backend)
@@ -152,15 +212,13 @@ case $SERVICE in
     frontend)
         update_service "frontend"
         ;;
-    mpc-node)
-        update_service "mpc-node"
+    mpc-node|mpc-nodes)
+        update_mpc_nodes_together
         ;;
     all)
         update_service "backend"
         update_service "frontend"
-        update_service "mpc-node-0"
-        update_service "mpc-node-1"
-        update_service "mpc-node-2"
+        update_mpc_nodes_together
         ;;
     *)
         log_error "Unknown service: ${SERVICE}. Valid options: backend, frontend, mpc-node, all"
