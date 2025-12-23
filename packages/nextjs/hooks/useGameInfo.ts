@@ -26,7 +26,9 @@ export const useGameInfo = (
   useEffect(() => {
     const fetchRoomInfo = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/api/room/${roomId}`);
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/room/${roomId}`,
+        );
         if (!response.ok) {
           throw new Error("ルーム情報の取得に失敗しました");
         }
@@ -41,7 +43,9 @@ export const useGameInfo = (
 
     const fetchGameInfo = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/api/game/${roomId}/state`);
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/state`,
+        );
         if (!response.ok) {
           throw new Error("ゲーム情報の取得に失敗しました");
         }

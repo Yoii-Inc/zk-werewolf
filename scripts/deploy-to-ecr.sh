@@ -163,7 +163,7 @@ case $SERVICE in
     frontend)
         build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
             "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
-            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/ws"
+            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
         ;;
     mpc-node)
         build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
@@ -172,7 +172,7 @@ case $SERVICE in
         build_and_push "backend" "packages/server/Dockerfile" "${BACKEND_REPO}" "latest"
         build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
             "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
-            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/ws"
+            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
         build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
     *)

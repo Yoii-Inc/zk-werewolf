@@ -269,7 +269,7 @@ module "frontend_service" {
     },
     {
       name  = "NEXT_PUBLIC_WS_URL"
-      value = "ws://${module.alb.alb_dns_name}/ws"
+      value = "ws://${module.alb.alb_dns_name}/api"
     }
   ]
 
