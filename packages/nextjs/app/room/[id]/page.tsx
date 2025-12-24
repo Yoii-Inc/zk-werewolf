@@ -26,11 +26,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [showGameResult, setShowGameResult] = useState(false);
 
   // Custom hooks
-  const { messages, setMessages, addMessage, resetMessages } = useGameChat(params.id, null);
+  const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id, null);
   const { roomInfo, gameInfo, isLoading, privateGameInfo } = useGameInfo(params.id, user?.id, setMessages);
   const { websocketRef, websocketStatus, connectWebSocket, disconnectWebSocket, sendMessage } = useGameWebSocket(
     params.id,
-    setMessages,
+    addServerMessage,
+    user?.username,
   );
   const {
     isStarting,
@@ -49,8 +50,19 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   // Computation results monitoring
   useComputationResults(params.id, user?.id || "", addMessage, gameInfo);
 
-  // Update chat hook with room info
-  const chatHook = useGameChat(params.id, roomInfo);
+  // ゲームリセット通知を監視
+  useEffect(() => {
+    const handleGameReset = () => {
+      console.log("Game reset notification received, clearing messages");
+      resetMessages();
+    };
+
+    window.addEventListener("gameResetNotification", handleGameReset);
+
+    return () => {
+      window.removeEventListener("gameResetNotification", handleGameReset);
+    };
+  }, [resetMessages]);
 
   // ゲーム終了を検知してモーダルを表示
   useEffect(() => {
@@ -361,26 +373,24 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                           console.log("Keys loaded successfully");
                           console.log("Public key verified:", keyManager.getPublicKey());
                           // システムメッセージを追加
-                          const message: ChatMessage = {
+                          addMessage({
                             id: Date.now().toString(),
                             sender: "System",
                             message: "Key pair generated successfully",
                             timestamp: new Date().toISOString(),
                             type: "system",
-                          };
-                          setMessages(prev => [...prev, message]);
+                          });
                         }
                       } catch (error) {
                         console.error("Error managing keys:", error);
                         // エラーメッセージを追加
-                        const message: ChatMessage = {
+                        addMessage({
                           id: Date.now().toString(),
                           sender: "System",
                           message: "Failed to generate key pair",
                           timestamp: new Date().toISOString(),
                           type: "system",
-                        };
-                        setMessages(prev => [...prev, message]);
+                        });
                       }
                     }}
                     disabled={!user?.id}
@@ -397,13 +407,15 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     onClick={async () => {
                       const success = await resetGame();
                       if (success) {
-                        addMessage({
-                          id: Date.now().toString(),
-                          sender: "System",
-                          message: "Game has been reset",
-                          timestamp: new Date().toISOString(),
-                          type: "system",
-                        });
+                        // クライアント側メッセージをクリア
+                        resetMessages();
+                        // addMessage({
+                        //   id: Date.now().toString(),
+                        //   sender: "System",
+                        //   message: "Game has been reset",
+                        //   timestamp: new Date().toISOString(),
+                        //   type: "system",
+                        // });
                       }
                     }}
                     className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mt-2"
@@ -444,7 +456,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     key={msg.id}
                     className={`mb-4 rounded-lg p-3 ${
                       msg.type === "system"
-                        ? "bg-indigo-50 text-indigo-700 text-left"
+                        ? msg.source === "client"
+                          ? "bg-lime-100 text-lime-700 text-left" // クライアント側システムメッセージは黄緑
+                          : "bg-indigo-100 text-indigo-700 text-left" // サーバー側システムメッセージは蒼
                         : msg.type === "whisper"
                           ? "bg-purple-50 text-purple-700 italic"
                           : "bg-white"

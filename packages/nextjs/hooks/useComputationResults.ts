@@ -169,14 +169,6 @@ export const useComputationResults = (
                 // 占い処理完了をグローバルイベントで通知
                 window.dispatchEvent(new CustomEvent("divinationCompleted"));
                 console.log("Divination completion event dispatched");
-
-                addMessage({
-                  id: Date.now().toString(),
-                  sender: "System",
-                  message: `Divination result decrypted: ${JSON.stringify(decryptedResult)}`,
-                  timestamp: new Date().toISOString(),
-                  type: "system",
-                });
               } catch (error) {
                 console.error("Divination result decryption error:", error);
                 addMessage({
@@ -298,165 +290,11 @@ export const useComputationResults = (
     };
   }, [playerId, addMessage, roomId, gameInfo]);
 
-  // 占い結果の処理
-  const handleDivinationResult = useCallback(
-    async (data: DivinationResult) => {
-      setDivinationResult(data);
-
-      // プレイヤーの役職を確認
-      const privateGameInfo = getPrivateGameInfo(roomId, playerId);
-
-      if (privateGameInfo?.playerRole === "Seer") {
-        console.log("Decrypting divination result as Seer");
-
-        try {
-          // ElGamal秘密鍵をJSONファイルから読み取り
-          const secretKeyResponse = await fetch("/elgamal_secret_key.json");
-          if (!secretKeyResponse.ok) {
-            throw new Error("Failed to load ElGamal secret key");
-          }
-
-          const secretKeyText = await secretKeyResponse.text();
-          const secretKey = JSONbigNative.parse(secretKeyText);
-
-          console.log("Starting divination result decryption:", {
-            ciphertext: data.ciphertext,
-            secretKey: secretKey,
-          });
-
-          // TODO: Implement actual decryption process
-          // Currently logging ciphertext and secret key instead of decryption logic
-          console.log("Ciphertext:", data.ciphertext);
-          console.log("Secret key:", secretKey);
-
-          addMessage({
-            id: Date.now().toString(),
-            sender: "System",
-            message: "Divination result decrypted. (Check console log for details)",
-            timestamp: new Date().toISOString(),
-            type: "system",
-          });
-        } catch (error) {
-          console.error("Divination result decryption error:", error);
-          addMessage({
-            id: Date.now().toString(),
-            sender: "System",
-            message: `Divination result decryption failed: ${error}`,
-            timestamp: new Date().toISOString(),
-            type: "system",
-          });
-        }
-      } else {
-        addMessage({
-          id: Date.now().toString(),
-          sender: "System",
-          message: "Divination result is ready.",
-          timestamp: new Date().toISOString(),
-          type: "system",
-        });
-      }
-    },
-    [roomId, playerId, addMessage],
-  );
-
-  // 役職配布結果の処理
-  const handleRoleAssignmentResult = useCallback(
-    (data: RoleAssignmentResult) => {
-      setRoleAssignmentResult(data);
-      addMessage({
-        id: Date.now().toString(),
-        sender: "System",
-        message: "Role assignment completed.",
-        timestamp: new Date().toISOString(),
-        type: "system",
-      });
-    },
-    [addMessage],
-  );
-
-  // 勝利判定結果の処理
-  const handleWinningJudgeResult = useCallback(
-    (data: WinningJudgeResult) => {
-      setWinningJudgeResult(data);
-
-      if (data.game_result !== "InProgress") {
-        const resultMessage = data.game_result === "VillagerWin" ? "Villagers win!" : "Werewolves win!";
-
-        addMessage({
-          id: Date.now().toString(),
-          sender: "System",
-          message: resultMessage,
-          timestamp: new Date().toISOString(),
-          type: "system",
-        });
-      }
-    },
-    [addMessage],
-  );
-
-  // 投票結果の処理
-  const handleVotingResult = useCallback(
-    (data: AnonymousVotingResult) => {
-      setVotingResult(data);
-      addMessage({
-        id: Date.now().toString(),
-        sender: "System",
-        message: `${data.executed_player_name} has been executed.`,
-        timestamp: new Date().toISOString(),
-        type: "system",
-      });
-    },
-    [addMessage],
-  );
-
-  // 占い結果の復号化処理
-  const decryptDivinationResult = useCallback(
-    async (privateKey: string) => {
-      if (!divinationResult) {
-        throw new Error("No divination result available");
-      }
-
-      try {
-        const response = await fetch(`/api/game/${roomId}/divination/decrypt`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            player_id: playerId,
-            private_key: privateKey,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Decryption failed: ${response.statusText}`);
-        }
-
-        const decryptedResult = await response.json();
-
-        addMessage({
-          id: Date.now().toString(),
-          sender: "System",
-          message: `Divination result: ${decryptedResult.is_werewolf ? "Werewolf" : "Not werewolf"}`,
-          timestamp: new Date().toISOString(),
-          type: "system",
-        });
-
-        return decryptedResult;
-      } catch (error) {
-        console.error("Decryption error:", error);
-        throw error;
-      }
-    },
-    [divinationResult, roomId, playerId, addMessage],
-  );
-
   return {
     divinationResult,
     roleAssignmentResult,
     winningJudgeResult,
     votingResult,
     isProcessing,
-    decryptDivinationResult,
   };
 };
