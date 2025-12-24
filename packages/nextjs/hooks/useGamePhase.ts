@@ -139,14 +139,6 @@ export const useGamePhase = (
             );
 
             await submitRoleAssignment(roomId, roleAssignmentData, playerCount);
-
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Role assignment process started",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
           } catch (error) {
             console.error("Role assignment process error:", error);
 
@@ -195,17 +187,10 @@ export const useGamePhase = (
               latestGameInfo,
             );
 
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Dummy request sent",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
-
             console.log("Step 1: Dummy request completed");
           } catch (error) {
             console.error("Step 1: Dummy request error:", error);
+            // TODO: サーバー側でエラーメッセージを送るようになったら削除
             addMessage({
               id: Date.now().toString(),
               sender: "System",

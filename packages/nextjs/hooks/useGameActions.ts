@@ -31,14 +31,6 @@ export const useGameActions = (
         try {
           initializePrivateGameInfo(roomId, userId);
           console.log("PrivateGameInfo initialized with null role in session storage");
-
-          addMessage({
-            id: Date.now().toString(),
-            sender: "System",
-            message: "Game has started. Please wait for role assignment...",
-            timestamp: new Date().toISOString(),
-            type: "system",
-          });
         } catch (storageError) {
           console.error("PrivateGameInfo initialization error:", storageError);
         }
@@ -88,14 +80,6 @@ export const useGameActions = (
         updatePrivateGameInfo(roomId, playerId, { playerRole: roleType });
         console.log(`Self role changed to ${newRole}, privateGameInfo updated`);
       }
-
-      addMessage({
-        id: Date.now().toString(),
-        sender: "System",
-        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}'s role changed to ${newRole}`,
-        timestamp: new Date().toISOString(),
-        type: "system",
-      });
 
       return true;
     } catch (error) {
