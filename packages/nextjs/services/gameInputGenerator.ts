@@ -186,29 +186,20 @@ function getScheme(): SecretSharingScheme {
  * コミットメントをサーバーに送信
  */
 async function submitCommitment(roomId: string, playerId: number, randomness: bigint[]): Promise<void> {
-  try {
-    // TODO: WASMのcomputePedersenCommitment()を使用
-    const dummyCommitment = {
-      player_id: playerId,
-      commitment: randomness.map(r => r.toString()),
-      created_at: new Date().toISOString(),
-    };
-
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/game/${roomId}/commitment`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(dummyCommitment),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to submit commitment: ${response.statusText}`);
-    }
-
-    console.log("Commitment submitted successfully");
-  } catch (error) {
-    console.error("Error submitting commitment:", error);
-    throw error;
-  }
+  // NOTE:
+  // 本来ここでは、ランダムネスと公開パラメータから Pedersen コミットメントを計算し、
+  // その結果のみをサーバーに送信する必要があります。
+  // しかし現時点では computePedersenCommitment() などの実装が無いため、
+  // ダミー値をサーバーへ送信するのは安全上問題があるため禁止します。
+  // 
+  // この関数を呼び出す前に、正しいコミットメント生成処理を実装してください。
+  // 実装例:
+  //   const commitment = await computePedersenCommitment(randomness, pedersenParams);
+  //   // commitment をサーバーへ送信する処理に差し替える
+  throw new Error(
+    "submitCommitment: Pedersen commitment generation is not implemented yet; " +
+      "dummy commitments will not be sent to the server.",
+  );
 }
 
 // ============================================================================
