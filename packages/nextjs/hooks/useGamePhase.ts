@@ -20,8 +20,6 @@ import { updateHasActed } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 export const useGamePhase = (
   gameInfo: GameInfo | null,
   roomId: string,
