@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { GameResultModal } from "../../../components/game/GameResultModal";
 import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
@@ -51,6 +51,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   // Update chat hook with room info
   const chatHook = useGameChat(params.id, roomInfo);
+
+  // ゲーム終了を検知してモーダルを表示
+  useEffect(() => {
+    if (gameInfo?.result && gameInfo.result !== "InProgress") {
+      setShowGameResult(true);
+    }
+  }, [gameInfo?.result]);
 
   const handleSendMessage = () => {
     if (newMessage.trim() !== "") {
@@ -516,6 +523,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         <NightActionModal
           players={gameInfo.players}
           role={gameInfo.players.find(player => player.name === user?.username)?.role ?? "Villager"}
+          gameInfo={gameInfo}
+          username={user?.username ?? ""}
           onSubmit={(targetPlayerId: string) => {
             const userRole = gameInfo.players.find(player => player.name === user?.username)?.role;
             // handleNightAction(targetPlayerId, userRole);
@@ -531,6 +540,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           myId={gameInfo.players.find(player => player.name === user?.username)?.id ?? ""}
           roomId={gameInfo.room_id}
           players={gameInfo.players}
+          gameInfo={gameInfo}
+          username={user?.username ?? ""}
           onSubmit={(targetId: string) => {
             // handleVote(targetId);
             setShowVoteModal(false);

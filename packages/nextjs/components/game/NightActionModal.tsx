@@ -1,26 +1,36 @@
 import React, { useState } from "react";
 import type { Player, Role } from "../../app/types";
-import JSONbig from "json-bigint";
+import { useGameInputGenerator } from "../../hooks/useGameInputGenerator";
 import { useBackgroundNightAction } from "~~/hooks/useBackgroundNightAction";
 import { useDivination } from "~~/hooks/useDivination";
-import { DivinationInput, DivinationPublicInput, NodeKey, SecretSharingScheme } from "~~/utils/crypto/type";
+import type { GameInfo } from "~~/types/game";
 
 interface NightActionModalProps {
   players: Player[];
   role: Role;
+  gameInfo: GameInfo;
+  username: string;
   onSubmit: (targetPlayerId: string) => void;
   onClose: () => void;
   roomId: string;
   myId: string;
 }
 
-const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSubmit, onClose, roomId, myId }) => {
+const NightActionModal: React.FC<NightActionModalProps> = ({
+  players,
+  role,
+  gameInfo,
+  username,
+  onSubmit,
+  onClose,
+  roomId,
+  myId,
+}) => {
   const [selectedPlayer, setSelectedPlayer] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitDivination, error, proofStatus } = useDivination();
   const { handleBackgroundNightAction } = useBackgroundNightAction();
-
-  const JSONbigNative = JSONbig({ useNativeBigInt: true });
+  const { isReady, generateDivinationInput } = useGameInputGenerator(roomId, username, gameInfo);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,85 +41,22 @@ const NightActionModal: React.FC<NightActionModalProps> = ({ players, role, onSu
     try {
       // もし占い師の場合は、占い処理を行う
       if (role === "Seer") {
-        const res = await fetch("/pedersen_params2.json");
-        const params = await res.text();
-        const parsedParams = JSONbigNative.parse(params);
+        if (!isReady) {
+          throw new Error("Game crypto is not ready");
+        }
 
-        const randres = await fetch("/pedersen_randomness_0.json");
-        const randomness = await randres.text();
-        const parsedRandomness = JSONbigNative.parse(randomness);
+        // 占いデータを生成
+        const divinationData = await generateDivinationInput(selectedPlayer, false);
 
-        const commitres = await fetch("/pedersen_commitment_0.json");
-        const commitment = await commitres.text();
-        const parsedCommitment = JSONbigNative.parse(commitment);
-
-        const elgamalparamres = await fetch("/elgamal_params.json");
-        const elgamalparam = await elgamalparamres.text();
-        const parsedElgamalParam = JSONbigNative.parse(elgamalparam);
-
-        const elgamalpubkeyres = await fetch("/elgamal_public_key.json");
-        const elgamalpubkey = await elgamalpubkeyres.text();
-        const parsedElgamalPubkey = JSONbigNative.parse(elgamalpubkey);
-
-        const privateInput = {
-          id: players.findIndex(player => player.id === myId),
-          isWerewolf: [JSONbigNative.parse('["0","0","0","0"]'), null],
-          isTarget: players.map(player => [
-            player.id === selectedPlayer
-              ? JSONbigNative.parse(
-                  '["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]',
-                )
-              : JSONbigNative.parse('["0","0","0","0"]'),
-            null,
-          ]),
-          randomness: parsedRandomness,
-        };
-
-        const publicInput: DivinationPublicInput = {
-          pedersenParam: parsedParams,
-          elgamalParam: parsedElgamalParam,
-          pubKey: parsedElgamalPubkey,
-          //   playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
-          playerNum: players.length,
-        };
-
-        const nodeKeys: NodeKey[] = [
-          {
-            nodeId: "0",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "1",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "2",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
-          },
-        ];
-
-        const scheme: SecretSharingScheme = {
-          totalShares: 3,
-          modulus: 97,
-        };
-
-        const votingData: DivinationInput = {
-          privateInput,
-          publicInput,
-          nodeKeys,
-          scheme,
-        };
+        if (!divinationData) {
+          throw new Error("Failed to generate divination data");
+        }
 
         const alivePlayerCount = players.filter(player => !player.is_dead).length;
 
         console.log("Executing divination.");
-        await submitDivination(roomId, votingData, alivePlayerCount);
+        await submitDivination(roomId, divinationData, alivePlayerCount);
       }
-      //   else {
-      //     // 占い師以外のプレイヤーの場合、ダミーリクエストを送信
-      //     console.log("ダミーリクエストを送信します。");
-      //     await handleBackgroundNightAction(roomId, myId, players);
-      //   }
 
       // 親コンポーネントのonSubmit関数を呼び出す
       await onSubmit(selectedPlayer);

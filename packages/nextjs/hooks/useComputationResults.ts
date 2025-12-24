@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import JSONbig from "json-bigint";
+import { loadCryptoParams } from "~~/services/gameInputGenerator";
 import type { ChatMessage } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
 import { getPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
@@ -89,14 +90,9 @@ export const useComputationResults = (
                 const secretKeyText = await secretKeyResponse.text();
                 const secretKey = JSONbigNative.parse(secretKeyText);
 
-                // ElGamalパラメータをJSONファイルから読み取り
-                const paramsResponse = await fetch("/test_elgamal_params.json");
-                if (!paramsResponse.ok) {
-                  throw new Error("Failed to load ElGamal parameters");
-                }
-
-                const paramsText = await paramsResponse.text();
-                const elgamalParams = JSONbigNative.parse(paramsText);
+                // ElGamalパラメータを取得（キャッシュされたcryptoParamsから）
+                const cryptoParams = await loadCryptoParams();
+                const elgamalParams = cryptoParams.elgamalParam;
 
                 console.log("Starting divination result decryption:", {
                   ciphertext: result.resultData.ciphertext,

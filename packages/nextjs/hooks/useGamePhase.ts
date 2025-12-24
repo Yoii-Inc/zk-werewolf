@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useBackgroundNightAction } from "./useBackgroundNightAction";
 import { useDivination } from "./useDivination";
+import { useGameInputGenerator } from "./useGameInputGenerator";
 import { useRoleAssignment } from "./useRoleAssignment";
 import { useWinningJudge } from "./useWinningJudge";
 import JSONbig from "json-bigint";
+import * as GameInputGenerator from "~~/services/gameInputGenerator";
 import type { ChatMessage, GameInfo } from "~~/types/game";
 import {
   NodeKey,
@@ -29,10 +31,15 @@ export const useGamePhase = (
   const { submitRoleAssignment } = useRoleAssignment();
   const { handleBackgroundNightAction } = useBackgroundNightAction();
   const { proofStatus } = useDivination();
+  const { isReady, generateRoleAssignmentInput, generateWinningJudgementInput } = useGameInputGenerator(
+    roomId,
+    username || "",
+    gameInfo,
+  );
   const phaseTransitionProcessedRef = useRef<string | null>(null);
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
-  const handleGameResultCheckRef = useRef<((transitionId: string) => void) | null>(null);
+  const handleGameResultCheckRef = useRef<((transitionId: string, latestGameInfo: GameInfo) => void) | null>(null);
 
   // WebSocketからのフェーズ変更通知を処理
   useEffect(() => {
@@ -40,11 +47,65 @@ export const useGamePhase = (
       const customEvent = event as CustomEvent;
       const { fromPhase, toPhase, requiresDummyRequest } = customEvent.detail;
 
-      //   console.log(`WebSocketフェーズ変更通知受信: ${fromPhase} → ${toPhase}`);
+      console.log(`WebSocket phase change notification: ${fromPhase} → ${toPhase}`);
 
-      if (!gameInfo || !username) return;
+      // WebSocketイベント発生時に最新のgameInfoを取得
+      // (props経由のgameInfoはポーリングタイミング次第でnullや古い可能性がある)
+      const fetchLatestGameInfo = async (): Promise<GameInfo | null> => {
+        try {
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/state`,
+          );
+          if (!response.ok) {
+            console.error("Failed to fetch game info");
+            return null;
+          }
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error("Error fetching game info:", error);
+          return null;
+        }
+      };
 
-      const currentPlayer = gameInfo.players.find(player => player.name === username);
+      if (!username) {
+        console.warn("Username not available, skipping phase change processing");
+        return;
+      }
+
+      // 最新のgameInfoを取得
+      const latestGameInfo = await fetchLatestGameInfo();
+      if (!latestGameInfo) {
+        console.error("Failed to get latest game info, skipping phase change processing");
+        return;
+      }
+
+      // GameCryptoの初期化を確認・実行
+      const ensureGameCryptoReady = async (): Promise<boolean> => {
+        try {
+          // 既に初期化済みの場合はスキップ
+          if (GameInputGenerator.isInitialized(roomId, username)) {
+            console.log("Game crypto already initialized");
+            return true;
+          }
+
+          console.log("Initializing game crypto...");
+          await GameInputGenerator.initializeGameCrypto(roomId, username, latestGameInfo);
+          console.log("Game crypto initialization completed");
+          return true;
+        } catch (error) {
+          console.error("Failed to initialize game crypto:", error);
+          return false;
+        }
+      };
+
+      const isCryptoReady = await ensureGameCryptoReady();
+      if (!isCryptoReady) {
+        console.error("Game crypto not ready, skipping phase change processing");
+        return;
+      }
+
+      const currentPlayer = latestGameInfo.players.find(player => player.name === username);
       if (!currentPlayer) return;
 
       // トランジションIDを生成
@@ -57,31 +118,77 @@ export const useGamePhase = (
       // 処理の優先順位を明確にした順次実行
       const processingSteps: (() => Promise<void>)[] = [];
 
+      // Step 0: 役職配布リクエスト送信
+      if (fromPhase === "Waiting" && toPhase === "Night") {
+        console.log("Step 0: Starting role assignment process.");
+        const handleRoleAssignment = async () => {
+          try {
+            const playerCount = latestGameInfo.players.length;
+
+            // latestGameInfoを使って直接サービスから入力を生成
+            const roleAssignmentData = await GameInputGenerator.generateRoleAssignmentInput(
+              roomId,
+              username,
+              latestGameInfo,
+            );
+
+            console.log(
+              `Player ${username} (ID: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
+            );
+
+            await submitRoleAssignment(roomId, roleAssignmentData, playerCount);
+          } catch (error) {
+            console.error("Role assignment process error:", error);
+
+            // サーバー側エラーメッセージをチェック
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (errorMessage.includes("Role assignment has already been completed")) {
+              console.log("Role assignment already completed");
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: "Role assignment already completed",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            } else {
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: "Role assignment process failed",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            }
+          }
+        };
+
+        handleRoleAssignment();
+      }
+
       // Step 1: ダミーリクエスト送信
       if (
         requiresDummyRequest &&
         fromPhase === "Night" &&
         toPhase === "DivinationProcessing" &&
-        currentPlayer.role !== "Seer" &&
         !currentPlayer.is_dead
       ) {
         processingSteps.push(async () => {
-          console.log(`Step 1: Non-Seer player ${username} sending dummy request.`);
+          console.log(`Step 1: Player ${username} sending dummy request.`);
 
           try {
-            await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players);
-
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Dummy request sent",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
+            await handleBackgroundNightAction(
+              roomId,
+              currentPlayer.id,
+              latestGameInfo.players,
+              username,
+              latestGameInfo,
+            );
 
             console.log("Step 1: Dummy request completed");
           } catch (error) {
             console.error("Step 1: Dummy request error:", error);
+            // TODO: サーバー側でエラーメッセージを送るようになったら削除
             addMessage({
               id: Date.now().toString(),
               sender: "System",
@@ -102,7 +209,13 @@ export const useGamePhase = (
           console.log(`Step 2: Starting winning judgement process: ${fromPhase} → ${toPhase}`);
 
           if (handleGameResultCheckRef.current) {
-            handleGameResultCheckRef.current(transitionId);
+            // 最新のgameInfoを再取得して渡す（投票結果反映後の状態を確実に取得）
+            const currentGameInfo = await fetchLatestGameInfo();
+            if (currentGameInfo) {
+              handleGameResultCheckRef.current(transitionId, currentGameInfo);
+            } else {
+              console.error("Failed to fetch latest game info for winning judgement");
+            }
           }
 
           console.log("Step 2: Winning judgement process completed");
@@ -168,116 +281,35 @@ export const useGamePhase = (
 
   // 勝敗判定処理を行う関数
   const handleGameResultCheck = useCallback(
-    async (phaseTransitionId: string) => {
-      if (!gameInfo || winningJudgementSentRef.current === phaseTransitionId) return;
-
-      // 占い師の結果を待つ処理
-      const waitForDivination = () => {
-        // Non-Seer players proceed immediately with winning judgement
-        const currentPlayer = gameInfo.players.find(player => player.name === username);
-        if (!currentPlayer || currentPlayer.role !== "Seer") {
-          return Promise.resolve();
-        }
-
-        // 占い師の場合は、占い結果が完了するまで待つ（最大30秒）
-        return new Promise<void>(resolve => {
-          const startTime = Date.now();
-          const maxWaitTime = 30000; // 30秒
-
-          const checkDivination = () => {
-            const elapsedTime = Date.now() - startTime;
-
-            if (divinationCompletedRef.current) {
-              console.log("Divination processing completed, executing winning judgement");
-              resolve();
-            } else if (elapsedTime >= maxWaitTime) {
-              console.log("Divination wait timeout. Continuing with winning judgement");
-              resolve();
-            } else {
-              console.log(`Waiting for divination processing... (${Math.round(elapsedTime / 1000)} seconds elapsed)`);
-              setTimeout(checkDivination, 1000); // 1秒ごとにチェック
-            }
-          };
-
-          checkDivination();
-        });
-      };
+    async (phaseTransitionId: string, currentGameInfo: GameInfo) => {
+      if (!username) return;
 
       try {
         // このフェーズ変更での勝敗判定をすでに実行済みとマーク
         winningJudgementSentRef.current = phaseTransitionId;
         console.log(`Starting winning judgement process. Transition ID: ${phaseTransitionId}`);
 
-        // Wait for divination results
-        await waitForDivination();
-        const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
+        const myId = currentGameInfo.players.find(player => player.name === username)?.id ?? "";
 
-        const res = await fetch("/pedersen_params2.json");
-        const params = await res.text();
-        const parsedParams = JSONbigNative.parse(params);
-
-        const randres = await fetch("/pedersen_randomness_0.json");
-        const randomness = await randres.text();
-        const parsedRandomness = JSONbigNative.parse(randomness);
-
-        const commitres = await fetch("/pedersen_commitment_0.json");
-        const commitment = await commitres.text();
-        const parsedCommitment = JSONbigNative.parse(commitment);
-
-        const players = gameInfo.players;
-        const myId = gameInfo.players.find(player => player.name === username)?.id ?? "";
-
-        const amWerewolfValues =
-          gameInfo.players.find(player => player.name === username)?.role === "Werewolf"
-            ? JSONbigNative.parse(
-                '["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"]',
-              )
-            : JSONbigNative.parse('["0", "0", "0", "0"]');
-
-        const privateInput = {
-          id: players.findIndex(player => player.id === myId),
-          amWerewolf: [amWerewolfValues, null],
-          playerRandomness: parsedRandomness,
-        };
-
-        const publicInput: WinningJudgementPublicInput = {
-          pedersenParam: parsedParams,
-          playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
-        };
-
-        const nodeKeys: NodeKey[] = [
-          {
-            nodeId: "0",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "1",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
-          },
-          {
-            nodeId: "2",
-            publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
-          },
-        ];
-
-        const scheme: SecretSharingScheme = {
-          totalShares: 3,
-          modulus: 97,
-        };
-
-        const winningJudgeData: WinningJudgementInput = {
-          privateInput,
-          publicInput,
-          nodeKeys,
-          scheme,
-        };
-
-        // Only proceed if the player is alive
-        const isPlayerAlive = gameInfo.players.find(player => player.name === username)?.is_dead === false;
+        // 最新のgameInfoを使って生存確認（投票結果が反映された状態）
+        const isPlayerAlive = currentGameInfo.players.find(player => player.name === username)?.is_dead === false;
         if (!isPlayerAlive) {
           console.log(`Player ${myId} is dead - skipping winning judgement`);
           return;
         }
+
+        const alivePlayersCount = currentGameInfo.players.filter(player => !player.is_dead).length;
+
+        if (!isReady) {
+          throw new Error("Game crypto not ready");
+        }
+
+        // 最新のgameInfoを使って勝利判定データを生成
+        const winningJudgeData = await GameInputGenerator.generateWinningJudgementInput(
+          roomId,
+          username,
+          currentGameInfo,
+        );
 
         console.log(`Player ${myId} is sending winning judgement proof request`);
         await submitWinningJudge(roomId, winningJudgeData, alivePlayersCount);
@@ -295,124 +327,13 @@ export const useGamePhase = (
         return () => clearTimeout(resetTimer);
       }
     },
-    [gameInfo, roomId, username, submitWinningJudge],
+    [roomId, username, submitWinningJudge, isReady],
   );
 
   // handleGameResultCheckをuseRefに設定
   useEffect(() => {
     handleGameResultCheckRef.current = handleGameResultCheck;
   }, [handleGameResultCheck]);
-
-  // 役職配布の処理
-  useEffect(() => {
-    if (gameInfo?.phase === "Night" && gameInfo.players.some(p => p.role === null)) {
-      const handleRoleAssignment = async () => {
-        try {
-          const playerCount = gameInfo.players.length;
-          // 型エラーを避けるため、コメントアウト
-
-          const res = await fetch("/pedersen-params.json");
-          const params = await res.text();
-          const parsedParams = JSONbigNative.parse(params);
-
-          const commitres = await fetch("/pedersen_commitment_0.json");
-          const commitment = await commitres.text();
-          const parsedCommitment = JSONbigNative.parse(commitment);
-
-          //   const privateInput: RoleAssignmentPrivateInput = {
-          //     id: gameInfo.players.findIndex(player => player.name === username),
-          //     shuffleMatrices: null,
-          //     randomness: null,
-          //     playerRandomness: parsedParams,
-          //   };
-
-          const publicInput: RoleAssignmentPublicInput = {
-            numPlayers: 3,
-            maxGroupSize: 3,
-            pedersenParam: parsedParams,
-            tauMatrix: null,
-            roleCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
-            playerCommitment: [parsedCommitment, parsedCommitment, parsedCommitment],
-            groupingParameter: {
-              Villager: [2, false],
-              FortuneTeller: [1, false],
-              Werewolf: [1, false],
-            },
-          };
-
-          const rinputres = await fetch("/test_role_assignment_input2.json");
-          const rinput = await rinputres.text();
-          const parsedRinput: RoleAssignmentInput = JSONbigNative.parse(rinput);
-
-          const roleAssignmentData: RoleAssignmentInput = {
-            privateInput: parsedRinput.privateInput,
-            publicInput: parsedRinput.publicInput,
-            // publicInput,
-            nodeKeys: [
-              {
-                nodeId: "0",
-                publicKey: process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
-              },
-              {
-                nodeId: "1",
-                publicKey: process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
-              },
-              {
-                nodeId: "2",
-                publicKey: process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
-              },
-            ],
-            scheme: {
-              totalShares: 3,
-              modulus: 97,
-            },
-          };
-
-          roleAssignmentData.privateInput.id = gameInfo.players.findIndex(player => player.name === username);
-
-          console.log(
-            `Player ${username} (ID: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
-          );
-
-          await submitRoleAssignment(roomId, roleAssignmentData, playerCount);
-
-          addMessage({
-            id: Date.now().toString(),
-            sender: "System",
-            message: "Role assignment process started",
-            timestamp: new Date().toISOString(),
-            type: "system",
-          });
-        } catch (error) {
-          console.error("Role assignment process error:", error);
-
-          // サーバー側エラーメッセージをチェック
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          if (errorMessage.includes("Role assignment has already been completed")) {
-            console.log("Role assignment already completed");
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Role assignment already completed",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
-          } else {
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Role assignment process failed",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
-          }
-        }
-      };
-
-      handleRoleAssignment();
-    }
-    //   }, [gameInfo?.phase, roomId, username, addMessage, submitRoleAssignment]);
-  }, [gameInfo?.phase, roomId, username, gameInfo?.players]);
 
   // フェーズ変更の検出（基本的な更新のみ）
   useEffect(() => {

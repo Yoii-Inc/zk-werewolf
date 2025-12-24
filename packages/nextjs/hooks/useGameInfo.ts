@@ -30,7 +30,7 @@ export const useGameInfo = (
           `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/room/${roomId}`,
         );
         if (!response.ok) {
-          throw new Error("ルーム情報の取得に失敗しました");
+          throw new Error("Failed to fetch room info");
         }
         const data = await response.json();
         setRoomInfo(data);
@@ -47,7 +47,7 @@ export const useGameInfo = (
           `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/state`,
         );
         if (!response.ok) {
-          throw new Error("ゲーム情報の取得に失敗しました");
+          throw new Error("Failed to fetch game info");
         }
         const data = await response.json();
         console.log(data);

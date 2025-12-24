@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { NightAction, NightActionRequest } from "~~/app/room/types";
 import type { ChatMessage, GameInfo, PrivateGameInfo } from "~~/types/game";
 import {
   clearPrivateGameInfo,
@@ -35,14 +34,6 @@ export const useGameActions = (
         try {
           initializePrivateGameInfo(roomId, userId);
           console.log("PrivateGameInfo initialized with null role in session storage");
-
-          addMessage({
-            id: Date.now().toString(),
-            sender: "System",
-            message: "Game has started. Please wait for role assignment...",
-            timestamp: new Date().toISOString(),
-            type: "system",
-          });
         } catch (storageError) {
           console.error("PrivateGameInfo initialization error:", storageError);
         }
@@ -56,99 +47,6 @@ export const useGameActions = (
       setIsStarting(false);
     }
   };
-
-  //   const handleNightAction = async (targetPlayerId: string, userRole?: string) => {
-  //     try {
-  //       if (!gameInfo) {
-  //         throw new Error("ゲーム情報が取得できません");
-  //       }
-
-  //       const action: NightAction = (() => {
-  //         switch (userRole) {
-  //           case "Werewolf":
-  //             return { Attack: { target_id: targetPlayerId } };
-  //           case "Seer":
-  //             return { Divine: { target_id: targetPlayerId } };
-  //           default:
-  //             throw new Error("夜の行動を実行できない役職です");
-  //         }
-  //       })();
-
-  //       const request: NightActionRequest = {
-  //         player_id: userId ?? "",
-  //         action: action,
-  //       };
-
-  //       const response = await fetch(`http://localhost:8080/api/game/${roomId}/actions/night-action`, {
-  //         method: "POST",
-  //         headers: {
-  //           "Content-Type": "application/json",
-  //         },
-  //         body: JSON.stringify(request),
-  //       });
-
-  //       if (!response.ok) {
-  //         throw new Error("夜の行動の送信に失敗しました");
-  //       }
-
-  //       // PrivateGameInfoのhasActedフラグを更新
-  //       if (userId) {
-  //         updateHasActed(roomId, userId, true);
-  //         console.log("PrivateGameInfo: hasActed updated to true after night action");
-  //       }
-
-  //       addMessage({
-  //         id: Date.now().toString(),
-  //         sender: "システム",
-  //         message: "夜の行動を実行しました",
-  //         timestamp: new Date().toISOString(),
-  //         type: "system",
-  //       });
-
-  //       return true;
-  //     } catch (error) {
-  //       console.error("夜の行動エラー:", error);
-  //       return false;
-  //     }
-  //   };
-
-  //   const handleVote = async (targetId: string) => {
-  //     try {
-  //       const response = await fetch(`http://localhost:8080/api/game/${roomId}/actions/vote`, {
-  //         method: "POST",
-  //         headers: {
-  //           "Content-Type": "application/json",
-  //         },
-  //         body: JSON.stringify({
-  //           voter_id: userId,
-  //           target_id: targetId,
-  //         }),
-  //       });
-
-  //       if (!response.ok) {
-  //         throw new Error("投票の送信に失敗しました");
-  //       }
-
-  //       // PrivateGameInfoのhasActedフラグを更新
-  //       if (userId) {
-  //         updateHasActed(roomId, userId, true);
-  //         console.log("PrivateGameInfo: hasActed updated to true after voting");
-  //       }
-
-  //       addMessage({
-  //         id: Date.now().toString(),
-  //         sender: "システム",
-  //         message: "投票を実行しました",
-  //         timestamp: new Date().toISOString(),
-  //         type: "system",
-  //       });
-
-  //       return true;
-  //     } catch (error) {
-  //       console.error("投票エラー:", error);
-  //       return false;
-  //     }
-  //   };
 
   const handleChangeRole = async (playerId: string, newRole: string) => {
     try {
@@ -188,14 +86,6 @@ export const useGameActions = (
         updatePrivateGameInfo(roomId, playerId, { playerRole: roleType });
         console.log(`Self role changed to ${newRole}, privateGameInfo updated`);
       }
-
-      addMessage({
-        id: Date.now().toString(),
-        sender: "System",
-        message: `${gameInfo?.players.find(p => p.id === playerId)?.name || "Unknown"}'s role changed to ${newRole}`,
-        timestamp: new Date().toISOString(),
-        type: "system",
-      });
 
       return true;
     } catch (error) {

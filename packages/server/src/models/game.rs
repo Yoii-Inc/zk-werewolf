@@ -38,30 +38,22 @@ pub struct Game {
     pub chat_log: super::chat::ChatLog,
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
-    pub divination_results: Vec<DivinationResult>,
     pub computation_results: ComputationResults,
     pub started_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DivinationResult {
-    pub ciphertext:
-        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
-    pub phase: GamePhase,
-    pub day_count: u32,
-    pub performed_at: DateTime<Utc>,
 }
 
 // 計算結果を管理する構造体群
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComputationResults {
     pub role_assignment: Option<ComputationEntry<RoleAssignmentComputationResult>>,
+    pub divination: Vec<ComputationEntry<DivinationComputationResult>>,
 }
 
 impl Default for ComputationResults {
     fn default() -> Self {
         ComputationResults {
             role_assignment: None,
+            divination: Vec::new(),
         }
     }
 }
@@ -70,7 +62,6 @@ impl Default for ComputationResults {
 pub struct ComputationEntry<T> {
     pub id: String,
     pub computed_at: DateTime<Utc>,
-    pub initiated_by: String,
     pub phase: GamePhase,
     pub day_count: u32,
     pub result: T,
@@ -86,6 +77,12 @@ pub struct RoleAssignmentComputationResult {
 pub struct PlayerRoleAssignment {
     pub player_id: String,
     pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DivinationComputationResult {
+    pub ciphertext:
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -302,7 +299,6 @@ impl Game {
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
             batch_request: BatchRequest::new(),
-            divination_results: Vec::new(),
             computation_results: ComputationResults::default(),
             started_at: Some(Utc::now()),
         }
@@ -315,7 +311,8 @@ impl Game {
 
     pub fn has_divination_for_current_phase(&self) -> bool {
         // 現在のフェーズ・日数での占い結果が存在するかチェック
-        self.divination_results
+        self.computation_results
+            .divination
             .iter()
             .any(|result| result.phase == self.phase && result.day_count == self.day_count)
     }
@@ -325,15 +322,26 @@ impl Game {
         &self,
         phase: &GamePhase,
         day_count: u32,
-    ) -> Option<&DivinationResult> {
-        self.divination_results
+    ) -> Option<&ComputationEntry<DivinationComputationResult>> {
+        self.computation_results
+            .divination
             .iter()
             .find(|result| result.phase == *phase && result.day_count == day_count)
     }
 
     // 占い結果を履歴に追加
-    pub fn add_divination_result(&mut self, result: DivinationResult) {
-        self.divination_results.push(result);
+    pub fn save_divination_result(
+        &mut self,
+        id: String,
+        ciphertext: <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
+    ) {
+        self.computation_results.divination.push(ComputationEntry {
+            id,
+            computed_at: Utc::now(),
+            phase: self.phase.clone(),
+            day_count: self.day_count,
+            result: DivinationComputationResult { ciphertext },
+        });
     }
 
     // より厳密な占い可能性チェック
@@ -379,7 +387,6 @@ impl Game {
     pub fn save_role_assignment_result(
         &mut self,
         id: String,
-        initiated_by: String,
         player_roles: Vec<PlayerRoleAssignment>,
         proof_data: serde_json::Value,
     ) {
@@ -388,7 +395,6 @@ impl Game {
             computed_at: Utc::now(),
             phase: self.phase.clone(),
             day_count: self.day_count,
-            initiated_by,
             result: RoleAssignmentComputationResult {
                 player_roles,
                 proof_data,
@@ -595,19 +601,50 @@ impl Game {
 
         // identifierをzk-mpc-nodeに送信するなどの処理を行う
         let node_urls = CONFIG.zk_mpc_node_urls();
+        println!("Sending proof request to ZK-MPC nodes: {:?}", node_urls);
+
         for url in &node_urls {
+            println!("Sending request to {}", url);
             let response = client
                 .post(url)
                 .json(&req_to_node)
                 .send()
                 .await
-                .map_err(|e| e.to_string());
+                .map_err(|e| {
+                    let error_msg = format!("Failed to send request to {}: {}", url, e);
+                    println!("ERROR: {}", error_msg);
+                    error_msg
+                });
             responses.push(response);
         }
 
+        // レスポンスを処理
         for (url, response) in node_urls.iter().zip(responses) {
-            let response_body: serde_json::Value = response.unwrap().json().await.unwrap();
-            println!("Response from {}: {:?}", url, response_body);
+            match response {
+                Ok(resp) => match resp.json::<serde_json::Value>().await {
+                    Ok(response_body) => {
+                        println!("Response from {}: {:?}", url, response_body);
+                    }
+                    Err(e) => {
+                        println!("ERROR: Failed to parse JSON response from {}: {}", url, e);
+                        self.batch_request.status = BatchStatus::Failed;
+                        self.chat_log.add_system_message(format!(
+                            "Failed to process proof: Invalid response from ZK node at {}",
+                            url
+                        ));
+                        return;
+                    }
+                },
+                Err(e) => {
+                    println!("ERROR: Failed to get response from {}: {}", url, e);
+                    self.batch_request.status = BatchStatus::Failed;
+                    self.chat_log.add_system_message(format!(
+                        "Failed to connect to ZK node at {}: {}",
+                        url, e
+                    ));
+                    return;
+                }
+            }
         }
 
         // 3. 結果の確認（非同期で実行）
@@ -642,15 +679,11 @@ impl Game {
                             }
                         };
 
-                        // フェーズとday_count情報を含む占い結果を作成
-                        let divination_result = DivinationResult {
-                            ciphertext: divination_ciphertext,
-                            phase: self.phase.clone(),
-                            day_count: self.day_count,
-                            performed_at: Utc::now(),
-                        };
-
-                        self.add_divination_result(divination_result.clone());
+                        // 占い結果を保存
+                        self.save_divination_result(
+                            self.batch_request.batch_id.clone(),
+                            divination_ciphertext,
+                        );
                         println!("Divination result processed successfully.");
                         self.chat_log.add_system_message(
                             "Divination result has been generated.".to_string(),
@@ -687,11 +720,12 @@ impl Game {
                         }
 
                         // 全プレイヤーに占い結果を通知
+                        let latest_divination = self.computation_results.divination.last().unwrap();
                         let result_data = serde_json::json!({
-                            "ciphertext": serde_json::to_value(&divination_result.ciphertext).unwrap_or_default(),
-                            "phase": divination_result.phase,
-                            "day_count": divination_result.day_count,
-                            "performed_at": divination_result.performed_at,
+                            "ciphertext": serde_json::to_value(&latest_divination.result.ciphertext).unwrap_or_default(),
+                            "phase": latest_divination.phase,
+                            "day_count": latest_divination.day_count,
+                            "performed_at": latest_divination.computed_at,
                             "status": "ready"
                         });
 
@@ -764,6 +798,14 @@ impl Game {
 
                         // Update phase
                         self.change_phase(GamePhase::Result);
+
+                        // フェーズ変更をWebSocketで通知
+                        if let Err(e) = app_state
+                            .broadcast_phase_change(&self.room_id, "Voting", "Result")
+                            .await
+                        {
+                            println!("Failed to broadcast phase change: {}", e);
+                        }
 
                         // 4. Clear vote results
                         self.vote_results.clear();
@@ -906,21 +948,8 @@ impl Game {
                         }
 
                         // 計算結果を保存
-                        let initiated_by = self
-                            .batch_request
-                            .requests
-                            .first()
-                            .and_then(|req| match req {
-                                ClientRequestType::RoleAssignment(role_req) => {
-                                    Some(role_req.user_id.clone())
-                                }
-                                _ => None,
-                            })
-                            .unwrap_or_else(|| "system".to_string());
-
                         self.save_role_assignment_result(
                             self.batch_request.batch_id.clone(),
-                            initiated_by,
                             player_role_assignments.clone(),
                             serde_json::json!({
                                 "raw_role_result": role_result.iter().map(|r| r.into_repr().to_string()).collect::<Vec<_>>(),
@@ -1014,6 +1043,7 @@ impl std::fmt::Display for Game {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct CryptoParameters {
     // public
     pub pedersen_param: <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Parameters,
@@ -1050,25 +1080,5 @@ impl Clone for CryptoParameters {
 impl std::fmt::Debug for CryptoParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unimplemented!("Debug not implemented for CryptoParameters");
-    }
-}
-
-impl Serialize for CryptoParameters {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Dummy implementation
-        unimplemented!("Serialization not implemented")
-    }
-}
-
-impl<'de> Deserialize<'de> for CryptoParameters {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // Dummy implementation
-        unimplemented!("Deserialization not implemented")
     }
 }

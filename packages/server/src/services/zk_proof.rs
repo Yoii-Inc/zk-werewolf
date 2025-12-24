@@ -1,16 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
-
 use crate::utils::config::CONFIG;
-use axum::{http::StatusCode, Json};
 use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
-use mpc_circuits::CircuitIdentifier;
 use reqwest::Client;
-use serde_json::json;
-use tokio::{
-    sync::Mutex,
-    time::{sleep, Duration},
-};
-use tracing_subscriber::field::debug;
+use tokio::time::{sleep, Duration};
 use zk_mpc::marlin::MFr;
 use zk_mpc_node::{
     models::{ProofOutput, ProofOutputType, ProofRequest, ProofResponse},

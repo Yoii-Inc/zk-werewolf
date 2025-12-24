@@ -5,7 +5,7 @@
 起動
 
 ```bash
-cargo run
+ZK_MPC_NODE_0_HTTP=http://localhost:9000 ZK_MPC_NODE_1_HTTP=http://localhost:9001 ZK_MPC_NODE_2_HTTP=http://localhost:9002 cargo run --release
 ```
 
 websocket connect

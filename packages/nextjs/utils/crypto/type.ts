@@ -55,33 +55,51 @@ export type WinningJudgementOutput = string;
 
 ////////////////////
 
+export type Field = bigint[] | null;
+
 export interface PedersenParam {
   randomness_generator: {
-    x: (bigint[] | null)[];
-    y: (bigint[] | null)[];
-    t: (bigint[] | null)[];
-    z: (bigint[] | null)[];
+    x: Field[];
+    y: Field[];
+    t: Field[];
+    z: Field[];
     _params: null;
   }[];
   generators: {
-    x: (bigint[] | null)[];
-    y: (bigint[] | null)[];
-    t: (bigint[] | null)[];
-    z: (bigint[] | null)[];
+    x: Field[];
+    y: Field[];
+    t: Field[];
+    z: Field[];
     _params: null;
   }[][];
 }
 
 export interface PedersenCommitment {
-  x: (bigint[] | null)[];
-  y: (bigint[] | null)[];
+  x: Field[];
+  y: Field[];
   _params: null;
 }
+
+export interface ElGamalParam {
+  generator: {
+    x: Field;
+    y: Field;
+    _params: null;
+  };
+}
+
+export interface ElGamalPublicKey {
+  x: Field;
+  y: Field;
+  _params: null;
+}
+
+export type ElGamalSecretKey = Field;
 
 export interface AnonymousVotingPrivateInput {
   id: number;
   //   isTargetId: string[];
-  isTargetId: (bigint[] | null)[][];
+  isTargetId: Field[][];
   playerRandomness: (number[] | null)[];
 }
 export interface AnonymousVotingPublicInput {
@@ -129,8 +147,8 @@ type GroupingParameter = {
 // TODO: modify.
 export interface DivinationPrivateInput {
   id: number;
-  isWerewolf: (bigint[] | null)[];
-  isTarget: (bigint[] | null)[][];
+  isWerewolf: Field[];
+  isTarget: Field[][];
   //   randomness: (number[] | null)[];
   randomness: any;
 }
@@ -144,8 +162,8 @@ export interface DivinationPublicInput {
 
 export interface WinningJudgementPrivateInput {
   id: number;
-  amWerewolf: (bigint[] | null)[];
-  playerRandomness: (bigint[] | null)[];
+  amWerewolf: Field[];
+  playerRandomness: Field[];
 }
 export interface WinningJudgementPublicInput {
   pedersenParam: PedersenParam;

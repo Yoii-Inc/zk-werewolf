@@ -11,7 +11,6 @@ use crate::{
 use ark_bls12_377::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::UniformRand;
-use ark_std::test_rng;
 use rand::seq::SliceRandom;
 use serde_json::json;
 use std::time::Duration;
@@ -21,7 +20,6 @@ use zk_mpc::{
     input::{MpcInputTrait, WerewolfKeyInput, WerewolfMpcInput},
     marlin::MFr,
 };
-use zk_mpc_node::ProofOutputType;
 
 // ゲームのライフサイクル管理
 pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String> {
@@ -30,7 +28,10 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
     if let Some(room) = rooms.get_mut(room_id) {
         // プレイヤー数に応じて役職を振り分け
         let roles = assign_roles(room.players.len())?;
-        let new_game = Game::new(room_id.to_string(), room.players.clone());
+        let mut new_game = Game::new(room_id.to_string(), room.players.clone());
+
+        // 暗号パラメータの初期化
+        initialize_crypto_parameters(&mut new_game);
 
         let mut games = state.games.lock().await;
         let game = games.entry(room_id.to_string()).or_insert(new_game);
@@ -130,6 +131,8 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
             game.resolve_night_actions();
         } else if current_phase == GamePhase::Voting {
             game.resolve_voting();
+        } else if current_phase == GamePhase::Result {
+            game.advance_to_next_day();
         }
         game.add_phase_change_message(current_phase.clone(), next_phase.clone());
         game.phase = next_phase.clone();
@@ -236,7 +239,7 @@ pub async fn process_night_action(
                     .map(|b| Fr::from(b))
                     .collect::<Vec<_>>();
 
-                let rng = &mut test_rng();
+                let rng = &mut rand::thread_rng();
 
                 // let (elgamal_param, elgamal_pubkey) = get_elgamal_param_pubkey();
                 let elgamal_param = game
@@ -503,7 +506,7 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
 
     println!("num_players: {}", num_players);
 
-    let rng = &mut test_rng();
+    let rng = &mut rand::thread_rng();
 
     // generate pedersen_commitment parameters
     // TODO: revise. generate randomness secretly
@@ -584,4 +587,43 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
     game.crypto_parameters = crypto_parameters.clone();
 
     Ok(())
+}
+
+// 暗号パラメータの初期化関数
+fn initialize_crypto_parameters(game: &mut Game) {
+    let mut rng = rand::thread_rng();
+
+    // Pedersenコミットメントパラメータの生成
+    let pedersen_param =
+        <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::setup(&mut rng).unwrap();
+
+    // ElGamalパラメータと鍵ペアの生成
+    let elgamal_param =
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::setup(
+            &mut rng,
+        )
+        .unwrap();
+    let (pk, sk) =
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::keygen(
+            &elgamal_param,
+            &mut rng,
+        )
+        .unwrap();
+
+    // プレイヤーごとのランダムネスとコミットメント（空で初期化、後でクライアントから受信）
+    let player_randomness: Vec<Fr> = Vec::new();
+    let player_commitment: Vec<
+        <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output,
+    > = Vec::new();
+
+    game.crypto_parameters = Some(crate::models::game::CryptoParameters {
+        pedersen_param,
+        player_randomness,
+        player_commitment,
+        fortune_teller_public_key: pk,
+        elgamal_param,
+        secret_key: sk,
+    });
+
+    tracing::info!("Initialized crypto parameters for game {}", game.room_id);
 }
