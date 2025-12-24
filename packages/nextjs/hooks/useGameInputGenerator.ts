@@ -32,12 +32,36 @@ export const useGameInputGenerator = (roomId: string, username: string, gameInfo
   return {
     isReady,
     // 各入力生成関数をそのまま返す
-    generateRoleAssignmentInput: () => GameInput.generateRoleAssignmentInput(roomId, username, gameInfo!),
-    generateDivinationInput: (targetId: string, isDummy: boolean) =>
-      GameInput.generateDivinationInput(roomId, username, gameInfo!, targetId, isDummy),
-    generateVotingInput: (votedForId: string) => GameInput.generateVotingInput(roomId, username, gameInfo!, votedForId),
-    encryptVotingData: (votedForId: string) => GameInput.encryptVotingData(roomId, username, gameInfo!, votedForId),
-    generateWinningJudgementInput: () => GameInput.generateWinningJudgementInput(roomId, username, gameInfo!),
+    generateRoleAssignmentInput: () => {
+      if (!gameInfo) {
+        throw new Error("gameInfo is not available for generateRoleAssignmentInput");
+      }
+      return GameInput.generateRoleAssignmentInput(roomId, username, gameInfo);
+    },
+    generateDivinationInput: (targetId: string, isDummy: boolean) => {
+      if (!gameInfo) {
+        throw new Error("gameInfo is not available for generateDivinationInput");
+      }
+      return GameInput.generateDivinationInput(roomId, username, gameInfo, targetId, isDummy);
+    },
+    generateVotingInput: (votedForId: string) => {
+      if (!gameInfo) {
+        throw new Error("gameInfo is not available for generateVotingInput");
+      }
+      return GameInput.generateVotingInput(roomId, username, gameInfo, votedForId);
+    },
+    encryptVotingData: (votedForId: string) => {
+      if (!gameInfo) {
+        throw new Error("gameInfo is not available for encryptVotingData");
+      }
+      return GameInput.encryptVotingData(roomId, username, gameInfo, votedForId);
+    },
+    generateWinningJudgementInput: () => {
+      if (!gameInfo) {
+        throw new Error("gameInfo is not available for generateWinningJudgementInput");
+      }
+      return GameInput.generateWinningJudgementInput(roomId, username, gameInfo);
+    },
   };
 };
 
