@@ -41,7 +41,7 @@ export const useGamePhase = (
   const phaseTransitionProcessedRef = useRef<string | null>(null);
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
-  const handleGameResultCheckRef = useRef<((transitionId: string) => void) | null>(null);
+  const handleGameResultCheckRef = useRef<((transitionId: string, latestGameInfo: GameInfo) => void) | null>(null);
 
   // WebSocketからのフェーズ変更通知を処理
   useEffect(() => {
@@ -226,7 +226,13 @@ export const useGamePhase = (
           console.log(`Step 2: Starting winning judgement process: ${fromPhase} → ${toPhase}`);
 
           if (handleGameResultCheckRef.current) {
-            handleGameResultCheckRef.current(transitionId);
+            // 最新のgameInfoを再取得して渡す（投票結果反映後の状態を確実に取得）
+            const currentGameInfo = await fetchLatestGameInfo();
+            if (currentGameInfo) {
+              handleGameResultCheckRef.current(transitionId, currentGameInfo);
+            } else {
+              console.error("Failed to fetch latest game info for winning judgement");
+            }
           }
 
           console.log("Step 2: Winning judgement process completed");
@@ -292,30 +298,35 @@ export const useGamePhase = (
 
   // 勝敗判定処理を行う関数
   const handleGameResultCheck = useCallback(
-    async (phaseTransitionId: string) => {
-      if (!gameInfo) return;
+    async (phaseTransitionId: string, currentGameInfo: GameInfo) => {
+      if (!username) return;
 
       try {
         // このフェーズ変更での勝敗判定をすでに実行済みとマーク
         winningJudgementSentRef.current = phaseTransitionId;
         console.log(`Starting winning judgement process. Transition ID: ${phaseTransitionId}`);
 
-        const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
+        const myId = currentGameInfo.players.find(player => player.name === username)?.id ?? "";
+
+        // 最新のgameInfoを使って生存確認（投票結果が反映された状態）
+        const isPlayerAlive = currentGameInfo.players.find(player => player.name === username)?.is_dead === false;
+        if (!isPlayerAlive) {
+          console.log(`Player ${myId} is dead - skipping winning judgement`);
+          return;
+        }
+
+        const alivePlayersCount = currentGameInfo.players.filter(player => !player.is_dead).length;
 
         if (!isReady) {
           throw new Error("Game crypto not ready");
         }
 
-        const myId = gameInfo.players.find(player => player.name === username)?.id ?? "";
-
-        const winningJudgeData = await generateWinningJudgementInput();
-
-        // Only proceed if the player is alive
-        const isPlayerAlive = gameInfo.players.find(player => player.name === username)?.is_dead === false;
-        if (!isPlayerAlive) {
-          console.log(`Player ${myId} is dead - skipping winning judgement`);
-          return;
-        }
+        // 最新のgameInfoを使って勝利判定データを生成
+        const winningJudgeData = await GameInputGenerator.generateWinningJudgementInput(
+          roomId,
+          username,
+          currentGameInfo,
+        );
 
         console.log(`Player ${myId} is sending winning judgement proof request`);
         await submitWinningJudge(roomId, winningJudgeData, alivePlayersCount);
@@ -333,7 +344,7 @@ export const useGamePhase = (
         return () => clearTimeout(resetTimer);
       }
     },
-    [gameInfo, roomId, username, submitWinningJudge, isReady],
+    [roomId, username, submitWinningJudge, isReady],
   );
 
   // handleGameResultCheckをuseRefに設定
