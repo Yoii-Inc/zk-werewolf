@@ -581,6 +581,13 @@ impl Game {
     async fn process_batch(&mut self, app_state: &crate::state::AppState) {
         self.batch_request.status = BatchStatus::Processing;
 
+        // batch_request.requestsをuser_idでソート（数値文字列として）
+        self.batch_request.requests.sort_by(|a, b| {
+            let a_user_id = a.get_user_id().parse::<u32>().unwrap_or(u32::MAX);
+            let b_user_id = b.get_user_id().parse::<u32>().unwrap_or(u32::MAX);
+            a_user_id.cmp(&b_user_id)
+        });
+
         // requsets: Vec<ClientRequestType>をCircuitEncryptedInputIdentifierに変換
         let identifier = try_convert_to_identifier(self.batch_request.requests.clone())
             .map_err(|e| {
