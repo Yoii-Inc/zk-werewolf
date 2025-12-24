@@ -191,7 +191,7 @@ async function submitCommitment(roomId: string, playerId: number, randomness: bi
   // その結果のみをサーバーに送信する必要があります。
   // しかし現時点では computePedersenCommitment() などの実装が無いため、
   // ダミー値をサーバーへ送信するのは安全上問題があるため禁止します。
-  // 
+  //
   // この関数を呼び出す前に、正しいコミットメント生成処理を実装してください。
   // 実装例:
   //   const commitment = await computePedersenCommitment(randomness, pedersenParams);
@@ -223,7 +223,7 @@ export async function initializeGameCrypto(roomId: string, username: string, gam
   const playerId = getMyPlayerId(gameInfo, username);
 
   // コミットメントを送信
-  await submitCommitment(roomId, playerId, randomness);
+  //   await submitCommitment(roomId, playerId, randomness);
 
   console.log("Game crypto initialized successfully");
 }

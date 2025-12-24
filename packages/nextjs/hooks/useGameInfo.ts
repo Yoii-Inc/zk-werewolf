@@ -5,7 +5,7 @@ import { getPrivateGameInfo, setPrivateGameInfo } from "~~/utils/privateGameInfo
 export const useGameInfo = (
   roomId: string,
   userId: string | undefined,
-  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+  setMessages: (messages: ChatMessage[]) => void,
 ) => {
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
@@ -58,22 +58,13 @@ export const useGameInfo = (
         const prevStatus = prevGameStatusRef.current;
         prevGameStatusRef.current = currentStatus;
 
-        // ゲームがリセットされた場合（他のフェーズからWaitingに戻った）
-        const isReset = prevStatus !== null && prevStatus !== "Waiting" && currentStatus === "Waiting";
-
         // ゲームが新たに開始された場合（Waitingから他のフェーズに変わった、またはprevStatusがnullで現在のステータスがWaiting以外）
         const isNewlyStarted =
           (prevStatus === "Waiting" && currentStatus !== "Waiting") ||
           (prevStatus === null && currentStatus !== "Waiting");
 
-        if (isReset && userId) {
-          console.log("Game reset detected, clearing privateGameInfo");
-          // ステート更新
-          setPrivateGameInfoState(null);
-          sessionStorage.removeItem(`game_${roomId}_player_${userId}`);
-        }
         // ゲームが新たに開始された場合
-        else if (isNewlyStarted && userId) {
+        if (isNewlyStarted && userId) {
           console.log("Game newly started, initializing privateGameInfo for all players");
 
           // 自分のプレイヤー情報を特定
@@ -112,9 +103,10 @@ export const useGameInfo = (
               message: msg.content,
               timestamp: msg.timestamp,
               type: msg.message_type === "System" ? "system" : "normal",
+              source: "server" as const, // サーバー側メッセージ
             }),
           );
-          setMessages(prev => [...messages]);
+          setMessages(messages); // マージはuseGameChat内で行われる
         }
       } catch (error) {
         console.error("Game info get error:", error);

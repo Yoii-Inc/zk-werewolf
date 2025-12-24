@@ -94,6 +94,25 @@ impl AppState {
 
         Ok(())
     }
+
+    pub async fn broadcast_game_reset(&self, room_id: &str) -> Result<(), String> {
+        let tx = self.get_or_create_room_channel(room_id).await;
+
+        let reset_notification = serde_json::json!({
+            "message_type": "game_reset",
+            "room_id": room_id,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        });
+
+        if let Ok(message_text) = serde_json::to_string(&reset_notification) {
+            if let Err(e) = tx.send(Message::Text(message_text)) {
+                return Err(format!("Failed to broadcast game reset: {}", e));
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn save_chat_message(
         &self,
         room_id: &str,

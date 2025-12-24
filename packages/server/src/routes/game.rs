@@ -303,6 +303,15 @@ async fn reset_game_handler(
                 .add_system_message("Room has been reset".to_string());
         }
 
+        // ロックを解放してからWebSocketブロードキャスト
+        drop(games);
+        drop(rooms);
+
+        // WebSocketでリセット通知を送信
+        if let Err(e) = state.broadcast_game_reset(&room_id).await {
+            eprintln!("Failed to broadcast game reset: {}", e);
+        }
+
         (
             StatusCode::OK,
             Json(json!({
