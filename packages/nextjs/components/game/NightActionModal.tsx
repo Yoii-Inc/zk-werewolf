@@ -57,11 +57,6 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
         console.log("Executing divination.");
         await submitDivination(roomId, divinationData, alivePlayerCount);
       }
-      //   else {
-      //     // 占い師以外のプレイヤーの場合、ダミーリクエストを送信
-      //     console.log("ダミーリクエストを送信します。");
-      //     await handleBackgroundNightAction(roomId, myId, players);
-      //   }
 
       // 親コンポーネントのonSubmit関数を呼び出す
       await onSubmit(selectedPlayer);

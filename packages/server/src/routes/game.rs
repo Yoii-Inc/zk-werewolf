@@ -280,6 +280,10 @@ async fn reset_game_handler(
             // player.vote_count = 0;
         }
 
+        reset_game.result = GameResult::InProgress;
+
+        reset_game.day_count = 1;
+
         // computation_results をリセット
         reset_game.computation_results = ComputationResults::default();
 

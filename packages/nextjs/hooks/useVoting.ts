@@ -36,7 +36,6 @@ export const useVoting = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          //   prover_num: "3",
           proof_type: "AnonymousVoting",
           data: {
             user_id: String(voteData.privateInput.id),

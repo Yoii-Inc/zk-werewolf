@@ -799,6 +799,14 @@ impl Game {
                         // Update phase
                         self.change_phase(GamePhase::Result);
 
+                        // フェーズ変更をWebSocketで通知
+                        if let Err(e) = app_state
+                            .broadcast_phase_change(&self.room_id, "Voting", "Result")
+                            .await
+                        {
+                            println!("Failed to broadcast phase change: {}", e);
+                        }
+
                         // 4. Clear vote results
                         self.vote_results.clear();
 

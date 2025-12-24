@@ -5,6 +5,7 @@ import { useGameInputGenerator } from "./useGameInputGenerator";
 import { useRoleAssignment } from "./useRoleAssignment";
 import { useWinningJudge } from "./useWinningJudge";
 import JSONbig from "json-bigint";
+import * as GameInputGenerator from "~~/services/gameInputGenerator";
 import type { ChatMessage, GameInfo } from "~~/types/game";
 import {
   NodeKey,
@@ -48,11 +49,65 @@ export const useGamePhase = (
       const customEvent = event as CustomEvent;
       const { fromPhase, toPhase, requiresDummyRequest } = customEvent.detail;
 
-      //   console.log(`WebSocketフェーズ変更通知受信: ${fromPhase} → ${toPhase}`);
+      console.log(`WebSocket phase change notification: ${fromPhase} → ${toPhase}`);
 
-      if (!gameInfo || !username) return;
+      // WebSocketイベント発生時に最新のgameInfoを取得
+      // (props経由のgameInfoはポーリングタイミング次第でnullや古い可能性がある)
+      const fetchLatestGameInfo = async (): Promise<GameInfo | null> => {
+        try {
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/state`,
+          );
+          if (!response.ok) {
+            console.error("Failed to fetch game info");
+            return null;
+          }
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error("Error fetching game info:", error);
+          return null;
+        }
+      };
 
-      const currentPlayer = gameInfo.players.find(player => player.name === username);
+      if (!username) {
+        console.warn("Username not available, skipping phase change processing");
+        return;
+      }
+
+      // 最新のgameInfoを取得
+      const latestGameInfo = await fetchLatestGameInfo();
+      if (!latestGameInfo) {
+        console.error("Failed to get latest game info, skipping phase change processing");
+        return;
+      }
+
+      // GameCryptoの初期化を確認・実行
+      const ensureGameCryptoReady = async (): Promise<boolean> => {
+        try {
+          // 既に初期化済みの場合はスキップ
+          if (GameInputGenerator.isInitialized(roomId, username)) {
+            console.log("Game crypto already initialized");
+            return true;
+          }
+
+          console.log("Initializing game crypto...");
+          await GameInputGenerator.initializeGameCrypto(roomId, username, latestGameInfo);
+          console.log("Game crypto initialization completed");
+          return true;
+        } catch (error) {
+          console.error("Failed to initialize game crypto:", error);
+          return false;
+        }
+      };
+
+      const isCryptoReady = await ensureGameCryptoReady();
+      if (!isCryptoReady) {
+        console.error("Game crypto not ready, skipping phase change processing");
+        return;
+      }
+
+      const currentPlayer = latestGameInfo.players.find(player => player.name === username);
       if (!currentPlayer) return;
 
       // トランジションIDを生成
@@ -67,16 +122,17 @@ export const useGamePhase = (
 
       // Step 0: 役職配布リクエスト送信
       if (fromPhase === "Waiting" && toPhase === "Night") {
+        console.log("Step 0: Starting role assignment process.");
         const handleRoleAssignment = async () => {
           try {
-            const playerCount = gameInfo.players.length;
+            const playerCount = latestGameInfo.players.length;
 
-            if (!isReady) {
-              console.log("Game crypto is not ready. Cannot perform role assignment.");
-              return;
-            }
-
-            const roleAssignmentData = await generateRoleAssignmentInput();
+            // latestGameInfoを使って直接サービスから入力を生成
+            const roleAssignmentData = await GameInputGenerator.generateRoleAssignmentInput(
+              roomId,
+              username,
+              latestGameInfo,
+            );
 
             console.log(
               `Player ${username} (ID: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
@@ -125,26 +181,19 @@ export const useGamePhase = (
         requiresDummyRequest &&
         fromPhase === "Night" &&
         toPhase === "DivinationProcessing" &&
-        currentPlayer.role !== "Seer" &&
         !currentPlayer.is_dead
       ) {
         processingSteps.push(async () => {
-          console.log(`Step 1: Non-Seer player ${username} sending dummy request.`);
+          console.log(`Step 1: Player ${username} sending dummy request.`);
 
           try {
-            if (!isReady) {
-              console.error("Game crypto is not ready. Cannot send dummy request.");
-              addMessage({
-                id: Date.now().toString(),
-                sender: "System",
-                message: "Failed to send dummy request: crypto not ready",
-                timestamp: new Date().toISOString(),
-                type: "system",
-              });
-              return;
-            }
-
-            await handleBackgroundNightAction(roomId, currentPlayer.id, gameInfo.players, username, gameInfo);
+            await handleBackgroundNightAction(
+              roomId,
+              currentPlayer.id,
+              latestGameInfo.players,
+              username,
+              latestGameInfo,
+            );
 
             addMessage({
               id: Date.now().toString(),
@@ -244,55 +293,19 @@ export const useGamePhase = (
   // 勝敗判定処理を行う関数
   const handleGameResultCheck = useCallback(
     async (phaseTransitionId: string) => {
-      //   if (!gameInfo || winningJudgementSentRef.current === phaseTransitionId) return;
       if (!gameInfo) return;
-
-      // 占い師の結果を待つ処理
-      const waitForDivination = () => {
-        // Non-Seer players proceed immediately with winning judgement
-        const currentPlayer = gameInfo.players.find(player => player.name === username);
-        if (!currentPlayer || currentPlayer.role !== "Seer") {
-          return Promise.resolve();
-        }
-
-        // 占い師の場合は、占い結果が完了するまで待つ（最大30秒）
-        return new Promise<void>(resolve => {
-          const startTime = Date.now();
-          const maxWaitTime = 30000; // 30秒
-
-          const checkDivination = () => {
-            const elapsedTime = Date.now() - startTime;
-
-            if (divinationCompletedRef.current) {
-              console.log("Divination processing completed, executing winning judgement");
-              resolve();
-            } else if (elapsedTime >= maxWaitTime) {
-              console.log("Divination wait timeout. Continuing with winning judgement");
-              resolve();
-            } else {
-              console.log(`Waiting for divination processing... (${Math.round(elapsedTime / 1000)} seconds elapsed)`);
-              setTimeout(checkDivination, 1000); // 1秒ごとにチェック
-            }
-          };
-
-          checkDivination();
-        });
-      };
 
       try {
         // このフェーズ変更での勝敗判定をすでに実行済みとマーク
         winningJudgementSentRef.current = phaseTransitionId;
         console.log(`Starting winning judgement process. Transition ID: ${phaseTransitionId}`);
 
-        // Wait for divination results
-        await waitForDivination();
         const alivePlayersCount = gameInfo.players.filter(player => !player.is_dead).length;
 
         if (!isReady) {
           throw new Error("Game crypto not ready");
         }
 
-        // const players = gameInfo.players;
         const myId = gameInfo.players.find(player => player.name === username)?.id ?? "";
 
         const winningJudgeData = await generateWinningJudgementInput();
