@@ -28,20 +28,23 @@ export const useDivination = () => {
         const encryptedDivination = await MPCEncryption.encryptDivination(divinationData);
 
         // 占い証明のリクエスト送信
-        const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            proof_type: "Divination",
-            data: {
-              user_id: String(divinationData.privateInput.id),
-              prover_count: alivePlayerCount,
-              encrypted_data: encryptedDivination,
+        const newProofId = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/proof`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-          }),
-        });
+            body: JSON.stringify({
+              proof_type: "Divination",
+              data: {
+                user_id: String(divinationData.privateInput.id),
+                prover_count: alivePlayerCount,
+                encrypted_data: encryptedDivination,
+              },
+            }),
+          },
+        );
 
         if (!newProofId.ok) {
           const errorData = await newProofId.json();

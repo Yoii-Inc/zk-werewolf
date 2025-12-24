@@ -11,7 +11,7 @@ ZK_MPC_NODE_0_HTTP=http://localhost:9000 ZK_MPC_NODE_1_HTTP=http://localhost:900
 websocket connect
 
 ```bash
-websocat ws://localhost:8080/api/room/ws
+websocat ws://localhost:8080/api/room/{roomId}/ws
 ```
 
 ## API 仕様

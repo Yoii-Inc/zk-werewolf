@@ -28,20 +28,23 @@ export const useWinningJudge = () => {
         const encryptedWinningJudge = await MPCEncryption.encryptWinningJudgement(winningJudgeData);
 
         // Send winning judge proof request
-        const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            proof_type: "WinningJudge",
-            data: {
-              user_id: String(winningJudgeData.privateInput.id),
-              prover_count: alivePlayerCount,
-              encrypted_data: encryptedWinningJudge,
+        const newProofId = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/proof`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-          }),
-        });
+            body: JSON.stringify({
+              proof_type: "WinningJudge",
+              data: {
+                user_id: String(winningJudgeData.privateInput.id),
+                prover_count: alivePlayerCount,
+                encrypted_data: encryptedWinningJudge,
+              },
+            }),
+          },
+        );
 
         if (!newProofId.ok) {
           const errorData = await newProofId.json();

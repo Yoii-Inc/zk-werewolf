@@ -43,13 +43,16 @@ export const useRoleAssignment = () => {
 
         console.log(requestBody);
 
-        const newProofId = await fetch(`http://localhost:8080/api/game/${roomId}/proof`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+        const newProofId = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/proof`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody),
           },
-          body: JSON.stringify(requestBody),
-        });
+        );
 
         if (!newProofId.ok) {
           const errorData = await newProofId.json();

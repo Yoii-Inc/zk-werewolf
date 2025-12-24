@@ -16,7 +16,7 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
 
   const connectWebSocket = () => {
     setWebsocketStatus("connecting");
-    const ws = new WebSocket(`ws://localhost:8080/api/room/${roomId}/ws`);
+    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/api"}/room/${roomId}/ws`);
 
     ws.onopen = () => {
       console.log("WebSocket connection established");
