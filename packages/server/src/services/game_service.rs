@@ -11,7 +11,6 @@ use crate::{
 use ark_bls12_377::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::UniformRand;
-use ark_std::test_rng;
 use rand::seq::SliceRandom;
 use serde_json::json;
 use std::time::Duration;
@@ -240,7 +239,7 @@ pub async fn process_night_action(
                     .map(|b| Fr::from(b))
                     .collect::<Vec<_>>();
 
-                let rng = &mut test_rng();
+                let rng = &mut rand::thread_rng();
 
                 // let (elgamal_param, elgamal_pubkey) = get_elgamal_param_pubkey();
                 let elgamal_param = game
@@ -507,7 +506,7 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
 
     println!("num_players: {}", num_players);
 
-    let rng = &mut test_rng();
+    let rng = &mut rand::thread_rng();
 
     // generate pedersen_commitment parameters
     // TODO: revise. generate randomness secretly
@@ -592,7 +591,7 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
 
 // 暗号パラメータの初期化関数
 fn initialize_crypto_parameters(game: &mut Game) {
-    let mut rng = test_rng();
+    let mut rng = rand::thread_rng();
 
     // Pedersenコミットメントパラメータの生成
     let pedersen_param =
