@@ -296,6 +296,8 @@ async fn reset_game_handler(
             .add_system_message("Game has been reset".to_string());
 
         // ゲームを更新
+        // reset crypto parameters as well
+        reset_game.crypto_parameters = None;
         *game = reset_game;
 
         // ルームも更新
@@ -631,7 +633,20 @@ async fn submit_commitment(
             serde_json::from_value(commitment_req.commitment.clone());
         match deserialized {
             Ok(commitment_obj) => {
-                crypto_params_mut.player_commitment.push(commitment_obj);
+                let idx = player_index.unwrap();
+                // If slot exists, overwrite. Otherwise extend the vector until the index and push.
+                if crypto_params_mut.player_commitment.len() > idx {
+                    crypto_params_mut.player_commitment[idx] = commitment_obj;
+                } else {
+                    // Extend by cloning the incoming commitment until we reach the desired index,
+                    // then push the real one. This relies on the commitment type implementing Clone.
+                    while crypto_params_mut.player_commitment.len() < idx {
+                        crypto_params_mut
+                            .player_commitment
+                            .push(commitment_obj.clone());
+                    }
+                    crypto_params_mut.player_commitment.push(commitment_obj);
+                }
             }
             Err(e) => {
                 tracing::error!("Failed to deserialize commitment: {}", e);

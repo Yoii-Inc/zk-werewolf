@@ -58,6 +58,14 @@ const randomnessCache = new Map<string, Field[]>();
 export async function loadCryptoParams(gameInfo?: GameInfo): Promise<any> {
   if (cryptoParamsCache) {
     console.log("Using cached crypto params");
+    // If gameInfo has updated player commitments, refresh that piece of cache
+    const gp = gameInfo?.crypto_parameters;
+    if (gp && gp.player_commitment) {
+      cryptoParamsCache.playerCommitments = gp.player_commitment;
+      // keep pedersenCommitment in sync with first element if available
+      cryptoParamsCache.pedersenCommitment = gp.player_commitment?.[0] ?? cryptoParamsCache.pedersenCommitment;
+      console.log("Updated cached playerCommitments from gameInfo");
+    }
     return cryptoParamsCache;
   }
 
@@ -72,6 +80,7 @@ export async function loadCryptoParams(gameInfo?: GameInfo): Promise<any> {
       pedersenRandomness: null, // ランダムネスは別途管理
       elgamalParam: gp.elgamal_param,
       elgamalPublicKey: gp.fortune_teller_public_key,
+      playerCommitments: gp.player_commitment,
     };
 
     console.log("Crypto params loaded successfully from gameInfo");
@@ -449,7 +458,7 @@ export async function generateRoleAssignmentInput(
     groupingParameter,
     tauMatrix: generatedTau,
     roleCommitment: parsedRinput.publicInput.roleCommitment,
-    playerCommitment: parsedRinput.publicInput.playerCommitment,
+    playerCommitment: cryptoParams.playerCommitments,
   };
 
   return {
