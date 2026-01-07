@@ -6,6 +6,7 @@ import init, {
   elgamal_decrypt,
   fr_rand,
   key_publicize,
+  pedersen_commitment,
   role_assignment,
   voting_split_and_encrypt,
   winning_judgement,
@@ -129,6 +130,21 @@ export class MPCEncryption {
     } catch (error) {
       console.error("Fr random generation failed:", error);
       throw new Error(`Failed to generate Fr random: ${error}`);
+    }
+  }
+
+  /**
+   * Pedersen commitment wrapper
+   * Expects input: { pedersen_params, x, pedersen_randomness }
+   */
+  public static async pedersenCommitment(input: any): Promise<any> {
+    await this.initializeWasm();
+    try {
+      const result = pedersen_commitment(input);
+      return JSON.parse(result);
+    } catch (error) {
+      console.error("Pedersen commitment failed:", error);
+      throw new Error(`Failed to compute pedersen commitment`);
     }
   }
 }

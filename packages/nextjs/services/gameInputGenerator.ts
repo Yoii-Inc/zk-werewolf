@@ -315,21 +315,37 @@ export function generateTauMatrixForWasm(groupingParameter: any, numPlayers: num
 /**
  * コミットメントをサーバーに送信
  */
-async function submitCommitment(roomId: string, playerId: number, randomness: bigint[]): Promise<void> {
-  // NOTE:
-  // 本来ここでは、ランダムネスと公開パラメータから Pedersen コミットメントを計算し、
-  // その結果のみをサーバーに送信する必要があります。
-  // しかし現時点では computePedersenCommitment() などの実装が無いため、
-  // ダミー値をサーバーへ送信するのは安全上問題があるため禁止します。
-  //
-  // この関数を呼び出す前に、正しいコミットメント生成処理を実装してください。
-  // 実装例:
-  //   const commitment = await computePedersenCommitment(randomness, pedersenParams);
-  //   // commitment をサーバーへ送信する処理に差し替える
-  throw new Error(
-    "submitCommitment: Pedersen commitment generation is not implemented yet; " +
-      "dummy commitments will not be sent to the server.",
-  );
+async function submitCommitment(roomId: string, playerId: number, randomness: any): Promise<void> {
+  // Compute Pedersen commitment using WASM and cache it.
+  const cryptoParams = await loadCryptoParams();
+  const pedersenParams = cryptoParams?.pedersenParam;
+  if (!pedersenParams) {
+    throw new Error("submitCommitment: pedersen params not available");
+  }
+
+  // x is the message Fr value (use provided randomness as message)
+  const x = randomness;
+
+  // generate pedersen randomness
+  const pedersenRandomness = await MPCEncryption.frRand();
+
+  // call wasm pedersen_commitment
+  const input = {
+    pedersen_params: pedersenParams,
+    x,
+    pedersen_randomness: pedersenRandomness,
+  };
+
+  const commitment = await MPCEncryption.pedersenCommitment(input);
+
+  // cache commitment and randomness in cryptoParamsCache for later use
+  cryptoParamsCache = {
+    ...cryptoParams,
+    pedersenCommitment: commitment,
+    pedersenRandomness,
+  };
+
+  console.log("Pedersen commitment generated and cached for player", playerId);
 }
 
 // ============================================================================
@@ -347,13 +363,13 @@ export async function initializeGameCrypto(roomId: string, username: string, gam
   await loadCryptoParams(gameInfo);
 
   // ランダムネスを取得（既存があればそれを使用、なければ生成）
-  const randomness = getRandomness(roomId, username);
+  const randomness = await getRandomness(roomId, username);
 
   // プレイヤーIDを取得
   const playerId = getMyPlayerId(gameInfo, username);
 
-  // コミットメントを送信
-  //   await submitCommitment(roomId, playerId, randomness);
+  // コミットメントを計算してキャッシュ（サーバー送信は別途実装可）
+  await submitCommitment(roomId, playerId, randomness);
 
   console.log("Game crypto initialized successfully");
 }
