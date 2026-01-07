@@ -32,6 +32,40 @@ impl GroupingParameter {
         Self(input)
     }
 
+    /// Create a GroupingParameter based on the number of players.
+    /// Rules:
+    /// - FortuneTeller: 1
+    /// - Werewolf: 4-6 players → 1, 7-9 players → 2, 10-12 players → 3
+    /// - Villager: remaining players
+    pub fn from_player_count(num_players: usize) -> Self {
+        assert!(num_players >= 4, "At least 4 players are required");
+        assert!(num_players <= 12, "Maximum 12 players allowed");
+
+        let num_werewolves = if num_players <= 6 {
+            1
+        } else if num_players <= 9 {
+            2
+        } else {
+            3
+        };
+
+        let num_fortune_tellers = 1;
+        let num_villagers = num_players - num_werewolves - num_fortune_tellers;
+
+        let mut map = BTreeMap::new();
+
+        // FortuneTeller: 1 person, not a group
+        map.insert(Role::FortuneTeller, (num_fortune_tellers, false));
+
+        // Werewolf: group if multiple, not a group if single
+        map.insert(Role::Werewolf, (num_werewolves, num_werewolves > 1));
+
+        // Villager: multiple people, not a group
+        map.insert(Role::Villager, (num_villagers, false));
+
+        Self(map)
+    }
+
     // F: Field used in the MPC.
     pub fn generate_tau_matrix<F: PrimeField>(&self) -> nalgebra::DMatrix<F> {
         let num_players = self.get_num_players();

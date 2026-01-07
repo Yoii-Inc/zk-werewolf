@@ -100,7 +100,7 @@ export interface AnonymousVotingPrivateInput {
   id: number;
   //   isTargetId: string[];
   isTargetId: Field[][];
-  playerRandomness: (number[] | null)[];
+  playerRandomness: Field[];
 }
 export interface AnonymousVotingPublicInput {
   pedersenParam: PedersenParam;
@@ -123,7 +123,7 @@ export interface RoleAssignmentPrivateInput {
   id: number;
   shuffleMatrices: any;
   randomness: any;
-  playerRandomness: number[] | null;
+  playerRandomness: Field[];
 }
 export interface RoleAssignmentPublicInput {
   // parameter
