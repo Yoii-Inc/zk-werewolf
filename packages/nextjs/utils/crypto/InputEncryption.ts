@@ -4,6 +4,7 @@ import init, {
   init as RustInit,
   divination,
   elgamal_decrypt,
+  fr_rand,
   key_publicize,
   role_assignment,
   voting_split_and_encrypt,
@@ -114,6 +115,20 @@ export class MPCEncryption {
     } catch (error) {
       console.error("ElGamal decryption failed:", error);
       throw new Error(`Failed to decrypt ElGamal cipher: ${error}`);
+    }
+  }
+
+  /**
+   * Fr random generator
+   */
+  public static async frRand(): Promise<any> {
+    await this.initializeWasm();
+    try {
+      const result = fr_rand();
+      return JSON.parse(result);
+    } catch (error) {
+      console.error("Fr random generation failed:", error);
+      throw new Error(`Failed to generate Fr random: ${error}`);
     }
   }
 }

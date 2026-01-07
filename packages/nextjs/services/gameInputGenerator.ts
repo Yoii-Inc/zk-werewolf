@@ -8,6 +8,7 @@ import {
   DivinationInput,
   DivinationPrivateInput,
   DivinationPublicInput,
+  Field,
   NodeKey,
   PedersenCommitment,
   PedersenParam,
@@ -23,6 +24,19 @@ import {
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
 // ============================================================================
+// 有限体の定数
+// ============================================================================
+
+// 有限体のゼロ要素: [0, 0, 0, 0]
+const FINITE_FIELD_ZERO: Field[] = [JSONbigNative.parse('["0","0","0","0"]'), null] as const;
+
+// 有限体のone要素
+const FINITE_FIELD_ONE: Field[] = [
+  JSONbigNative.parse('["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]'),
+  null,
+] as const;
+
+// ============================================================================
 // グローバルキャッシュ
 // ============================================================================
 
@@ -30,7 +44,7 @@ const JSONbigNative = JSONbig({ useNativeBigInt: true });
 let cryptoParamsCache: any | null = null;
 
 // ランダムネスのキャッシュ（ルーム×ユーザーごと）
-const randomnessCache = new Map<string, bigint[]>();
+const randomnessCache = new Map<string, Field[]>();
 
 // ============================================================================
 // 暗号パラメータ管理
@@ -38,29 +52,45 @@ const randomnessCache = new Map<string, bigint[]>();
 
 /**
  * 暗号パラメータを読み込む（キャッシュあり）
+ * gameInfo.cryptoParametersから取得し、なければ静的ファイルからフォールバック
  * 一度読み込んだらアプリ全体で再利用される
  */
-export async function loadCryptoParams(): Promise<any> {
+export async function loadCryptoParams(gameInfo?: GameInfo): Promise<any> {
   if (cryptoParamsCache) {
     console.log("Using cached crypto params");
     return cryptoParamsCache;
   }
 
-  console.log("Loading crypto params from static files...");
+  // gameInfo.cryptoParametersがあればそれを使用
+  const gp = gameInfo?.crypto_parameters;
+  if (gp) {
+    console.log("Loading crypto params from gameInfo.crypto_parameters...");
 
-  // 並列で全ファイルを取得
-  const [pedersenRes, commitRes, randRes, elgamalParamRes, elgamalPubkeyRes] = await Promise.all([
+    cryptoParamsCache = {
+      pedersenParam: gp.pedersen_param,
+      pedersenCommitment: gp.player_commitment?.[0],
+      pedersenRandomness: null, // ランダムネスは別途管理
+      elgamalParam: gp.elgamal_param,
+      elgamalPublicKey: gp.fortune_teller_public_key,
+    };
+
+    console.log("Crypto params loaded successfully from gameInfo");
+    return cryptoParamsCache;
+  }
+
+  // フォールバック: 静的ファイルから読み込み
+  console.log("gameInfo.crypto_parameters not found, falling back to static files...");
+
+  const [pedersenRes, commitRes, elgamalParamRes, elgamalPubkeyRes] = await Promise.all([
     fetch("/pedersen_params2.json"),
     fetch("/pedersen_commitment_0.json"),
-    fetch("/pedersen_randomness_0.json"),
     fetch("/elgamal_params.json"),
     fetch("/elgamal_public_key.json"),
   ]);
 
-  const [pedersenParams, commitment, randomness, elgamalParam, elgamalPubkey] = await Promise.all([
+  const [pedersenParams, commitment, elgamalParam, elgamalPubkey] = await Promise.all([
     pedersenRes.text(),
     commitRes.text(),
-    randRes.text(),
     elgamalParamRes.text(),
     elgamalPubkeyRes.text(),
   ]);
@@ -68,12 +98,12 @@ export async function loadCryptoParams(): Promise<any> {
   cryptoParamsCache = {
     pedersenParam: JSONbigNative.parse(pedersenParams),
     pedersenCommitment: JSONbigNative.parse(commitment),
-    pedersenRandomness: JSONbigNative.parse(randomness),
+    pedersenRandomness: null,
     elgamalParam: JSONbigNative.parse(elgamalParam),
     elgamalPublicKey: JSONbigNative.parse(elgamalPubkey),
   };
 
-  console.log("Crypto params loaded successfully");
+  console.log("Crypto params loaded successfully from static files");
   return cryptoParamsCache;
 }
 
@@ -92,7 +122,7 @@ export function clearCryptoParamsCache(): void {
  * プレイヤーのランダムネスを取得（キャッシュあり）
  * LocalStorageから読み込み、なければ新規生成
  */
-function getRandomness(roomId: string, username: string): bigint[] {
+async function getRandomness(roomId: string, username: string): Promise<Field[]> {
   const cacheKey = `${roomId}_${username}`;
 
   // メモリキャッシュをチェック
@@ -116,12 +146,8 @@ function getRandomness(roomId: string, username: string): bigint[] {
   }
 
   // 新規生成（TODO: WASMのgeneratePedersenRandomness()を使用）
-  const randomness = [
-    BigInt(Math.floor(Math.random() * 1000000000)),
-    BigInt(Math.floor(Math.random() * 1000000000)),
-    BigInt(Math.floor(Math.random() * 1000000000)),
-    BigInt(Math.floor(Math.random() * 1000000000)),
-  ];
+  const randomness = await MPCEncryption.frRand();
+  console.log("Generated new randomness:", randomness);
 
   // キャッシュに保存
   randomnessCache.set(cacheKey, randomness);
@@ -178,6 +204,56 @@ function getScheme(): SecretSharingScheme {
   return { totalShares: 3, modulus: 97 };
 }
 
+/**
+ * 個別のシャッフル行列を生成する（Rustのgenerate_individual_shuffle_matrixのTypeScript版）
+ * 行列は行優先（row-major）で平坦化した配列として返す。
+ * F::one() に相当する値は `FINITE_FIELD_ONE` を使用する。
+ */
+export function generateIndividualShuffleMatrix(n: number, m: number, rng?: () => number): Field[][] {
+  const size = n + m;
+  const total = size * size;
+
+  // permutation 0..n-1 を生成してシャッフル
+  const permutation: number[] = Array.from({ length: n }, (_, i) => i);
+  for (let i = permutation.length - 1; i > 0; i--) {
+    const r = rng ? rng() : Math.random();
+    const j = Math.floor(r * (i + 1));
+    const tmp = permutation[i];
+    permutation[i] = permutation[j];
+    permutation[j] = tmp;
+  }
+
+  // 平坦化された行列をゼロ要素で初期化
+  const mat: Field[][] = new Array(total);
+  for (let idx = 0; idx < total; idx++) {
+    mat[idx] = FINITE_FIELD_ZERO;
+  }
+
+  // シャッフル部分: for i in 0..n set (i, permutation[i]) = ONE
+  for (let i = 0; i < n; i++) {
+    const row = i;
+    const col = permutation[i];
+    mat[row * size + col] = FINITE_FIELD_ONE;
+  }
+
+  // 固定部分: for i in n..n+m set (i,i) = ONE
+  for (let i = n; i < n + m; i++) {
+    mat[i * size + i] = FINITE_FIELD_ONE;
+  }
+
+  return mat;
+}
+
+/**
+ * WASM に渡す形式（JSONbig.parse と同じ形）で生成するヘルパー
+ * 返り値は [matrixFlatArray, size, size] の形になります。
+ */
+export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () => number): any[] {
+  const mat = generateIndividualShuffleMatrix(n, m, rng);
+  const size = n + m;
+  return [mat, size, size];
+}
+
 // ============================================================================
 // コミットメント送信
 // ============================================================================
@@ -191,7 +267,7 @@ async function submitCommitment(roomId: string, playerId: number, randomness: bi
   // その結果のみをサーバーに送信する必要があります。
   // しかし現時点では computePedersenCommitment() などの実装が無いため、
   // ダミー値をサーバーへ送信するのは安全上問題があるため禁止します。
-  // 
+  //
   // この関数を呼び出す前に、正しいコミットメント生成処理を実装してください。
   // 実装例:
   //   const commitment = await computePedersenCommitment(randomness, pedersenParams);
@@ -214,7 +290,7 @@ export async function initializeGameCrypto(roomId: string, username: string, gam
   console.log("Initializing game crypto...");
 
   // 暗号パラメータをロード
-  await loadCryptoParams();
+  await loadCryptoParams(gameInfo);
 
   // ランダムネスを取得（既存があればそれを使用、なければ生成）
   const randomness = getRandomness(roomId, username);
@@ -223,7 +299,7 @@ export async function initializeGameCrypto(roomId: string, username: string, gam
   const playerId = getMyPlayerId(gameInfo, username);
 
   // コミットメントを送信
-  await submitCommitment(roomId, playerId, randomness);
+  //   await submitCommitment(roomId, playerId, randomness);
 
   console.log("Game crypto initialized successfully");
 }
@@ -248,8 +324,22 @@ export async function generateRoleAssignmentInput(
   username: string,
   gameInfo: GameInfo,
 ): Promise<RoleAssignmentInput> {
-  const cryptoParams = await loadCryptoParams();
+  const cryptoParams = await loadCryptoParams(gameInfo);
   const myId = getMyPlayerId(gameInfo, username);
+
+  const groupingParameter = gameInfo.grouping_parameter;
+  if (!groupingParameter) {
+    throw new Error("Grouping parameter is missing in crypto parameters");
+  }
+
+  // villager + fortune teller + 1 (werewolf)
+  const maxGroupSize = groupingParameter.Villager[0] + groupingParameter.FortuneTeller[0] + 1;
+
+  const generatedShuffleMatrices = generateShuffleMatricesForWasm(
+    gameInfo.players.length, // n (players.length used here as n)
+    maxGroupSize, // m
+  );
+  const playerRandomness = await getRandomness(roomId, username);
 
   // テストデータを読み込み
   const rinputRes = await fetch("/test_role_assignment_input2.json");
@@ -257,9 +347,27 @@ export async function generateRoleAssignmentInput(
   const parsedRinput: RoleAssignmentInput = JSONbigNative.parse(rinput);
   parsedRinput.privateInput.id = myId;
 
+  const privateInput: RoleAssignmentPrivateInput = {
+    id: myId,
+    shuffleMatrices: generatedShuffleMatrices,
+    randomness: FINITE_FIELD_ZERO,
+    playerRandomness,
+  };
+
+  // TODO: tauMatrix, roleCommitment, playerCommitmentを適切に設定する
+  const publicInput: RoleAssignmentPublicInput = {
+    numPlayers: gameInfo.players.length,
+    maxGroupSize,
+    pedersenParam: cryptoParams.pedersenParam,
+    groupingParameter,
+    tauMatrix: parsedRinput.publicInput.tauMatrix,
+    roleCommitment: parsedRinput.publicInput.roleCommitment,
+    playerCommitment: parsedRinput.publicInput.playerCommitment,
+  };
+
   return {
-    privateInput: parsedRinput.privateInput,
-    publicInput: parsedRinput.publicInput,
+    privateInput,
+    publicInput,
     nodeKeys: getNodeKeys(),
     scheme: getScheme(),
   };
@@ -275,41 +383,27 @@ export async function generateDivinationInput(
   targetId: string,
   isDummy: boolean,
 ): Promise<DivinationInput> {
-  const cryptoParams = await loadCryptoParams();
+  const cryptoParams = await loadCryptoParams(gameInfo);
+  const randomness = getRandomness(roomId, username);
   const myId = getMyPlayerId(gameInfo, username);
 
-  // 占い用の新規ランダムネス生成（1回の占いごとに新しいもの）
-  // TODO: WASMのgeneratePedersenRandomness()を使用
-  const divinationRandomness = [JSONbigNative.parse('["0","0","0","0"]'), null];
-
-  // 実際のゲーム状態を使用
-  const isWerewolfValue = isWerewolf(gameInfo, username)
-    ? [
-        JSONbigNative.parse('["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]'),
-        null,
-      ]
-    : [JSONbigNative.parse('["0","0","0","0"]'), null];
+  const isWerewolfValue = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: DivinationPrivateInput =
     isDummy === false
       ? {
           id: myId,
-          isTarget: gameInfo.players.map((player: any) => [
-            player.id === targetId
-              ? JSONbigNative.parse(
-                  '["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]',
-                )
-              : JSONbigNative.parse('["0","0","0","0"]'),
-            null,
-          ]),
+          isTarget: gameInfo.players.map((player: any) =>
+            player.id === targetId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO,
+          ),
           isWerewolf: isWerewolfValue,
-          randomness: divinationRandomness,
+          randomness: randomness,
         }
       : {
           id: myId,
-          isTarget: gameInfo.players.map(() => [JSONbigNative.parse('["0","0","0","0"]'), null]),
+          isTarget: gameInfo.players.map(() => FINITE_FIELD_ZERO),
           isWerewolf: isWerewolfValue,
-          randomness: divinationRandomness,
+          randomness: randomness,
         };
 
   const publicInput: DivinationPublicInput = {
@@ -336,8 +430,8 @@ export async function generateVotingInput(
   gameInfo: GameInfo,
   votedForId: string,
 ): Promise<AnonymousVotingInput> {
-  const cryptoParams = await loadCryptoParams();
-  const randomness = getRandomness(roomId, username);
+  const cryptoParams = await loadCryptoParams(gameInfo);
+  const randomness = await getRandomness(roomId, username);
   const myId = getMyPlayerId(gameInfo, username);
 
   // MPC公開鍵の確認
@@ -346,23 +440,12 @@ export async function generateVotingInput(
     throw new Error("MPC node public keys are not properly configured");
   }
 
-  // bigint[]を(number[] | null)[]に変換
-  //   const randomnessForVoting = randomness.map(r => Array.from(r.toString().split("")).map(Number));
-  const randomnessForVoting = [JSONbigNative.parse('["0","0","0","0"]'), null];
-
   const privateInput: AnonymousVotingPrivateInput = {
     id: myId,
     isTargetId: gameInfo.players.map((player: any) =>
-      player.id === votedForId
-        ? [
-            JSONbigNative.parse(
-              '["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]',
-            ),
-            null,
-          ]
-        : [JSONbigNative.parse('["0","0","0","0"]'), null],
+      player.id === votedForId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO,
     ),
-    playerRandomness: randomnessForVoting,
+    playerRandomness: randomness,
   };
 
   const publicInput: AnonymousVotingPublicInput = {
@@ -400,25 +483,15 @@ export async function generateWinningJudgementInput(
   username: string,
   gameInfo: GameInfo,
 ): Promise<WinningJudgementInput> {
-  const cryptoParams = await loadCryptoParams();
-  const randomness = getRandomness(roomId, username);
+  const cryptoParams = await loadCryptoParams(gameInfo);
+  const randomness = await getRandomness(roomId, username);
   const myId = getMyPlayerId(gameInfo, username);
-
-  // 実際の役職情報を使用
-  const amWerewolfValues = isWerewolf(gameInfo, username)
-    ? JSONbigNative.parse('["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"]')
-    : JSONbigNative.parse('["0", "0", "0", "0"]');
-
-  // bigint[]を(bigint[] | null)[]に変換
-  //   const randomnessArray: (bigint[] | null)[] = [[...randomness], null];
-  const randres = await fetch("/pedersen_randomness_0.json");
-  const randomnessjson = await randres.text();
-  const randomnessArray = JSONbigNative.parse(randomnessjson);
+  const amWerewolfValues = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: WinningJudgementPrivateInput = {
     id: myId,
-    amWerewolf: [amWerewolfValues, null],
-    playerRandomness: randomnessArray,
+    amWerewolf: amWerewolfValues,
+    playerRandomness: randomness,
   };
 
   const publicInput: WinningJudgementPublicInput = {

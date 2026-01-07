@@ -45,6 +45,7 @@ export interface GameInfo {
       message_type: string;
     }>;
   };
+  grouping_parameter?: GroupingParameter;
 }
 
 export interface PrivateGameInfo {
@@ -81,4 +82,10 @@ export interface WebSocketMessage {
 export interface GameResultModalProps {
   result: "VillagerWin" | "WerewolfWin" | "InProgress";
   onClose: () => void;
+}
+
+export interface GroupingParameter {
+  Villager: [number, boolean];
+  FortuneTeller: [number, boolean];
+  Werewolf: [number, boolean];
 }
