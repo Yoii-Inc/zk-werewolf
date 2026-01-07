@@ -68,6 +68,7 @@ export interface ChatMessage {
   message: string;
   timestamp: string;
   type: "system" | "normal" | "whisper";
+  source?: "server" | "client"; // メッセージの送信元（オプショナル）
 }
 
 export interface WebSocketMessage {

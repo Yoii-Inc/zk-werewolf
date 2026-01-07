@@ -9,7 +9,11 @@ interface ComputationResult {
   timestamp: string;
 }
 
-export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>) => {
+export const useGameWebSocket = (
+  roomId: string,
+  addServerMessage: (message: ChatMessage) => void, // サーバー側メッセージを追加する関数
+  username?: string,
+) => {
   const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected");
   const hasConnectedRef = useRef(false);
@@ -63,19 +67,33 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
         return;
       }
 
+      // ゲームリセット通知の場合
+      if (data.message_type === "game_reset") {
+        console.log("Game reset notification received");
+
+        // カスタムイベントを発行
+        window.dispatchEvent(
+          new CustomEvent("gameResetNotification", {
+            detail: {
+              roomId: data.room_id,
+              timestamp: data.timestamp,
+            },
+          }),
+        );
+        return;
+      }
+
       // 通常のチャットメッセージの場合
       const fullMessage: WebSocketMessage = data;
 
-      setMessages(prevMessages => [
-        ...prevMessages,
-        {
-          id: "Server",
-          sender: fullMessage.player_name,
-          message: fullMessage.content,
-          timestamp: new Date().toISOString(),
-          type: "normal",
-        },
-      ]);
+      addServerMessage({
+        id: "Server",
+        sender: fullMessage.player_name,
+        message: fullMessage.content,
+        timestamp: new Date().toISOString(),
+        type: "normal",
+        source: "server", // WebSocketで受信したメッセージはサーバー側
+      });
     };
 
     ws.onclose = event => {
@@ -104,7 +122,7 @@ export const useGameWebSocket = (roomId: string, setMessages: React.Dispatch<Rea
       const websocketMessage: WebSocketMessage = {
         message_type: "normal",
         player_id: Date.now().toString(),
-        player_name: "Player",
+        player_name: username || "Player",
         content: message,
         timestamp: new Date().toISOString(),
         room_id: roomId,
