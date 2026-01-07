@@ -254,6 +254,60 @@ export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () =>
   return [mat, size, size];
 }
 
+/**
+ * tau matrix を WASM/JSONbig と同じ形式で生成する。
+ * groupingParameter の走査順はオブジェクトの列挙順に従う。
+ */
+export function generateTauMatrixForWasm(groupingParameter: any, numPlayers: number): any[] {
+  // compute num_groups according to Rust logic
+  let numGroups = 0;
+  for (const key of Object.keys(groupingParameter)) {
+    const [count, isNotAlone] = groupingParameter[key];
+    if (isNotAlone) numGroups += 1;
+    else numGroups += count;
+  }
+
+  const size = numPlayers + numGroups;
+  const total = size * size;
+
+  const mat: any[] = new Array(total);
+  for (let i = 0; i < total; i++) mat[i] = FINITE_FIELD_ZERO;
+
+  let playerIndex = 0;
+  let groupIndex = 0;
+
+  for (const key of Object.keys(groupingParameter)) {
+    const [count, isNotAlone] = groupingParameter[key];
+    if (isNotAlone) {
+      if (count < 2) throw new Error("not alone group count must be >= 2");
+
+      // group
+      mat[playerIndex * size + (numPlayers + groupIndex)] = FINITE_FIELD_ONE;
+
+      // players (chain)
+      for (let k = 0; k < count - 1; k++) {
+        mat[(playerIndex + 1) * size + playerIndex] = FINITE_FIELD_ONE;
+        playerIndex += 1;
+      }
+
+      mat[(numPlayers + groupIndex) * size + playerIndex] = FINITE_FIELD_ONE;
+      playerIndex += 1;
+      groupIndex += 1;
+    } else {
+      for (let k = 0; k < count; k++) {
+        // group
+        mat[playerIndex * size + (numPlayers + groupIndex)] = FINITE_FIELD_ONE;
+        // player
+        mat[(numPlayers + groupIndex) * size + playerIndex] = FINITE_FIELD_ONE;
+        playerIndex += 1;
+        groupIndex += 1;
+      }
+    }
+  }
+
+  return [mat, size, size];
+}
+
 // ============================================================================
 // コミットメント送信
 // ============================================================================
@@ -355,12 +409,14 @@ export async function generateRoleAssignmentInput(
   };
 
   // TODO: tauMatrix, roleCommitment, playerCommitmentを適切に設定する
+  const generatedTau = generateTauMatrixForWasm(groupingParameter, gameInfo.players.length);
+
   const publicInput: RoleAssignmentPublicInput = {
     numPlayers: gameInfo.players.length,
     maxGroupSize,
     pedersenParam: cryptoParams.pedersenParam,
     groupingParameter,
-    tauMatrix: parsedRinput.publicInput.tauMatrix,
+    tauMatrix: generatedTau,
     roleCommitment: parsedRinput.publicInput.roleCommitment,
     playerCommitment: parsedRinput.publicInput.playerCommitment,
   };
