@@ -26,7 +26,8 @@ impl ark_crypto_primitives::crh::pedersen::Window for Window {
 
 type PedersenComScheme = Commitment<ark_ed_on_bls12_377::EdwardsProjective, Window>;
 type PedersenParam = <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Parameters;
-type PedersenCommitment = <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Output;
+pub type PedersenCommitment =
+    <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Output;
 type PedersenRandomness =
     <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Randomness;
 

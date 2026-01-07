@@ -10,6 +10,8 @@ use crate::{
     services::game_service,
     state::AppState,
 };
+use ark_bls12_377::Fr;
+use ark_crypto_primitives::CommitmentScheme;
 use axum::response::IntoResponse;
 use axum::{
     extract::{Path, State},
@@ -19,6 +21,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use zk_mpc::circuits::LocalOrMPC;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VoteAction {
@@ -556,9 +559,11 @@ async fn get_crypto_params(
 // コミットメントを受信
 #[derive(Debug, Serialize, Deserialize)]
 struct CommitmentRequest {
-    player_id: i32,
-    commitment: Vec<String>,
-    created_at: String,
+    player_id: String,
+    // クライアントが配列として送る場合もあればオブジェクトで送る場合もあるため
+    // 一旦汎用の JSON 値として受け取る（後で型変換を行う）
+    commitment: serde_json::Value,
+    created_at: Option<String>,
 }
 
 async fn submit_commitment(
@@ -569,36 +574,90 @@ async fn submit_commitment(
     let mut games = state.games.lock().await;
 
     if let Some(game) = games.get_mut(&room_id) {
-        if let Some(ref mut _crypto_params) = game.crypto_parameters {
-            // TODO: commitment文字列をPedersenCommitment型にデシリアライズして保存
-            // 現状はプレイヤーIDと対応づけてログに記録
-            tracing::info!(
-                "Received commitment from player {} in room {}: {:?}",
-                commitment_req.player_id,
-                room_id,
-                commitment_req.commitment
-            );
+        // // ゲーム開始前のみコミットメント登録を許可(今は制限しない)
+        // if game.phase != GamePhase::Waiting {
+        //     return (
+        //         StatusCode::BAD_REQUEST,
+        //         Json(json!({
+        //             "success": false,
+        //             "message": "Commitments can only be submitted before game start"
+        //         })),
+        //     );
+        // }
 
-            // 将来的には以下のように保存:
-            // let commitment_obj = deserialize_commitment(&commitment_req.commitment)?;
-            // crypto_params.player_commitment.push(commitment_obj);
-
-            (
-                StatusCode::OK,
-                Json(json!({
-                    "success": true,
-                    "message": "Commitment received and logged (storage pending serialization implementation)"
-                })),
-            )
-        } else {
-            (
+        // プレイヤーが存在するか確認
+        let player_index = game
+            .players
+            .iter()
+            .position(|p| p.id == commitment_req.player_id);
+        if player_index.is_none() {
+            return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({
                     "success": false,
-                    "message": "Crypto parameters not initialized for this game"
+                    "message": "Player not found in this game"
                 })),
-            )
+            );
         }
+
+        // CryptoParametersが初期化されているか確認
+        if game.crypto_parameters.is_none() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "success": false,
+                    "message": "Crypto parameters not initialized yet"
+                })),
+            );
+        }
+
+        // コミットメントをデシリアライズしてCryptoParameters.player_commitmentに追加
+        // TODO: 現状はJSON文字列をログに記録するのみ（deserializeの実装が必要）
+        tracing::info!(
+            "Received commitment from player {} (index: {}) in room {}: {:?}",
+            commitment_req.player_id,
+            player_index.unwrap(),
+            room_id,
+            commitment_req.commitment
+        );
+
+        // Try to deserialize incoming JSON into the Pedersen commitment type
+        let crypto_params_mut = game.crypto_parameters.as_mut().unwrap();
+        // Target type alias for readability
+        type PedersenOutput =
+            <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output;
+
+        let deserialized: Result<PedersenOutput, _> =
+            serde_json::from_value(commitment_req.commitment.clone());
+        match deserialized {
+            Ok(commitment_obj) => {
+                crypto_params_mut.player_commitment.push(commitment_obj);
+            }
+            Err(e) => {
+                tracing::error!("Failed to deserialize commitment: {}", e);
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "success": false,
+                        "message": format!("Failed to deserialize commitment: {}", e)
+                    })),
+                );
+            }
+        }
+
+        let current_count = crypto_params_mut.player_commitment.len();
+        let all_ready = current_count >= game.players.len();
+
+        (
+            StatusCode::OK,
+            Json(json!({
+                "success": true,
+                "message": "Commitment received (pending full implementation)",
+                "commitments_count": current_count,
+                "total_players": game.players.len(),
+                "all_ready": all_ready
+            })),
+        )
     } else {
         (
             StatusCode::NOT_FOUND,

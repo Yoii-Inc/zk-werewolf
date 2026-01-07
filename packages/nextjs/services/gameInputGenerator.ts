@@ -179,8 +179,13 @@ export function clearRandomnessCache(roomId?: string, username?: string): void {
 // ヘルパー関数
 // ============================================================================
 
-function getMyPlayerId(gameInfo: GameInfo, username: string): number {
+function getMyPlayerIndex(gameInfo: GameInfo, username: string): number {
   return gameInfo.players.findIndex(p => p.name === username);
+}
+
+function getMyPlayerId(gameInfo: GameInfo, username: string): string | null {
+  const player = gameInfo.players.find(p => p.name === username);
+  return player ? player.id : null;
 }
 
 function getMyRole(gameInfo: GameInfo, username: string): string | null {
@@ -308,44 +313,48 @@ export function generateTauMatrixForWasm(groupingParameter: any, numPlayers: num
   return [mat, size, size];
 }
 
-// ============================================================================
-// コミットメント送信
-// ============================================================================
-
 /**
  * コミットメントをサーバーに送信
  */
-async function submitCommitment(roomId: string, playerId: number, randomness: any): Promise<void> {
-  // Compute Pedersen commitment using WASM and cache it.
-  const cryptoParams = await loadCryptoParams();
-  const pedersenParams = cryptoParams?.pedersenParam;
-  if (!pedersenParams) {
-    throw new Error("submitCommitment: pedersen params not available");
+export async function submitCommitment(
+  roomId: string,
+  playerIndex: number,
+  randomness: Field[],
+  playerIdString: string,
+): Promise<void> {
+  const params = await loadCryptoParams();
+  console.log("Submitting commitment for player index:", params);
+  if (!params?.pedersenParam) {
+    throw new Error("Pedersen parameters not available");
   }
 
-  // x is the message Fr value (use provided randomness as message)
-  const x = randomness;
-
-  // generate pedersen randomness
-  const pedersenRandomness = await MPCEncryption.frRand();
-
-  // call wasm pedersen_commitment
-  const input = {
-    pedersen_params: pedersenParams,
-    x,
-    pedersen_randomness: pedersenRandomness,
+  const pedersenInput = {
+    pedersenParams: params.pedersenParam,
+    x: randomness,
+    pedersenRandomness: randomness, // 同じランダムネスを使用
   };
 
-  const commitment = await MPCEncryption.pedersenCommitment(input);
+  console.log("Computing Pedersen commitment with input:", pedersenInput);
 
-  // cache commitment and randomness in cryptoParamsCache for later use
-  cryptoParamsCache = {
-    ...cryptoParams,
-    pedersenCommitment: commitment,
-    pedersenRandomness,
-  };
+  const commitment = await MPCEncryption.pedersenCommitment(pedersenInput);
 
-  console.log("Pedersen commitment generated and cached for player", playerId);
+  console.log("Computed commitment:", commitment);
+
+  // サーバーへ送信
+  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const res = await fetch(`${base}/game/${roomId}/commitment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ player_id: playerIdString, commitment }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(`Failed to submit commitment: ${error.message || res.statusText}`);
+  }
+
+  const result = await res.json();
+  console.log("Commitment submitted successfully:", result);
 }
 
 // ============================================================================
@@ -365,11 +374,17 @@ export async function initializeGameCrypto(roomId: string, username: string, gam
   // ランダムネスを取得（既存があればそれを使用、なければ生成）
   const randomness = await getRandomness(roomId, username);
 
-  // プレイヤーIDを取得
+  // プレイヤーIndexを取得
+  const playerIndex = getMyPlayerIndex(gameInfo, username);
+
   const playerId = getMyPlayerId(gameInfo, username);
 
+  if (playerId === null) {
+    throw new Error("Player ID not found for username: " + username);
+  }
+
   // コミットメントを計算してキャッシュ（サーバー送信は別途実装可）
-  await submitCommitment(roomId, playerId, randomness);
+  await submitCommitment(roomId, playerIndex, randomness, playerId);
 
   console.log("Game crypto initialized successfully");
 }
@@ -395,7 +410,7 @@ export async function generateRoleAssignmentInput(
   gameInfo: GameInfo,
 ): Promise<RoleAssignmentInput> {
   const cryptoParams = await loadCryptoParams(gameInfo);
-  const myId = getMyPlayerId(gameInfo, username);
+  const myIndex = getMyPlayerIndex(gameInfo, username);
 
   const groupingParameter = gameInfo.grouping_parameter;
   if (!groupingParameter) {
@@ -415,10 +430,10 @@ export async function generateRoleAssignmentInput(
   const rinputRes = await fetch("/test_role_assignment_input2.json");
   const rinput = await rinputRes.text();
   const parsedRinput: RoleAssignmentInput = JSONbigNative.parse(rinput);
-  parsedRinput.privateInput.id = myId;
+  parsedRinput.privateInput.id = myIndex;
 
   const privateInput: RoleAssignmentPrivateInput = {
-    id: myId,
+    id: myIndex,
     shuffleMatrices: generatedShuffleMatrices,
     randomness: FINITE_FIELD_ZERO,
     playerRandomness,
@@ -457,14 +472,14 @@ export async function generateDivinationInput(
 ): Promise<DivinationInput> {
   const cryptoParams = await loadCryptoParams(gameInfo);
   const randomness = getRandomness(roomId, username);
-  const myId = getMyPlayerId(gameInfo, username);
+  const myIndex = getMyPlayerIndex(gameInfo, username);
 
   const isWerewolfValue = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: DivinationPrivateInput =
     isDummy === false
       ? {
-          id: myId,
+          id: myIndex,
           isTarget: gameInfo.players.map((player: any) =>
             player.id === targetId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO,
           ),
@@ -472,7 +487,7 @@ export async function generateDivinationInput(
           randomness: randomness,
         }
       : {
-          id: myId,
+          id: myIndex,
           isTarget: gameInfo.players.map(() => FINITE_FIELD_ZERO),
           isWerewolf: isWerewolfValue,
           randomness: randomness,
@@ -504,7 +519,7 @@ export async function generateVotingInput(
 ): Promise<AnonymousVotingInput> {
   const cryptoParams = await loadCryptoParams(gameInfo);
   const randomness = await getRandomness(roomId, username);
-  const myId = getMyPlayerId(gameInfo, username);
+  const myIndex = getMyPlayerIndex(gameInfo, username);
 
   // MPC公開鍵の確認
   const nodeKeys = getNodeKeys();
@@ -513,7 +528,7 @@ export async function generateVotingInput(
   }
 
   const privateInput: AnonymousVotingPrivateInput = {
-    id: myId,
+    id: myIndex,
     isTargetId: gameInfo.players.map((player: any) =>
       player.id === votedForId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO,
     ),
@@ -557,11 +572,11 @@ export async function generateWinningJudgementInput(
 ): Promise<WinningJudgementInput> {
   const cryptoParams = await loadCryptoParams(gameInfo);
   const randomness = await getRandomness(roomId, username);
-  const myId = getMyPlayerId(gameInfo, username);
+  const myIndex = getMyPlayerIndex(gameInfo, username);
   const amWerewolfValues = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: WinningJudgementPrivateInput = {
-    id: myId,
+    id: myIndex,
     amWerewolf: amWerewolfValues,
     playerRandomness: randomness,
   };
