@@ -38,6 +38,7 @@ export const useRoleAssignment = () => {
             user_id: String(roleAssignmentData.privateInput.id),
             prover_count: alivePlayerCount,
             encrypted_data: encryptedRoleAssignment,
+            public_key: roleAssignmentData.publicKey, // プレイヤーの公開鍵を追加
           },
         };
 

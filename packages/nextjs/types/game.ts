@@ -19,13 +19,12 @@ export interface RoomInfo {
 }
 
 // 暗号パラメータの型定義（サーバー側のCryptoParametersに対応）
+// 注意: 公開情報のみを含み、機密情報（player_randomness、secret_key）は含まない
 export interface CryptoParameters {
   pedersen_param: PedersenParam; // Pedersenコミットメントパラメータ
   player_commitment: PedersenCommitment[]; // プレイヤーのコミットメント配列
   fortune_teller_public_key: ElGamalPublicKey; // 占い師の公開鍵
   elgamal_param: ElGamalParam; // ElGamal暗号化パラメータ
-  player_randomness: Field[]; // プレイヤーのランダムネス配列(本来は含めるべきでない)
-  secret_key: ElGamalSecretKey; // 秘密鍵（注意: 本来は含めるべきでない）
 }
 
 export interface GameInfo {

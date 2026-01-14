@@ -169,6 +169,8 @@ pub async fn change_player_role(
     State(state): State<AppState>,
     Json(payload): Json<ChangeRoleRequest>,
 ) -> impl IntoResponse {
+    // WARNING: This endpoint is for debugging only and should NOT be used in production
+    // In production, roles should only be assigned via MPC and never stored on server
     let mut games = state.games.lock().await;
 
     if let Some(game) = games.get_mut(&room_id) {

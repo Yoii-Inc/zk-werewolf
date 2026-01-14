@@ -1,6 +1,7 @@
 import JSONbig from "json-bigint";
 import { GameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
+import { CryptoManager } from "~~/utils/crypto/encryption";
 import {
   AnonymousVotingInput,
   AnonymousVotingPrivateInput,
@@ -270,7 +271,7 @@ export function generateIndividualShuffleMatrix(n: number, m: number, rng?: () =
   }
 
   // 平坦化された行列をゼロ要素で初期化
-  const mat: Field[][] = new Array(total);
+  const mat: Field[][] = new Array(size);
   for (let idx = 0; idx < total; idx++) {
     mat[idx] = FINITE_FIELD_ZERO;
   }
@@ -294,7 +295,7 @@ export function generateIndividualShuffleMatrix(n: number, m: number, rng?: () =
  * WASM に渡す形式（JSONbig.parse と同じ形）で生成するヘルパー
  * 返り値は [matrixFlatArray, size, size] の形になります。
  */
-export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () => number): any[] {
+export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () => number): [Field[][], number, number] {
   const mat = generateIndividualShuffleMatrix(n, m, rng);
   const size = n + m;
   return [mat, size, size];
@@ -304,7 +305,7 @@ export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () =>
  * tau matrix を WASM/JSONbig と同じ形式で生成する。
  * groupingParameter の走査順はオブジェクトの列挙順に従う。
  */
-export function generateTauMatrixForWasm(groupingParameter: any, numPlayers: number): any[] {
+export function generateTauMatrixForWasm(groupingParameter: any, numPlayers: number): [Field[], number, number] {
   // compute num_groups according to Rust logic
   let numGroups = 0;
   for (const key of Object.keys(groupingParameter)) {
@@ -543,11 +544,25 @@ export async function generateRoleAssignmentInput(
     playerCommitment: playerCommitments,
   };
 
+  // プレイヤーの公開鍵を取得または生成
+  const playerId = getMyPlayerId(latestGameInfo, username);
+  const cryptoManager = new CryptoManager(playerId || username);
+
+  let publicKey: string | undefined;
+  if (!cryptoManager.hasKeyPair()) {
+    console.log("Generating new keypair for role assignment");
+    const keyPair = cryptoManager.generateKeyPair(playerId || username);
+    publicKey = keyPair.publicKey;
+  } else {
+    publicKey = cryptoManager.getPublicKey();
+  }
+
   return {
     privateInput,
     publicInput,
     nodeKeys: getNodeKeys(),
     scheme: getScheme(),
+    publicKey,
   };
 }
 

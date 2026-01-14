@@ -24,6 +24,7 @@ jsonwebtoken = "8.3"
 bcrypt = "0.15"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.13"
 zk-mpc-node = { path = "../zk-mpc-node" }
 rand = "0.8.5"
 zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git" }

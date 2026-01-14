@@ -3,6 +3,7 @@ import JSONbig from "json-bigint";
 import { loadCryptoParams } from "~~/services/gameInputGenerator";
 import type { ChatMessage } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
+import { CryptoManager } from "~~/utils/crypto/encryption";
 import { getPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
@@ -60,9 +61,11 @@ export const useComputationResults = (
       const result: ComputationResult = customEvent.detail;
 
       console.log(`Computation result received: ${result.computationType}`, result);
+      console.log(`Target player ID: ${result.targetPlayerId}, My player ID: ${playerId}`);
 
       // 対象プレイヤーのチェック（指定がある場合）
       if (result.targetPlayerId && result.targetPlayerId !== playerId) {
+        console.log(`Skipping message not for me (target: ${result.targetPlayerId}, me: ${playerId})`);
         return; // 自分宛てでない場合はスキップ
       }
 
@@ -192,55 +195,58 @@ export const useComputationResults = (
           case "role_assignment":
             setRoleAssignmentResult(result.resultData);
 
-            // ダミーコード: gameInfoから役職を取得してprivateGameInfoを更新
-            console.log("Role assignment result received, retrieving role from gameInfo");
+            // Role情報の復号処理
+            try {
+              console.log("Starting role assignment decryption process");
+              console.log("Result data:", result.resultData);
 
-            if (gameInfo && gameInfo.players) {
-              const currentPlayer = gameInfo.players.find((player: any) => player.id === playerId);
-
-              if (currentPlayer && currentPlayer.role) {
-                console.log("Role retrieved from gameInfo:", currentPlayer.role);
-
-                // privateGameInfoを更新
-                const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
-                  playerRole: currentPlayer.role,
-                });
-
-                if (updatedInfo) {
-                  console.log("privateGameInfo updated (gameInfo based):", updatedInfo);
-
-                  addMessage({
-                    id: Date.now().toString(),
-                    sender: "System",
-                    message: `Your role is "${currentPlayer.role}"`,
-                    timestamp: new Date().toISOString(),
-                    type: "system",
-                  });
-                } else {
-                  console.warn("Failed to update privateGameInfo. It may not be initialized.");
-
-                  addMessage({
-                    id: Date.now().toString(),
-                    sender: "System",
-                    message: "Failed to update role information. Please restart the game.",
-                    timestamp: new Date().toISOString(),
-                    type: "system",
-                  });
-                }
-              } else {
-                console.warn("Could not retrieve role information from gameInfo");
+              // 暗号化されたRoleデータを取得
+              if (!result.resultData.encrypted_role) {
+                throw new Error("No encrypted role data in result");
               }
-            } else {
-              console.warn("gameInfo is not available");
-            }
 
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Role assignment completed.",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
+              const { encrypted, nonce, sender_public_key } = result.resultData.encrypted_role;
+
+              if (!encrypted || !nonce || !sender_public_key) {
+                throw new Error("Invalid encrypted role data structure");
+              }
+
+              // CryptoManagerで復号
+              const cryptoManager = new CryptoManager(playerId);
+
+              if (!cryptoManager.hasKeyPair()) {
+                throw new Error("No keypair found. Cannot decrypt role.");
+              }
+
+              console.log("Decrypting role with CryptoManager");
+              const decryptedRole = cryptoManager.decrypt(encrypted, nonce, sender_public_key);
+
+              console.log("Role decrypted successfully:", decryptedRole);
+
+              // 復号したRoleをprivateGameInfoに保存
+              updatePrivateGameInfo(roomId, playerId, { playerRole: decryptedRole as any });
+
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: `Your role has been assigned: ${decryptedRole}`,
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+
+              // Role割り当て完了イベントを発火
+              window.dispatchEvent(new CustomEvent("roleAssignmentCompleted"));
+              console.log("Role assignment completion event dispatched");
+            } catch (error) {
+              console.error("Role decryption error:", error);
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: `Failed to decrypt role: ${error instanceof Error ? error.message : String(error)}`,
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            }
             break;
           case "winning_judge":
             setWinningJudgeResult(result.resultData);

@@ -31,6 +31,7 @@ export type RoleAssignmentInput = {
   publicInput: RoleAssignmentPublicInput;
   nodeKeys: NodeKey[];
   scheme: SecretSharingScheme;
+  publicKey?: string; // Curve25519公開鍵（Base64エンコード）
 };
 
 export type RoleAssignmentOutput = string;

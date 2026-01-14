@@ -71,16 +71,16 @@ export const useGameInfo = (
           const currentPlayer = data.players.find((player: any) => player.id === userId);
 
           if (currentPlayer) {
-            // PrivateGameInfoを初期化
+            // PrivateGameInfoを初期化（roleはMPC計算結果から後で設定）
             const newPrivateInfo: PrivateGameInfo = {
               playerId: userId,
-              playerRole: currentPlayer.role, // 役職を設定
+              playerRole: null as any, // Roleはまだ未決定
               hasActed: false,
             };
 
             // セッションストレージに保存
             saveToStorage(roomId, newPrivateInfo);
-            console.log("PrivateGameInfo initialized for non-starter player:", newPrivateInfo);
+            console.log("PrivateGameInfo initialized for player (role not yet assigned):", newPrivateInfo);
 
             // ステート更新
             setPrivateGameInfoState(newPrivateInfo);

@@ -11,6 +11,9 @@ pub struct Config {
     pub zk_mpc_node_0: String,
     pub zk_mpc_node_1: String,
     pub zk_mpc_node_2: String,
+    pub mpc_node_0_public_key: String,
+    pub mpc_node_1_public_key: String,
+    pub mpc_node_2_public_key: String,
 }
 
 impl Config {
@@ -22,6 +25,9 @@ impl Config {
             zk_mpc_node_0: env::var("ZK_MPC_NODE_0_HTTP").expect("ZK_MPC_NODE_0_HTTP must be set"),
             zk_mpc_node_1: env::var("ZK_MPC_NODE_1_HTTP").expect("ZK_MPC_NODE_1_HTTP must be set"),
             zk_mpc_node_2: env::var("ZK_MPC_NODE_2_HTTP").expect("ZK_MPC_NODE_2_HTTP must be set"),
+            mpc_node_0_public_key: env::var("MPC_NODE_0_PUBLIC_KEY").unwrap_or_default(),
+            mpc_node_1_public_key: env::var("MPC_NODE_1_PUBLIC_KEY").unwrap_or_default(),
+            mpc_node_2_public_key: env::var("MPC_NODE_2_PUBLIC_KEY").unwrap_or_default(),
         }
     }
 

@@ -26,8 +26,8 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
     let mut rooms = state.rooms.lock().await;
 
     if let Some(room) = rooms.get_mut(room_id) {
-        // プレイヤー数に応じて役職を振り分け
-        let roles = assign_roles(room.players.len())?;
+        // プレイヤー数に応じて役職を振り分け（デバッグ用に生成のみ）
+        let _roles = assign_roles(room.players.len())?;
         let mut new_game = Game::new(room_id.to_string(), room.players.clone());
 
         // 暗号パラメータの初期化
@@ -38,31 +38,25 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
 
         // preprocessing_werewolf(state.clone(), &mut game).await;
 
-        if state.debug_config.random_role {
-            // 各プレイヤーに役職を割り当て
-            for (player, role) in game.players.iter_mut().zip(roles.iter()) {
-                player.role = Some(role.clone());
-            }
-        }
+        // NOTE: Role情報はサーバー側では保持せず、MPC計算で暗号化された形で配布される
+        // デバッグモードでもroleを割り当てない
+        // if state.debug_config.random_role {
+        //     // 各プレイヤーに役職を割り当て
+        //     for (player, role) in game.players.iter_mut().zip(roles.iter()) {
+        //         player.role = Some(role.clone());
+        //     }
+        // }
 
         room.status = RoomStatus::InProgress;
 
         // ゲーム開始のシステムメッセージを追加
         let player_count = game.players.len();
-        let werewolf_count = game
-            .players
-            .iter()
-            .filter(|p| p.role == Some(Role::Werewolf))
-            .count();
-        let seer_exists = game.players.iter().any(|p| p.role == Some(Role::Seer));
-
-        let mut start_message = format!(
-            "Starting the game. {} players have joined, including {} werewolves.",
-            player_count, werewolf_count
+        
+        // NOTE: 役職情報は非公開なので、メッセージには入れない
+        let start_message = format!(
+            "Starting the game with {} players. Roles will be assigned via MPC.",
+            player_count
         );
-        if seer_exists {
-            start_message.push_str(" The seer will also help protect the village.");
-        }
 
         game.chat_log.add_system_message(start_message);
 
@@ -577,11 +571,9 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
     // 各ゲームのZKPパラメータを更新
     let crypto_parameters = Some(crate::models::game::CryptoParameters {
         pedersen_param,
-        player_randomness,
         player_commitment: player_commitment.clone(),
         fortune_teller_public_key: pk,
         elgamal_param,
-        secret_key: sk,
     });
 
     game.crypto_parameters = crypto_parameters.clone();
@@ -610,19 +602,16 @@ pub fn initialize_crypto_parameters(game: &mut Game) {
         )
         .unwrap();
 
-    // プレイヤーごとのランダムネスとコミットメント（空で初期化、後でクライアントから受信）
-    let player_randomness: Vec<Fr> = Vec::new();
+    // プレイヤーごとのコミットメント（空で初期化、後でクライアントから受信）
     let player_commitment: Vec<
         <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output,
     > = Vec::new();
 
     game.crypto_parameters = Some(crate::models::game::CryptoParameters {
         pedersen_param,
-        player_randomness,
         player_commitment,
         fortune_teller_public_key: pk,
         elgamal_param,
-        secret_key: sk,
     });
 
     tracing::info!("Initialized crypto parameters for game {}", game.room_id);
