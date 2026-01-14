@@ -31,9 +31,11 @@ server:
 # Start all nodes in background
 node:
 	@echo "Starting zk-mpc-nodes (id=0,1,2) in background..."
-	cd packages/zk-mpc-node && cargo run --release start --id 0 &
-	cd packages/zk-mpc-node && cargo run --release start --id 1 &
-	cd packages/zk-mpc-node && cargo run --release start --id 2 &
+	# Start nodes 1 and 2 in background and discard their output
+	cd packages/zk-mpc-node && cargo run --release start --id 1 > /dev/null 2>&1 &
+	cd packages/zk-mpc-node && cargo run --release start --id 2 > /dev/null 2>&1 &
+	# Start node 0 in foreground so its output is shown
+	cd packages/zk-mpc-node && cargo run --release start --id 0
 	@echo "All nodes started in background!"
 
 # Stop all running services

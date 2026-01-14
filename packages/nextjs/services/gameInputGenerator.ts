@@ -435,12 +435,6 @@ export async function generateRoleAssignmentInput(
   );
   const playerRandomness = await getRandomness(roomId, username);
 
-  // テストデータを読み込み
-  const rinputRes = await fetch("/test_role_assignment_input2.json");
-  const rinput = await rinputRes.text();
-  const parsedRinput: RoleAssignmentInput = JSONbigNative.parse(rinput);
-  parsedRinput.privateInput.id = myIndex;
-
   const privateInput: RoleAssignmentPrivateInput = {
     id: myIndex,
     shuffleMatrices: generatedShuffleMatrices,
@@ -451,14 +445,35 @@ export async function generateRoleAssignmentInput(
   // TODO: tauMatrix, roleCommitment, playerCommitmentを適切に設定する
   const generatedTau = generateTauMatrixForWasm(groupingParameter, gameInfo.players.length);
 
+  const pedersenInput = {
+    pedersenParams: cryptoParams.pedersenParam,
+    x: playerRandomness,
+    pedersenRandomness: playerRandomness, // 同じランダムネスを使用
+  };
+
+  const dummyRoleCommitment = [
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+  ];
+
+  const dummyPlayerCommitments = [
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
+  ];
+
   const publicInput: RoleAssignmentPublicInput = {
     numPlayers: gameInfo.players.length,
     maxGroupSize,
     pedersenParam: cryptoParams.pedersenParam,
     groupingParameter,
     tauMatrix: generatedTau,
-    roleCommitment: parsedRinput.publicInput.roleCommitment,
-    playerCommitment: cryptoParams.playerCommitments,
+    roleCommitment: dummyRoleCommitment,
+    // playerCommitment: cryptoParams.playerCommitments,
+    playerCommitment: dummyPlayerCommitments,
   };
 
   return {
@@ -480,7 +495,7 @@ export async function generateDivinationInput(
   isDummy: boolean,
 ): Promise<DivinationInput> {
   const cryptoParams = await loadCryptoParams(gameInfo);
-  const randomness = getRandomness(roomId, username);
+  const randomness = await getRandomness(roomId, username);
   const myIndex = getMyPlayerIndex(gameInfo, username);
 
   const isWerewolfValue = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;

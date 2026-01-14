@@ -4,6 +4,7 @@ use crate::models::game::{
 };
 use crate::models::role::Role;
 use crate::models::room::RoomStatus;
+use crate::services::game_service::initialize_crypto_parameters;
 use crate::services::zk_proof;
 use crate::{
     models::chat::{ChatMessage, ChatMessageType},
@@ -297,7 +298,7 @@ async fn reset_game_handler(
 
         // ゲームを更新
         // reset crypto parameters as well
-        reset_game.crypto_parameters = None;
+        initialize_crypto_parameters(&mut reset_game);
         *game = reset_game;
 
         // ルームも更新
