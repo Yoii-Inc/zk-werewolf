@@ -12,6 +12,7 @@ import { useGameChat } from "~~/hooks/useGameChat";
 import { useGameInfo } from "~~/hooks/useGameInfo";
 import { useGamePhase } from "~~/hooks/useGamePhase";
 import { useGameWebSocket } from "~~/hooks/useGameWebSocket";
+import * as GameInputGenerator from "~~/services/gameInputGenerator";
 import type { ChatMessage } from "~~/types/game";
 import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
 
@@ -52,9 +53,15 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   // ゲームリセット通知を監視
   useEffect(() => {
-    const handleGameReset = () => {
-      console.log("Game reset notification received, clearing messages");
+    const handleGameReset = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { roomId } = customEvent.detail;
+
+      console.log("Game reset notification received, clearing messages and crypto state");
       resetMessages();
+
+      // 暗号パラメータとランダムネスの初期化状態をリセット
+      GameInputGenerator.resetGameCryptoState(roomId);
     };
 
     window.addEventListener("gameResetNotification", handleGameReset);

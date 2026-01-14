@@ -66,6 +66,31 @@ impl AppState {
         Ok(())
     }
 
+    pub async fn broadcast_commitments_ready(
+        &self,
+        room_id: &str,
+        commitments_count: usize,
+        total_players: usize,
+    ) -> Result<(), String> {
+        let tx = self.get_or_create_room_channel(room_id).await;
+
+        let commitments_ready_notification = serde_json::json!({
+            "message_type": "commitments_ready",
+            "room_id": room_id,
+            "commitments_count": commitments_count,
+            "total_players": total_players,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        });
+
+        if let Ok(message_text) = serde_json::to_string(&commitments_ready_notification) {
+            if let Err(e) = tx.send(Message::Text(message_text)) {
+                return Err(format!("Failed to broadcast commitments ready: {}", e));
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn broadcast_computation_result(
         &self,
         room_id: &str,

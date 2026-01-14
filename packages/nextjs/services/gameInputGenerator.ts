@@ -184,6 +184,38 @@ export function clearRandomnessCache(roomId?: string, username?: string): void {
   }
 }
 
+/**
+ * 特定のルームのLocalStorageに保存されているランダムネスをクリア
+ */
+export function clearRandomnessFromStorage(roomId: string): void {
+  // LocalStorageから該当ルームのランダムネスを削除
+  const keys = Object.keys(localStorage);
+  keys.forEach(key => {
+    if (key.startsWith(`randomness_${roomId}_`)) {
+      localStorage.removeItem(key);
+      console.log(`Cleared randomness from localStorage: ${key}`);
+    }
+  });
+}
+
+/**
+ * ゲームリセット時の全クライアント初期化状態クリア
+ */
+export function resetGameCryptoState(roomId: string): void {
+  console.log(`Resetting game crypto state for room: ${roomId}`);
+
+  // 暗号パラメータキャッシュをクリア
+  clearCryptoParamsCache();
+
+  // ランダムネスメモリキャッシュをクリア
+  clearRandomnessCache();
+
+  // LocalStorageから該当ルームのランダムネスを削除
+  clearRandomnessFromStorage(roomId);
+
+  console.log(`Game crypto state reset completed for room: ${roomId}`);
+}
+
 // ============================================================================
 // ヘルパー関数
 // ============================================================================
@@ -418,10 +450,27 @@ export async function generateRoleAssignmentInput(
   username: string,
   gameInfo: GameInfo,
 ): Promise<RoleAssignmentInput> {
-  const cryptoParams = await loadCryptoParams(gameInfo);
-  const myIndex = getMyPlayerIndex(gameInfo, username);
+  // 最新のゲーム状態を取得してコミットメントを確実に反映
+  let latestGameInfo = gameInfo;
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/state`,
+    );
+    if (response.ok) {
+      const freshGameInfo = await response.json();
+      if (freshGameInfo?.crypto_parameters) {
+        latestGameInfo = freshGameInfo;
+        console.log("Fetched latest game state with crypto parameters for role assignment");
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to fetch latest game state, using provided gameInfo:", error);
+  }
 
-  const groupingParameter = gameInfo.grouping_parameter;
+  const cryptoParams = await loadCryptoParams(latestGameInfo);
+  const myIndex = getMyPlayerIndex(latestGameInfo, username);
+
+  const groupingParameter = latestGameInfo.grouping_parameter;
   if (!groupingParameter) {
     throw new Error("Grouping parameter is missing in crypto parameters");
   }
@@ -430,7 +479,7 @@ export async function generateRoleAssignmentInput(
   const maxGroupSize = groupingParameter.Villager[0] + groupingParameter.FortuneTeller[0] + 1;
 
   const generatedShuffleMatrices = generateShuffleMatricesForWasm(
-    gameInfo.players.length, // n (players.length used here as n)
+    latestGameInfo.players.length, // n (players.length used here as n)
     maxGroupSize, // m
   );
   const playerRandomness = await getRandomness(roomId, username);
@@ -442,14 +491,7 @@ export async function generateRoleAssignmentInput(
     playerRandomness,
   };
 
-  // TODO: tauMatrix, roleCommitment, playerCommitmentを適切に設定する
-  const generatedTau = generateTauMatrixForWasm(groupingParameter, gameInfo.players.length);
-
-  const pedersenInput = {
-    pedersenParams: cryptoParams.pedersenParam,
-    x: playerRandomness,
-    pedersenRandomness: playerRandomness, // 同じランダムネスを使用
-  };
+  const generatedTau = generateTauMatrixForWasm(groupingParameter, latestGameInfo.players.length);
 
   const dummyRoleCommitment = [
     { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
@@ -458,22 +500,46 @@ export async function generateRoleAssignmentInput(
     { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
   ];
 
-  const dummyPlayerCommitments = [
-    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
-    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
-    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
-    { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null },
-  ];
+  console.log("cryptoParams before roleassignment input generation:", cryptoParams);
+  console.log("playerCommitments available:", cryptoParams.playerCommitments);
+  console.log("playerCommitments length:", cryptoParams.playerCommitments?.length);
+
+  // プレイヤーコミットメントを取得（サーバーから取得できた場合はそれを使用、なければダミー）
+  let playerCommitments: PedersenCommitment[];
+
+  if (cryptoParams.playerCommitments && cryptoParams.playerCommitments.length > 0) {
+    console.log("Using actual player commitments from server");
+    playerCommitments = cryptoParams.playerCommitments;
+
+    // プレイヤー数と一致しない場合は警告
+    if (playerCommitments.length !== latestGameInfo.players.length) {
+      console.warn(
+        `Player commitments count mismatch: expected ${latestGameInfo.players.length}, got ${playerCommitments.length}`,
+      );
+
+      // 不足分をダミーで埋める
+      const dummyCommitment = { x: FINITE_FIELD_ZERO, y: FINITE_FIELD_ZERO, _params: null };
+      while (playerCommitments.length < latestGameInfo.players.length) {
+        playerCommitments.push(dummyCommitment);
+      }
+    }
+  } else {
+    console.warn("No player commitments available, using dummy commitments");
+    playerCommitments = Array(latestGameInfo.players.length).fill({
+      x: FINITE_FIELD_ZERO,
+      y: FINITE_FIELD_ZERO,
+      _params: null,
+    });
+  }
 
   const publicInput: RoleAssignmentPublicInput = {
-    numPlayers: gameInfo.players.length,
+    numPlayers: latestGameInfo.players.length,
     maxGroupSize,
     pedersenParam: cryptoParams.pedersenParam,
     groupingParameter,
     tauMatrix: generatedTau,
     roleCommitment: dummyRoleCommitment,
-    // playerCommitment: cryptoParams.playerCommitments,
-    playerCommitment: dummyPlayerCommitments,
+    playerCommitment: playerCommitments,
   };
 
   return {

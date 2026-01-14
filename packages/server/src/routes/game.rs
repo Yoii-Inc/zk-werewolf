@@ -671,7 +671,30 @@ async fn submit_commitment(
         }
 
         let current_count = crypto_params_mut.player_commitment.len();
-        let all_ready = current_count >= game.players.len();
+        let total_players = game.players.len();
+        let all_ready = current_count >= total_players;
+
+        // 全プレイヤーのコミットメントが揃った場合、WebSocketで通知
+        if all_ready {
+            tracing::info!(
+                "All commitments ready for room {}: {}/{}",
+                room_id,
+                current_count,
+                total_players
+            );
+
+            // WebSocket通知を送信（非同期でエラーはログのみ）
+            let state_clone = state.clone();
+            let room_id_clone = room_id.clone();
+            tokio::spawn(async move {
+                if let Err(e) = state_clone
+                    .broadcast_commitments_ready(&room_id_clone, current_count, total_players)
+                    .await
+                {
+                    tracing::error!("Failed to broadcast commitments ready: {}", e);
+                }
+            });
+        }
 
         (
             StatusCode::OK,
@@ -679,7 +702,7 @@ async fn submit_commitment(
                 "success": true,
                 "message": "Commitment received (pending full implementation)",
                 "commitments_count": current_count,
-                "total_players": game.players.len(),
+                "total_players": total_players,
                 "all_ready": all_ready
             })),
         )

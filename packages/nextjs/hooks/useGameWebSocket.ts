@@ -48,6 +48,24 @@ export const useGameWebSocket = (
         return;
       }
 
+      // コミットメント準備完了通知の場合
+      if (data.message_type === "commitments_ready") {
+        console.log(`Commitments ready notification received: ${data.commitments_count}/${data.total_players} players`);
+
+        // カスタムイベントを発行
+        window.dispatchEvent(
+          new CustomEvent("commitmentsReadyNotification", {
+            detail: {
+              roomId: data.room_id,
+              commitmentsCount: data.commitments_count,
+              totalPlayers: data.total_players,
+              timestamp: data.timestamp,
+            },
+          }),
+        );
+        return;
+      }
+
       // For computation result notification
       if (data.message_type === "computation_result") {
         console.log(`Computation result notification received: ${data.computation_type}`);
