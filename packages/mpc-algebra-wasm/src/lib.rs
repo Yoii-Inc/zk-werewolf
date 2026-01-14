@@ -140,7 +140,7 @@ pub fn elgamal_decrypt(input: JsValue) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn fr_rand() -> Result<JsValue, JsValue> {
-    let fr = ark_bls12_377::Fr::rand(&mut ark_std::test_rng());
+    let fr = ark_bls12_377::Fr::rand(&mut ark_std::rand::thread_rng());
     let json_str = serde_json::to_string(&fr)
         .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
     Ok(JsValue::from_str(&json_str))
