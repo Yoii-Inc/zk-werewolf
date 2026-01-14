@@ -458,9 +458,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             {/* Chat Area */}
             <div className="flex-1 flex flex-col">
               <div className="flex-1 overflow-y-auto p-4">
-                {messages.map(msg => (
+                {messages.map((msg, index) => (
                   <div
-                    key={msg.id}
+                    key={`${msg.id}-${index}`}
                     className={`mb-4 rounded-lg p-3 ${
                       msg.type === "system"
                         ? msg.source === "client"
