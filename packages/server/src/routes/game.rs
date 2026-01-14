@@ -624,7 +624,6 @@ async fn submit_commitment(
         }
 
         // コミットメントをデシリアライズしてCryptoParameters.player_commitmentに追加
-        // TODO: 現状はJSON文字列をログに記録するのみ（deserializeの実装が必要）
         tracing::info!(
             "Received commitment from player {} (index: {}) in room {}: {:?}",
             commitment_req.player_id,
