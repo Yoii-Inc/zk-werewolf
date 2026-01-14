@@ -364,7 +364,8 @@ export async function submitCommitment(
   playerIdString: string,
 ): Promise<void> {
   const params = await loadCryptoParams();
-  console.log("Submitting commitment for player index:", params);
+  console.log("Submitting commitment for player index:", playerIndex);
+  console.log("Loaded crypto params for commitment:", params);
   if (!params?.pedersenParam) {
     throw new Error("Pedersen parameters not available");
   }
