@@ -142,9 +142,14 @@ export const Header = () => {
             </button>
           </div>
         ) : (
-          <Link href="/login" className="btn btn-sm btn-ghost ml-4">
-            Login
-          </Link>
+          <div className="flex items-center gap-2 ml-4">
+            <Link href="/register" className="btn btn-sm btn-ghost">
+              Register
+            </Link>
+            <Link href="/login" className="btn btn-sm btn-ghost">
+              Login
+            </Link>
+          </div>
         )}
       </div>
     </div>
