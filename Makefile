@@ -36,7 +36,7 @@ node:
 	cd packages/zk-mpc-node && cargo run --release start --id 2 > /dev/null 2>&1 &
 	# Start node 0 in foreground so its output is shown
 	cd packages/zk-mpc-node && cargo run --release start --id 0
-	@echo "All nodes started in background!"
+	@echo "Background nodes 1 and 2 started; node 0 has exited."
 
 # Stop all running services
 stop:
