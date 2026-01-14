@@ -590,7 +590,7 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
 }
 
 // 暗号パラメータの初期化関数
-fn initialize_crypto_parameters(game: &mut Game) {
+pub fn initialize_crypto_parameters(game: &mut Game) {
     let mut rng = rand::thread_rng();
 
     // Pedersenコミットメントパラメータの生成

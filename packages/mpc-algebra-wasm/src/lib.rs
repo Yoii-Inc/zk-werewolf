@@ -1,6 +1,7 @@
 use ark_crypto_primitives::{
-    commitment::pedersen::Commitment, encryption::AsymmetricEncryptionScheme,
+    commitment::pedersen::Commitment, encryption::AsymmetricEncryptionScheme, CommitmentScheme,
 };
+use ark_ff::{BigInteger, PrimeField, UniformRand};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
@@ -25,7 +26,8 @@ impl ark_crypto_primitives::crh::pedersen::Window for Window {
 
 type PedersenComScheme = Commitment<ark_ed_on_bls12_377::EdwardsProjective, Window>;
 type PedersenParam = <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Parameters;
-type PedersenCommitment = <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Output;
+pub type PedersenCommitment =
+    <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Output;
 type PedersenRandomness =
     <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Randomness;
 
@@ -132,6 +134,38 @@ pub fn elgamal_decrypt(input: JsValue) -> Result<JsValue, JsValue> {
 
     // Serialize plaintext to JSON string and return as JsValue
     let json_str = serde_json::to_string(&plaintext)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
+}
+
+#[wasm_bindgen]
+pub fn fr_rand() -> Result<JsValue, JsValue> {
+    let fr = ark_bls12_377::Fr::rand(&mut ark_std::rand::thread_rng());
+    let json_str = serde_json::to_string(&fr)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PedersenCommitmentInput {
+    pub pedersen_params: PedersenParam,
+    pub x: ark_bls12_377::Fr,
+    pub pedersen_randomness: PedersenRandomness,
+}
+
+#[wasm_bindgen]
+pub fn pedersen_commitment(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: PedersenCommitmentInput = serde_wasm_bindgen::from_value(input)
+        .map_err(|e| JsValue::from_str(&format!("Deserialize error: {}", e)))?;
+
+    let x_bytes = input.x.into_repr().to_bytes_le();
+
+    let commitment =
+        PedersenComScheme::commit(&input.pedersen_params, &x_bytes, &input.pedersen_randomness)
+            .map_err(|e| JsValue::from_str(&format!("Commit error: {}", e)))?;
+
+    let json_str = serde_json::to_string(&commitment)
         .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
     Ok(JsValue::from_str(&json_str))
 }

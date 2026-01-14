@@ -40,6 +40,7 @@ pub struct Game {
     pub batch_request: BatchRequest,
     pub computation_results: ComputationResults,
     pub started_at: Option<DateTime<Utc>>,
+    pub grouping_parameter: GroupingParameter,
 }
 
 // 計算結果を管理する構造体群
@@ -285,6 +286,7 @@ pub enum BatchStatus {
 
 impl Game {
     pub fn new(room_id: String, players: Vec<Player>) -> Self {
+        let player_count = players.len();
         Game {
             room_id: room_id.clone(),
             name: "".to_string(),
@@ -301,6 +303,7 @@ impl Game {
             batch_request: BatchRequest::new(),
             computation_results: ComputationResults::default(),
             started_at: Some(Utc::now()),
+            grouping_parameter: GroupingParameter::from_player_count(player_count),
         }
     }
 

@@ -37,8 +37,10 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                 // Base64デコード
                 let private_key_bytes = base64::decode(&private_key_base64)
                     .expect("Failed to decode MPC_PRIVATE_KEY from base64");
-                let public_key_bytes = base64::decode(&public_key_base64)
-                    .expect(&format!("Failed to decode {} from base64", public_key_env_name));
+                let public_key_bytes = base64::decode(&public_key_base64).expect(&format!(
+                    "Failed to decode {} from base64",
+                    public_key_env_name
+                ));
 
                 key_manager
                     .set_keys_from_base64_bytes(private_key_bytes, public_key_bytes)

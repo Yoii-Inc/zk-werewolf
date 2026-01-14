@@ -39,6 +39,7 @@ export const useGamePhase = (
   const phaseTransitionProcessedRef = useRef<string | null>(null);
   const winningJudgementSentRef = useRef<string | null>(null);
   const divinationCompletedRef = useRef(false); // 占い完了フラグ
+  const commitmentsReadyRef = useRef(false); // コミットメント準備完了フラグ
   const handleGameResultCheckRef = useRef<((transitionId: string, latestGameInfo: GameInfo) => void) | null>(null);
 
   // WebSocketからのフェーズ変更通知を処理
@@ -118,11 +119,36 @@ export const useGamePhase = (
       // 処理の優先順位を明確にした順次実行
       const processingSteps: (() => Promise<void>)[] = [];
 
-      // Step 0: 役職配布リクエスト送信
+      // Step 0: 役職配布リクエスト送信（コミットメント完了通知を待つ）
       if (fromPhase === "Waiting" && toPhase === "Night") {
-        console.log("Step 0: Starting role assignment process.");
+        console.log("Step 0: Waiting for all commitments to be ready before role assignment...");
+
         const handleRoleAssignment = async () => {
           try {
+            // コミットメント完了フラグをチェック（最大30秒待機）
+            const maxWaitTime = 30000; // 30秒
+            const checkInterval = 500; // 0.5秒ごとにチェック
+            let waited = 0;
+
+            while (!commitmentsReadyRef.current && waited < maxWaitTime) {
+              console.log(`Waiting for commitments... (${waited}ms / ${maxWaitTime}ms)`);
+              await new Promise(resolve => setTimeout(resolve, checkInterval));
+              waited += checkInterval;
+            }
+
+            if (!commitmentsReadyRef.current) {
+              console.warn("Timeout waiting for commitments, proceeding anyway...");
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: "Warning: Proceeding without all commitments confirmed",
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            } else {
+              console.log("All commitments ready, proceeding with role assignment");
+            }
+
             const playerCount = latestGameInfo.players.length;
 
             // latestGameInfoを使って直接サービスから入力を生成
@@ -240,6 +266,59 @@ export const useGamePhase = (
       window.removeEventListener("phaseChangeNotification", handlePhaseChangeNotification);
     };
   }, [gameInfo, username, roomId, handleBackgroundNightAction, addMessage]);
+
+  // コミットメント完了イベントを監視
+  useEffect(() => {
+    const handleCommitmentsReady = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { roomId: notifiedRoomId, commitmentsCount, totalPlayers } = customEvent.detail;
+
+      console.log(
+        `Commitments ready notification received for room ${notifiedRoomId}: ${commitmentsCount}/${totalPlayers}`,
+      );
+
+      if (notifiedRoomId === roomId) {
+        commitmentsReadyRef.current = true;
+        console.log("Commitments ready flag set to true");
+
+        addMessage({
+          id: Date.now().toString(),
+          sender: "System",
+          message: `All player commitments received (${commitmentsCount}/${totalPlayers})`,
+          timestamp: new Date().toISOString(),
+          type: "system",
+        });
+      }
+    };
+
+    window.addEventListener("commitmentsReadyNotification", handleCommitmentsReady);
+
+    return () => {
+      window.removeEventListener("commitmentsReadyNotification", handleCommitmentsReady);
+    };
+  }, [roomId, addMessage]);
+
+  // ゲームリセット通知を監視してフラグをリセット
+  useEffect(() => {
+    const handleGameReset = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { roomId: resetRoomId } = customEvent.detail;
+
+      console.log(`Game reset notification received in useGamePhase for room: ${resetRoomId}`);
+
+      if (resetRoomId === roomId) {
+        // コミットメント準備完了フラグをリセット
+        commitmentsReadyRef.current = false;
+        console.log("Commitments ready flag reset to false");
+      }
+    };
+
+    window.addEventListener("gameResetNotification", handleGameReset);
+
+    return () => {
+      window.removeEventListener("gameResetNotification", handleGameReset);
+    };
+  }, [roomId]);
 
   // 占い完了イベントを監視
   useEffect(() => {
