@@ -1,10 +1,11 @@
 "use client";
 
-import init, {
-  init as RustInit,
+import {
   divination,
   elgamal_decrypt,
+  elgamal_keygen,
   fr_rand,
+  init,
   key_publicize,
   pedersen_commitment,
   role_assignment,
@@ -18,6 +19,8 @@ import {
   DivinationOutput,
   ElGamalDecryptInput,
   ElGamalDecryptOutput,
+  ElGamalKeygenInput,
+  ElGamalKeygenOutput,
   KeyPublicizeInput,
   KeyPublicizeOutput,
   RoleAssignmentInput,
@@ -34,8 +37,7 @@ export class MPCEncryption {
    */
   private static async initializeWasm(): Promise<void> {
     if (!this.isInitialized) {
-      await init();
-      RustInit();
+      init();
       this.isInitialized = true;
     }
   }
@@ -145,6 +147,20 @@ export class MPCEncryption {
     } catch (error) {
       console.error("Pedersen commitment failed:", error);
       throw new Error(`Failed to compute pedersen commitment`);
+    }
+  }
+  /**
+   * ElGamal鍵ペア生成
+   * Expects input: { elgamalParams }
+   */
+  public static async elgamalKeygen(input: any): Promise<any> {
+    await this.initializeWasm();
+    try {
+      const result = elgamal_keygen(input);
+      return JSON.parse(result);
+    } catch (error) {
+      console.error("ElGamal keygen failed:", error);
+      throw new Error(`Failed to generate ElGamal keypair: ${error}`);
     }
   }
 }

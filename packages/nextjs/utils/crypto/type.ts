@@ -180,3 +180,12 @@ export interface ElGamalDecryptInput {
 export interface ElGamalDecryptOutput {
   plaintext: any;
 }
+
+export interface ElGamalKeygenInput {
+  elgamalParams: any;
+}
+
+export interface ElGamalKeygenOutput {
+  publicKey: any;
+  secretKey: any;
+}
