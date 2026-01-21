@@ -983,7 +983,10 @@ impl Game {
                                 let user_index: usize = match user_index_str.parse() {
                                     Ok(idx) => idx,
                                     Err(e) => {
-                                        println!("ERROR: Failed to parse user_id '{}' as index: {}", user_index_str, e);
+                                        println!(
+                                            "ERROR: Failed to parse user_id '{}' as index: {}",
+                                            user_index_str, e
+                                        );
                                         continue;
                                     }
                                 };
@@ -992,11 +995,18 @@ impl Game {
                                 let actual_player_id = if user_index < self.players.len() {
                                     self.players[user_index].id.clone()
                                 } else {
-                                    println!("ERROR: Player index {} out of bounds (total players: {})", user_index, self.players.len());
+                                    println!(
+                                        "ERROR: Player index {} out of bounds (total players: {})",
+                                        user_index,
+                                        self.players.len()
+                                    );
                                     continue;
                                 };
 
-                                println!("Converting user_index {} to player_id {}", user_index, actual_player_id);
+                                println!(
+                                    "Converting user_index {} to player_id {}",
+                                    user_index, actual_player_id
+                                );
 
                                 // encrypted_dataは [nonce(24バイト) + ciphertext] の形式
                                 if encrypted_share.encrypted_data.len() < 24 {
@@ -1145,26 +1155,68 @@ impl Game {
                         }
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
-                        // itemsを処理する
-                        let public_key: <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey =
-                            match output.value {
-                                Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
-                                    Ok(key) => key,
-                                    Err(e) => {
-                                        println!("Failed to deserialize public key: {}", e);
-                                        return;
-                                    }
-                                },
-                                None => {
-                                    println!("No output value found");
+                        println!("KeyPublicize process is starting...");
+
+                        // ProofOutputから公開鍵を取得
+                        let (pub_key_x, pub_key_y): (Fr, Fr) = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(key) => key,
+                                Err(e) => {
+                                    println!("Failed to deserialize divination public key: {}", e);
                                     return;
                                 }
-                            };
+                            },
+                            None => {
+                                println!("No divination public key found in output");
+                                return;
+                            }
+                        };
 
-                        self.crypto_parameters = Some(CryptoParameters {
-                            fortune_teller_public_key: public_key,
-                            ..self.crypto_parameters.clone().unwrap()
+                        println!("Fortune teller public key received from KeyPublicize MPC:");
+                        println!("  X: {}", serde_json::to_string(&pub_key_x).unwrap());
+                        println!("  Y: {}", serde_json::to_string(&pub_key_y).unwrap());
+
+                        // EdwardsProjectiveに変換してcrypto_parametersに保存
+
+                        let mut curve_pt = <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalPubKey::default();
+
+                        curve_pt.x = pub_key_x;
+                        curve_pt.y = pub_key_y;
+
+                        // crypto_parametersのfortune_teller_public_keyを更新
+                        if let Some(ref mut crypto_params) = self.crypto_parameters {
+                            crypto_params.fortune_teller_public_key = Some(curve_pt);
+                            println!("Updated crypto_parameters.fortune_teller_public_key with KeyPublicize result");
+                        } else {
+                            println!("WARNING: crypto_parameters is None, cannot update fortune_teller_public_key");
+                        }
+
+                        // 全プレイヤーに占い公開鍵を配信（フロントエンド互換形式）
+                        let key_data = serde_json::json!({
+                            "divination_public_key": {
+                                "x": serde_json::to_string(&pub_key_x).unwrap(),
+                                "y": serde_json::to_string(&pub_key_y).unwrap(),
+                                "_params": null
+                            },
+                            "status": "completed"
                         });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "divination_key_ready",
+                                key_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast divination key ready event: {}", e);
+                        }
+
+                        self.chat_log.add_system_message(
+                            "Fortune teller public key has been generated via MPC.".to_string(),
+                        );
                     }
                 }
 
@@ -1196,8 +1248,9 @@ pub struct CryptoParameters {
     pub pedersen_param: <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Parameters,
     pub player_commitment:
         Vec<<<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output>,
-    pub fortune_teller_public_key:
+    pub fortune_teller_public_key: Option<
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey,
+    >,
     pub elgamal_param:
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Parameters,
 }

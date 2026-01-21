@@ -419,7 +419,16 @@ impl CircuitFactory {
                 todo!()
             }
             BuiltinCircuit::KeyPublicize(circuit) => {
-                todo!()
+                let mut inputs = Vec::new();
+                let (pub_key_x, pub_key_y) = circuit.calculate_output();
+
+                let revealed_pub_key_x = pub_key_x.sync_reveal();
+                let revealed_pub_key_y = pub_key_y.sync_reveal();
+
+                // 公開鍵のX座標とY座標を入力として返す
+                inputs.push(revealed_pub_key_x);
+                inputs.push(revealed_pub_key_y);
+                inputs
             }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
         }

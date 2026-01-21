@@ -118,32 +118,6 @@ export class CryptoManager {
   }
 
   /**
-   * メッセージを復号（UTF8文字列用）
-   * @param encrypted Base64エンコードされた暗号文
-   * @param nonce Base64エンコードされたnonce
-   * @param senderPublicKey Base64エンコードされた送信者の公開鍵
-   * @returns 復号されたメッセージ
-   */
-  decrypt(encrypted: string, nonce: string, senderPublicKey: string): string {
-    if (!this.keyPair) {
-      throw new Error("キーペアが生成されていません");
-    }
-
-    const encryptedUint8 = decodeBase64(encrypted);
-    const nonceUint8 = decodeBase64(nonce);
-    const senderPublicKeyUint8 = decodeBase64(senderPublicKey);
-    const recipientPrivateKeyUint8 = decodeBase64(this.keyPair.privateKey);
-
-    const decryptedMessage = box.open(encryptedUint8, nonceUint8, senderPublicKeyUint8, recipientPrivateKeyUint8);
-
-    if (!decryptedMessage) {
-      throw new Error("復号に失敗しました");
-    }
-
-    return encodeUTF8(decryptedMessage);
-  }
-
-  /**
    * バイナリデータを復号（MPC Role割り当て用）
    * @param encrypted Base64エンコードされた暗号文
    * @param nonce Base64エンコードされたnonce

@@ -211,14 +211,14 @@ pub async fn process_night_action(
                 // Note: is_werewolf_vecはダミーデータを使用（実際の役職判定はMPCで行われる）
                 let is_werewolf_vec = vec![Fr::from(false); game.players.len()];
 
-                let mut mpc_input = WerewolfMpcInput::init();
-                mpc_input.set_public_input(rng, Some((elgamal_param, elgamal_pubkey)));
-                mpc_input.set_private_input(Some((is_werewolf_vec.clone(), is_target_vec.clone())));
-                mpc_input.generate_input(rng);
+                // let mut mpc_input = WerewolfMpcInput::init();
+                // mpc_input.set_public_input(rng, Some((elgamal_param, elgamal_pubkey)));
+                // mpc_input.set_private_input(Some((is_werewolf_vec.clone(), is_target_vec.clone())));
+                // mpc_input.generate_input(rng);
 
-                let divination_circuit = zk_mpc::circuits::DivinationCircuit::<MFr> {
-                    mpc_input: mpc_input.clone(),
-                };
+                // let divination_circuit = zk_mpc::circuits::DivinationCircuit::<MFr> {
+                //     mpc_input: mpc_input.clone(),
+                // };
 
                 // MPC計算による占い結果を返す
                 Ok("占いが実行されました（結果はMPC計算で決定されます）".to_string())
@@ -532,7 +532,7 @@ pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<
     let crypto_parameters = Some(crate::models::game::CryptoParameters {
         pedersen_param,
         player_commitment: player_commitment.clone(),
-        fortune_teller_public_key: pk,
+        fortune_teller_public_key: None,
         elgamal_param,
     });
 
@@ -570,7 +570,7 @@ pub fn initialize_crypto_parameters(game: &mut Game) {
     game.crypto_parameters = Some(crate::models::game::CryptoParameters {
         pedersen_param,
         player_commitment,
-        fortune_teller_public_key: pk,
+        fortune_teller_public_key: None,
         elgamal_param,
     });
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import JSONbig from "json-bigint";
-import { loadCryptoParams } from "~~/services/gameInputGenerator";
+import { getFortuneTellerSecretKey, loadCryptoParams } from "~~/services/gameInputGenerator";
 import type { ChatMessage, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
 import { CryptoManager } from "~~/utils/crypto/encryption";
@@ -84,14 +84,14 @@ export const useComputationResults = (
               console.log("Decrypting divination result as Seer");
 
               try {
-                // ElGamal秘密鍵をJSONファイルから読み取り
-                const secretKeyResponse = await fetch("/elgamal_secret_key.json");
-                if (!secretKeyResponse.ok) {
-                  throw new Error("Failed to load ElGamal secret key");
+                // KeyPublicize時に保存したElGamal秘密鍵を取得
+                const secretKey = getFortuneTellerSecretKey(roomId, playerId);
+
+                if (!secretKey) {
+                  throw new Error("ElGamal secret key not found. Please complete KeyPublicize first.");
                 }
 
-                const secretKeyText = await secretKeyResponse.text();
-                const secretKey = JSONbigNative.parse(secretKeyText);
+                console.log("ElGamal secret key loaded from localStorage");
 
                 // ElGamalパラメータを取得（キャッシュされたcryptoParamsから）
                 const cryptoParams = await loadCryptoParams();

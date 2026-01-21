@@ -1,11 +1,11 @@
 "use client";
 
-import {
+import init, {
+  init as RustInit,
   divination,
   elgamal_decrypt,
   elgamal_keygen,
   fr_rand,
-  init,
   key_publicize,
   pedersen_commitment,
   role_assignment,
@@ -37,7 +37,8 @@ export class MPCEncryption {
    */
   private static async initializeWasm(): Promise<void> {
     if (!this.isInitialized) {
-      init();
+      await init();
+      RustInit();
       this.isInitialized = true;
     }
   }
