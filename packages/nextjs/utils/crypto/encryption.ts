@@ -118,7 +118,7 @@ export class CryptoManager {
   }
 
   /**
-   * メッセージを復号
+   * メッセージを復号（UTF8文字列用）
    * @param encrypted Base64エンコードされた暗号文
    * @param nonce Base64エンコードされたnonce
    * @param senderPublicKey Base64エンコードされた送信者の公開鍵
@@ -141,6 +141,32 @@ export class CryptoManager {
     }
 
     return encodeUTF8(decryptedMessage);
+  }
+
+  /**
+   * バイナリデータを復号（MPC Role割り当て用）
+   * @param encrypted Base64エンコードされた暗号文
+   * @param nonce Base64エンコードされたnonce
+   * @param senderPublicKey Base64エンコードされた送信者の公開鍵
+   * @returns 復号されたバイナリデータ（Base64エンコード）
+   */
+  decryptBinary(encrypted: string, nonce: string, senderPublicKey: string): Uint8Array {
+    if (!this.keyPair) {
+      throw new Error("キーペアが生成されていません");
+    }
+
+    const encryptedUint8 = decodeBase64(encrypted);
+    const nonceUint8 = decodeBase64(nonce);
+    const senderPublicKeyUint8 = decodeBase64(senderPublicKey);
+    const recipientPrivateKeyUint8 = decodeBase64(this.keyPair.privateKey);
+
+    const decryptedData = box.open(encryptedUint8, nonceUint8, senderPublicKeyUint8, recipientPrivateKeyUint8);
+
+    if (!decryptedData) {
+      throw new Error("復号に失敗しました");
+    }
+
+    return decryptedData;
   }
 
   /**

@@ -1935,6 +1935,7 @@ dependencies = [
  "mpc-algebra-wasm",
  "nalgebra",
  "serde",
+ "serde_json",
  "zk-mpc",
 ]
 

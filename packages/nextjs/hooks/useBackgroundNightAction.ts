@@ -14,6 +14,8 @@ export const useBackgroundNightAction = () => {
         console.log(`Generating dummy divination for player ${myId}, target: ${dummyTargetId}`);
         const divinationData = await GameInput.generateDivinationInput(roomId, username, gameInfo, dummyTargetId, true);
 
+        console.log("占いダミーデータ:", divinationData);
+
         if (!divinationData) {
           throw new Error("Failed to generate divination data");
         }

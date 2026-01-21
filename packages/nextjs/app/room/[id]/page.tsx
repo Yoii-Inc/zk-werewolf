@@ -62,6 +62,20 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
       // 暗号パラメータとランダムネスの初期化状態をリセット
       GameInputGenerator.resetGameCryptoState(roomId);
+
+      // privateGameInfoのplayerRoleをnullにリセット
+      if (user?.id) {
+        const existingInfo = privateGameInfo;
+        if (existingInfo) {
+          const updatedInfo = {
+            ...existingInfo,
+            playerRole: null as any,
+            hasActed: false,
+          };
+          sessionStorage.setItem(`game_${roomId}_player_${user.id}`, JSON.stringify(updatedInfo));
+          console.log("PrivateGameInfo reset: playerRole set to null");
+        }
+      }
     };
 
     window.addEventListener("gameResetNotification", handleGameReset);
@@ -69,7 +83,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     return () => {
       window.removeEventListener("gameResetNotification", handleGameReset);
     };
-  }, [resetMessages]);
+  }, [resetMessages, user?.id, privateGameInfo]);
 
   // ゲーム終了を検知してモーダルを表示
   useEffect(() => {
@@ -180,20 +194,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     )}
 
                     <span className="flex items-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full text-sm">
-                      Your Role:{" "}
-                      {(() => {
-                        const role = gameInfo.players.find(player => player.name === user?.username)?.role;
-                        switch (role) {
-                          case "Seer":
-                            return "Seer";
-                          case "Werewolf":
-                            return "Werewolf";
-                          case "Villager":
-                            return "Villager";
-                          default:
-                            return "Unknown";
-                        }
-                      })()}
+                      Your Role: {privateGameInfo?.playerRole ?? "Unknown"}
                     </span>
 
                     {gameInfo.result === "InProgress" && (
@@ -244,7 +245,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 )}
                 {gameInfo?.phase === "Night" &&
                   !gameInfo.hasActed &&
-                  gameInfo.players.find(player => player.name === user?.username)?.role !== "Villager" && (
+                  privateGameInfo?.playerRole !== "Villager" &&
+                  privateGameInfo?.playerRole !== null && (
                     <button
                       onClick={() => setShowNightAction(true)}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
@@ -543,12 +545,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       {showNightAction && gameInfo?.phase === "Night" && (
         <NightActionModal
           players={gameInfo.players}
-          role={gameInfo.players.find(player => player.name === user?.username)?.role ?? "Villager"}
+          role={privateGameInfo?.playerRole ?? "Villager"}
           gameInfo={gameInfo}
           username={user?.username ?? ""}
           onSubmit={(targetPlayerId: string) => {
-            const userRole = gameInfo.players.find(player => player.name === user?.username)?.role;
-            // handleNightAction(targetPlayerId, userRole);
+            // handleNightAction(targetPlayerId, privateGameInfo?.playerRole);
             setShowNightAction(false);
           }}
           onClose={() => setShowNightAction(false)}

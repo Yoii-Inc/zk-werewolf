@@ -1,5 +1,5 @@
 import JSONbig from "json-bigint";
-import { GameInfo } from "~~/types/game";
+import { GameInfo, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
 import { CryptoManager } from "~~/utils/crypto/encryption";
 import {
@@ -21,6 +21,7 @@ import {
   WinningJudgementPrivateInput,
   WinningJudgementPublicInput,
 } from "~~/utils/crypto/type";
+import { getPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
@@ -230,13 +231,8 @@ function getMyPlayerId(gameInfo: GameInfo, username: string): string | null {
   return player ? player.id : null;
 }
 
-function getMyRole(gameInfo: GameInfo, username: string): string | null {
-  const player = gameInfo.players.find(p => p.name === username);
-  return player?.role || null;
-}
-
-function isWerewolf(gameInfo: GameInfo, username: string): boolean {
-  return getMyRole(gameInfo, username) === "Werewolf";
+function isWerewolf(privateGameInfo: PrivateGameInfo | null): boolean {
+  return privateGameInfo?.playerRole === "Werewolf";
 }
 
 function getNodeKeys(): NodeKey[] {
@@ -580,7 +576,10 @@ export async function generateDivinationInput(
   const randomness = await getRandomness(roomId, username);
   const myIndex = getMyPlayerIndex(gameInfo, username);
 
-  const isWerewolfValue = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
+  // PrivateGameInfoから自分の役職を取得
+  const playerId = getMyPlayerId(gameInfo, username);
+  const privateGameInfo = playerId ? getPrivateGameInfo(roomId, playerId) : null;
+  const isWerewolfValue = isWerewolf(privateGameInfo) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: DivinationPrivateInput =
     isDummy === false
@@ -679,7 +678,11 @@ export async function generateWinningJudgementInput(
   const cryptoParams = await loadCryptoParams(gameInfo);
   const randomness = await getRandomness(roomId, username);
   const myIndex = getMyPlayerIndex(gameInfo, username);
-  const amWerewolfValues = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
+
+  // PrivateGameInfoから自分の役職を取得
+  const playerId = getMyPlayerId(gameInfo, username);
+  const privateGameInfo = playerId ? getPrivateGameInfo(roomId, playerId) : null;
+  const amWerewolfValues = isWerewolf(privateGameInfo) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: WinningJudgementPrivateInput = {
     id: myIndex,

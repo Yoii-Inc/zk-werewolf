@@ -51,7 +51,7 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
 
         // ゲーム開始のシステムメッセージを追加
         let player_count = game.players.len();
-        
+
         // NOTE: 役職情報は非公開なので、メッセージには入れない
         let start_message = format!(
             "Starting the game with {} players. Roles will be assigned via MPC.",
@@ -161,71 +161,31 @@ pub async fn process_night_action(
         return Err("夜のアクションは夜にのみ実行できます".to_string());
     }
 
-    let player = game
+    // プレイヤーの存在確認のみ実施（役職チェックは行わない）
+    let _player = game
         .players
         .iter()
         .find(|p| p.id == action_req.player_id)
         .ok_or("プレイヤーが見つかりません")?;
 
-    match (
-        player.role.as_ref().unwrap_or(&Role::Villager),
-        &action_req.action,
-    ) {
-        (Role::Werewolf, NightAction::Attack { target_id }) => {
-            if state.debug_config.create_proof {
-                // request proof of werewolf attack validity
-                let _attack_inputs = json!({
-                    "attacker_id": action_req.player_id,
-                    "target_id": target_id,
-                    "is_attacker_werewolf": true,
-                    "is_night_phase": true,
-                    "is_target_alive": !game.players.iter().find(|p| p.id == *target_id).map_or(true, |p| p.is_dead)
-                });
-
-                // TODO: Replace with actual circuit identifier
-
-                todo!();
-
-                // let proof_id = request_proof(
-                //     zk_mpc_node::CircuitIdentifier::Built(WerewolfAttackCircuit),
-                //     attack_inputs,
-                // )
-                // .await?;
-
-                // if check_status_with_retry(&proof_id).await? {
-                //     drop(games);
-                //     let mut games = state.games.lock().await;
-                //     let game = games.get_mut(room_id).ok_or("Game not found")?;
-                //     game.register_attack(target_id)?;
-                //     Ok("襲撃先を登録しました".to_string())
-                // } else {
-                //     Err("襲撃の証明に失敗しました".to_string())
-                // }
-            } else {
-                drop(games);
-                let mut games = state.games.lock().await;
-                let game = games.get_mut(room_id).ok_or("Game not found")?;
-                game.register_attack(target_id)?;
-                Ok("襲撃先を登録しました".to_string())
-            }
+    // 役職情報はクライアント側（MPC計算結果）で管理されるため、
+    // サーバーは役職チェックを行わず、アクションタイプに応じた処理のみ実施
+    match &action_req.action {
+        NightAction::Attack { target_id } => {
+            // 人狼の襲撃処理
+            drop(games);
+            let mut games = state.games.lock().await;
+            let game = games.get_mut(room_id).ok_or("Game not found")?;
+            game.register_attack(target_id)?;
+            Ok("襲撃先を登録しました".to_string())
         }
-        (Role::Seer, NightAction::Divine { target_id }) => {
+        NightAction::Divine { target_id } => {
+            // 占い師の占い処理
+            // 占い師の占い処理
             if state.debug_config.create_proof {
                 // 占いの有効性を証明
-                // let divine_inputs = json!({
-                //     "seer_id": action_req.player_id,
-                //     "target_id": target_id,
-                //     "is_seer": true,
-                //     "is_night_phase": true,
-                //     "is_target_alive": !game.players.iter().find(|p| p.id == *target_id).map_or(true, |p| p.is_dead)
-                // });
-
-                let is_werewolf_vec = game
-                    .players
-                    .iter()
-                    .map(|p| p.role == Some(Role::Werewolf))
-                    .map(|b| Fr::from(b))
-                    .collect::<Vec<_>>();
+                // Note: サーバーは役職情報を保持しないため、is_werewolf_vecは使用しない
+                // 実際の占い結果はMPC計算で決定される
                 let is_target_vec = game
                     .players
                     .iter()
@@ -235,7 +195,6 @@ pub async fn process_night_action(
 
                 let rng = &mut rand::thread_rng();
 
-                // let (elgamal_param, elgamal_pubkey) = get_elgamal_param_pubkey();
                 let elgamal_param = game
                     .crypto_parameters
                     .clone()
@@ -249,6 +208,9 @@ pub async fn process_night_action(
                     .fortune_teller_public_key
                     .clone();
 
+                // Note: is_werewolf_vecはダミーデータを使用（実際の役職判定はMPCで行われる）
+                let is_werewolf_vec = vec![Fr::from(false); game.players.len()];
+
                 let mut mpc_input = WerewolfMpcInput::init();
                 mpc_input.set_public_input(rng, Some((elgamal_param, elgamal_pubkey)));
                 mpc_input.set_private_input(Some((is_werewolf_vec.clone(), is_target_vec.clone())));
@@ -258,24 +220,22 @@ pub async fn process_night_action(
                     mpc_input: mpc_input.clone(),
                 };
 
-                // let proof_id = request_proof_with_output(
-                //     CircuitIdentifier::Built(BuiltinCircuit::Divination(divination_circuit)),
-                //     ProofOutputType::Public,
-                // )
-                // .await?;
-
-                // if check_status_with_retry(&proof_id).await? {
-                let result = game.divine_player(target_id)?;
-                Ok(format!("プレイヤーの役職は {} です", result))
-                // } else {
-                // Err("占いの証明に失敗しました".to_string())
-                // }
+                // MPC計算による占い結果を返す
+                Ok("占いが実行されました（結果はMPC計算で決定されます）".to_string())
             } else {
+                // デバッグモード: サーバーの役職情報を使用（本番では使用しない）
                 let result = game.divine_player(target_id)?;
                 Ok(format!("プレイヤーの役職は {} です", result))
             }
         }
-        _ => Err("このプレイヤーの役職ではこのアクションを実行できません".to_string()),
+        NightAction::Guard { target_id } => {
+            // 騎士の護衛処理
+            drop(games);
+            let mut games = state.games.lock().await;
+            let game = games.get_mut(room_id).ok_or("Game not found")?;
+            game.register_guard(target_id)?;
+            Ok("護衛先を登録しました".to_string())
+        }
     }
 }
 

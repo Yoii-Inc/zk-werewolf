@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import JSONbig from "json-bigint";
 import { loadCryptoParams } from "~~/services/gameInputGenerator";
-import type { ChatMessage } from "~~/types/game";
+import type { ChatMessage, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
 import { CryptoManager } from "~~/utils/crypto/encryption";
-import { getPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
+import { getPrivateGameInfo, setPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
@@ -205,10 +205,23 @@ export const useComputationResults = (
                 throw new Error("No encrypted role data in result");
               }
 
-              const { encrypted, nonce, sender_public_key } = result.resultData.encrypted_role;
+              const { encrypted, nonce, node_id } = result.resultData.encrypted_role;
 
-              if (!encrypted || !nonce || !sender_public_key) {
+              if (!encrypted || !nonce || node_id === undefined) {
                 throw new Error("Invalid encrypted role data structure");
+              }
+
+              // node_idからMPCノードの公開鍵を取得
+              const MPC_NODE_PUBLIC_KEYS = [
+                process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
+                process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
+                process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
+              ];
+
+              const sender_public_key = MPC_NODE_PUBLIC_KEYS[node_id];
+
+              if (!sender_public_key) {
+                throw new Error(`MPC node ${node_id} public key not configured`);
               }
 
               // CryptoManagerで復号
@@ -219,17 +232,87 @@ export const useComputationResults = (
               }
 
               console.log("Decrypting role with CryptoManager");
-              const decryptedRole = cryptoManager.decrypt(encrypted, nonce, sender_public_key);
+              console.log("Encrypted (first 50 chars):", encrypted.substring(0, 50));
+              console.log("Nonce:", nonce);
+              console.log("Sender public key (first 20 chars):", sender_public_key.substring(0, 20));
 
-              console.log("Role decrypted successfully:", decryptedRole);
+              // バイナリデータとして復号
+              const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, sender_public_key);
+
+              console.log("Role decrypted successfully. Binary length:", decryptedBinary.length);
+
+              // バイナリデータをUTF8文字列に変換
+              const decoder = new TextDecoder("utf-8");
+              const decryptedString = decoder.decode(decryptedBinary);
+
+              console.log("Decrypted string:", decryptedString);
+
+              // JSONとしてパース（Vec<String>形式を想定）
+              let roleData: string[] | null = null;
+              try {
+                roleData = JSON.parse(decryptedString);
+                console.log("Parsed role data:", roleData);
+              } catch (parseError) {
+                console.error("Failed to parse role data as JSON:", parseError);
+                console.log("Raw data (first 200 chars):", decryptedString.substring(0, 200));
+                throw new Error("Invalid role data format");
+              }
+
+              // roleDataから実際のRole情報を抽出
+              // 修正後: 各プレイヤーには自分のRole IDのみが配列として送られる
+              // 例: ["0000000000000000000000000000000000000000000000000000000000000002"]
+              // 値はBigInt形式の16進数文字列で、0=Villager, 1=FortuneTeller, 2=Werewolf
+
+              if (!roleData || roleData.length === 0) {
+                throw new Error("Empty role data received");
+              }
+
+              // 配列の最初（唯一）の要素がこのプレイヤーのRole ID
+              const roleIdStr = roleData[0];
+
+              // 16進数文字列をBigIntとしてパース
+              const roleIdBigInt = BigInt("0x" + roleIdStr);
+              const roleId = roleIdBigInt % BigInt(3); // 0, 1, 2 のいずれか
+
+              const ROLE_MAPPING: Record<string, string> = {
+                "0": "Villager",
+                "1": "Seer",
+                "2": "Werewolf",
+              };
+
+              const roleName = ROLE_MAPPING[roleId.toString()] || "Unknown";
+
+              console.log("Role ID:", roleId.toString(), "Role Name:", roleName);
 
               // 復号したRoleをprivateGameInfoに保存
-              updatePrivateGameInfo(roomId, playerId, { playerRole: decryptedRole as any });
+              // まず既存の情報を確認し、なければ初期化してから更新
+              let existingInfo = getPrivateGameInfo(roomId, playerId);
+
+              if (!existingInfo) {
+                console.log("PrivateGameInfo not found, initializing before role assignment");
+                const initialInfo: PrivateGameInfo = {
+                  playerId: playerId,
+                  playerRole: null as any,
+                  hasActed: false,
+                };
+                setPrivateGameInfo(roomId, initialInfo);
+                existingInfo = initialInfo;
+              }
+
+              const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
+                playerRole: roleName as "Villager" | "Werewolf" | "Seer",
+              });
+
+              if (updatedInfo) {
+                console.log("PrivateGameInfo updated successfully:", updatedInfo);
+              } else {
+                console.error("Failed to update PrivateGameInfo even after initialization attempt");
+              }
 
               addMessage({
                 id: Date.now().toString(),
                 sender: "System",
-                message: `Your role has been assigned: ${decryptedRole}`,
+                message: `Your role has been assigned: ${roleName} (from node ${node_id})`,
                 timestamp: new Date().toISOString(),
                 type: "system",
               });

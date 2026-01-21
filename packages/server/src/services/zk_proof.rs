@@ -63,7 +63,7 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
     for _ in 0..MAX_RETRY_ATTEMPTS {
         let mut completed_count = 0;
         let mut failed_count = 0;
-        let mut last_completed_status: Option<ProofStatus> = None;
+        let mut all_completed_statuses: Vec<ProofStatus> = Vec::new();
 
         // 全ノードのステータスをチェック
         for node_url in CONFIG.zk_mpc_node_urls() {
@@ -78,7 +78,7 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
             match status.state.as_str() {
                 "completed" => {
                     completed_count += 1;
-                    last_completed_status = Some(status);
+                    all_completed_statuses.push(status);
                 }
                 "failed" => failed_count += 1,
                 _ => continue,
@@ -87,7 +87,8 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
 
         // 全ノードが完了していたら成功
         if completed_count == CONFIG.zk_mpc_node_urls().len() {
-            return Ok((true, last_completed_status.and_then(|s| s.output)));
+            // 全ノードからの暗号化シェアをマージ
+            return Ok((true, merge_proof_outputs(all_completed_statuses)));
         }
 
         // 1つでも失敗していたら失敗
@@ -99,6 +100,40 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
     }
 
     Ok((false, None))
+}
+
+/// 全ノードからのProofOutputをマージする
+/// 各ノードの暗号化シェアを1つのProofOutputに統合
+fn merge_proof_outputs(statuses: Vec<ProofStatus>) -> Option<ProofOutput> {
+    if statuses.is_empty() {
+        return None;
+    }
+
+    let mut all_shares = Vec::new();
+    let first_output = statuses[0].output.as_ref()?;
+
+    // 各ノードからの暗号化シェアを集める
+    for status in &statuses {
+        if let Some(output) = &status.output {
+            if let Some(shares) = &output.shares {
+                println!("Collecting {} shares from node", shares.len());
+                all_shares.extend(shares.clone());
+            }
+        }
+    }
+
+    println!("Total merged shares: {}", all_shares.len());
+
+    // マージされたProofOutputを作成
+    Some(ProofOutput {
+        output_type: first_output.output_type.clone(),
+        value: first_output.value.clone(),
+        shares: if all_shares.is_empty() {
+            None
+        } else {
+            Some(all_shares)
+        },
+    })
 }
 
 pub async fn check_status_with_retry(

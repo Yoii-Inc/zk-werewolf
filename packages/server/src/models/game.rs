@@ -976,14 +976,33 @@ impl Game {
 
                             // 各プレイヤーに個別に暗号化された役職データを配信
                             for encrypted_share in encrypted_shares {
-                                let user_id = encrypted_share.user_id.clone();
+                                let user_index_str = encrypted_share.user_id.clone();
                                 let node_id = encrypted_share.node_id;
+
+                                // user_idは配列のインデックス（文字列）なので、実際のプレイヤーIDに変換
+                                let user_index: usize = match user_index_str.parse() {
+                                    Ok(idx) => idx,
+                                    Err(e) => {
+                                        println!("ERROR: Failed to parse user_id '{}' as index: {}", user_index_str, e);
+                                        continue;
+                                    }
+                                };
+
+                                // インデックスからプレイヤーIDを取得
+                                let actual_player_id = if user_index < self.players.len() {
+                                    self.players[user_index].id.clone()
+                                } else {
+                                    println!("ERROR: Player index {} out of bounds (total players: {})", user_index, self.players.len());
+                                    continue;
+                                };
+
+                                println!("Converting user_index {} to player_id {}", user_index, actual_player_id);
 
                                 // encrypted_dataは [nonce(24バイト) + ciphertext] の形式
                                 if encrypted_share.encrypted_data.len() < 24 {
                                     println!(
-                                        "ERROR: Encrypted data too short for player {}",
-                                        user_id
+                                        "ERROR: Encrypted data too short for player {} (index {})",
+                                        actual_player_id, user_index
                                     );
                                     continue;
                                 }
@@ -996,42 +1015,35 @@ impl Game {
                                 let nonce_b64 = base64::encode(nonce);
                                 let ciphertext_b64 = base64::encode(ciphertext);
 
-                                // ノードの公開鍵を取得（CONFIGから）
-                                let sender_public_key = match node_id {
-                                    0 => CONFIG.mpc_node_0_public_key.clone(),
-                                    1 => CONFIG.mpc_node_1_public_key.clone(),
-                                    2 => CONFIG.mpc_node_2_public_key.clone(),
-                                    _ => String::new(),
-                                };
-
+                                // サーバーは中継のみ - node_idを送信してクライアント側で公開鍵を解決
                                 let result_data = serde_json::json!({
                                     "encrypted_role": {
                                         "encrypted": ciphertext_b64,
                                         "nonce": nonce_b64,
-                                        "sender_public_key": sender_public_key
+                                        "node_id": node_id
                                     },
                                     "status": "ready"
                                 });
 
                                 println!(
-                                    "Sending encrypted role to player {} (from node {})",
-                                    user_id, node_id
+                                    "Sending encrypted role to player {} (index {}, from node {})",
+                                    actual_player_id, user_index, node_id
                                 );
 
-                                // 特定のプレイヤーにのみ送信
+                                // 特定のプレイヤーにのみ送信（実際のプレイヤーIDを使用）
                                 if let Err(e) = app_state
                                     .broadcast_computation_result(
                                         &self.room_id,
                                         "role_assignment",
                                         result_data,
-                                        Some(user_id.clone()), // 特定プレイヤーに送信
+                                        Some(actual_player_id.clone()), // 実際のプレイヤーIDを使用
                                         &self.batch_request.batch_id,
                                     )
                                     .await
                                 {
                                     println!(
                                         "Failed to send encrypted role to player {}: {}",
-                                        user_id, e
+                                        actual_player_id, e
                                     );
                                 }
                             }
