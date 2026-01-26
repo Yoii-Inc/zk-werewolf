@@ -179,63 +179,6 @@ pub async fn process_night_action(
             game.register_attack(target_id)?;
             Ok("襲撃先を登録しました".to_string())
         }
-        NightAction::Divine { target_id } => {
-            // 占い師の占い処理
-            // 占い師の占い処理
-            if state.debug_config.create_proof {
-                // 占いの有効性を証明
-                // Note: サーバーは役職情報を保持しないため、is_werewolf_vecは使用しない
-                // 実際の占い結果はMPC計算で決定される
-                let is_target_vec = game
-                    .players
-                    .iter()
-                    .map(|p| p.id == *target_id)
-                    .map(|b| Fr::from(b))
-                    .collect::<Vec<_>>();
-
-                let rng = &mut rand::thread_rng();
-
-                let elgamal_param = game
-                    .crypto_parameters
-                    .clone()
-                    .unwrap()
-                    .elgamal_param
-                    .clone();
-                let elgamal_pubkey = game
-                    .crypto_parameters
-                    .clone()
-                    .unwrap()
-                    .fortune_teller_public_key
-                    .clone();
-
-                // Note: is_werewolf_vecはダミーデータを使用（実際の役職判定はMPCで行われる）
-                let is_werewolf_vec = vec![Fr::from(false); game.players.len()];
-
-                // let mut mpc_input = WerewolfMpcInput::init();
-                // mpc_input.set_public_input(rng, Some((elgamal_param, elgamal_pubkey)));
-                // mpc_input.set_private_input(Some((is_werewolf_vec.clone(), is_target_vec.clone())));
-                // mpc_input.generate_input(rng);
-
-                // let divination_circuit = zk_mpc::circuits::DivinationCircuit::<MFr> {
-                //     mpc_input: mpc_input.clone(),
-                // };
-
-                // MPC計算による占い結果を返す
-                Ok("占いが実行されました（結果はMPC計算で決定されます）".to_string())
-            } else {
-                // デバッグモード: サーバーの役職情報を使用（本番では使用しない）
-                let result = game.divine_player(target_id)?;
-                Ok(format!("プレイヤーの役職は {} です", result))
-            }
-        }
-        NightAction::Guard { target_id } => {
-            // 騎士の護衛処理
-            drop(games);
-            let mut games = state.games.lock().await;
-            let game = games.get_mut(room_id).ok_or("Game not found")?;
-            game.register_guard(target_id)?;
-            Ok("護衛先を登録しました".to_string())
-        }
     }
 }
 
@@ -249,169 +192,108 @@ async fn check_status_with_retry(proof_id: &str) -> Result<bool, String> {
     Ok(false)
 }
 
-// 投票システム
-pub async fn handle_vote(
-    state: AppState,
-    room_id: &str,
-    voter_id: &str,
-    target_id: &str,
-) -> Result<String, String> {
-    let games = state.games.lock().await;
-    let game = games.get(room_id).ok_or("Game not found")?;
+// // 勝利判定
+// pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, String> {
+//     let games = state.games.lock().await;
+//     let game = games.get(room_id).ok_or("Game not found")?;
 
-    if game.phase != GamePhase::Voting {
-        return Err("現在は投票フェーズではありません".to_string());
-    }
+//     // 生存者のカウント
+//     let living_players: Vec<_> = game.players.iter().filter(|p| !p.is_dead).collect();
+//     let alive_villagers = living_players
+//         .iter()
+//         .filter(|p| p.role.as_ref() != Some(&Role::Werewolf))
+//         .count();
+//     let alive_werewolves = living_players
+//         .iter()
+//         .filter(|p| p.role.as_ref() == Some(&Role::Werewolf))
+//         .count();
 
-    if state.debug_config.create_proof {
-        // 投票の有効性を証明
-        let vote_inputs = json!({
-            "voter_id": voter_id,
-            "target_id": target_id,
-            "is_voter_alive": !game.players.iter().find(|p| p.id == voter_id).map_or(true, |p| p.is_dead),
-            "is_target_alive": !game.players.iter().find(|p| p.id == target_id).map_or(true, |p| p.is_dead),
-            "is_voting_phase": game.phase == GamePhase::Voting
-        });
+//     if state.debug_config.create_proof {
+//         // 勝利判定の証明
+//         let winner_inputs = json!({
+//             "alive_villagers": alive_villagers,
+//             "alive_werewolves": alive_werewolves,
+//             "total_players": game.players.len(),
+//             "is_game_in_progress": game.phase != GamePhase::Finished
+//         });
 
-        let anonymous_voting_circuit = zk_mpc::circuits::AnonymousVotingCircuit::<MFr> {
-            is_target_id: todo!(),
-            pedersen_param: todo!(),
-            player_randomness: todo!(),
-            player_commitment: todo!(),
-        };
+//         let winning_judge_circuit = zk_mpc::circuits::WinningJudgeCircuit::<MFr> {
+//             num_alive: todo!(),
+//             pedersen_param: todo!(),
+//             am_werewolf: todo!(),
+//             game_state: todo!(),
+//             player_randomness: todo!(),
+//             player_commitment: todo!(),
+//         };
 
-        todo!();
+//         todo!();
 
-        // let proof_id = request_proof_with_output(
-        //     CircuitIdentifier::Built(BuiltinCircuit::AnonymousVoting(anonymous_voting_circuit)),
-        //     ProofOutputType::Public,
-        // )
-        // .await?;
+//         // let proof_id = request_proof_with_output(
+//         //     CircuitIdentifier::Built(BuiltinCircuit::WinningJudge(winning_judge_circuit)),
+//         //     ProofOutputType::Public,
+//         // )
+//         // .await?;
 
-        // // 証明の完了を待つ
-        // for _ in 0..30 {
-        //     if check_proof_status(&proof_id).await?.0 {
-        //         drop(games); // 先のロックを解放
-        //         let mut games = state.games.lock().await;
-        //         let game = games.get_mut(room_id).ok_or("Game not found")?;
-        //         game.cast_vote(voter_id, target_id)?;
-        //         return Ok("投票を受け付けました".to_string());
-        //     }
-        //     sleep(Duration::from_secs(1)).await;
-        // }
+//         // if check_status_with_retry(&proof_id).await? {
+//         //     let result = if alive_werewolves == 0 {
+//         //         GameResult::VillagerWin
+//         //     } else if alive_werewolves >= alive_villagers {
+//         //         GameResult::WerewolfWin
+//         //     } else {
+//         //         GameResult::InProgress
+//         //     };
 
-        Err("投票の証明に失敗しました".to_string())
-    } else {
-        drop(games); // 先のロックを解放
-        let mut games = state.games.lock().await;
-        let game = games.get_mut(room_id).ok_or("Game not found")?;
-        game.cast_vote(voter_id, target_id)?;
-        Ok("投票を受け付けました".to_string())
-    }
-}
+//         //     drop(games);
+//         //     let mut games = state.games.lock().await;
+//         //     let game = games.get_mut(room_id).ok_or("Game not found")?;
+//         //     game.result = result.clone();
+//         //     Ok(result)
+//         // } else {
+//         //     Err("勝利判定の証明に失敗しました".to_string())
+//         // }
+//     } else {
+//         let result = if alive_werewolves == 0 {
+//             GameResult::VillagerWin
+//         } else if alive_werewolves >= alive_villagers {
+//             GameResult::WerewolfWin
+//         } else {
+//             GameResult::InProgress
+//         };
 
-// 勝利判定
-pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, String> {
-    let games = state.games.lock().await;
-    let game = games.get(room_id).ok_or("Game not found")?;
+//         drop(games);
+//         let mut games = state.games.lock().await;
+//         let game = games.get_mut(room_id).ok_or("Game not found")?;
 
-    // 生存者のカウント
-    let living_players: Vec<_> = game.players.iter().filter(|p| !p.is_dead).collect();
-    let alive_villagers = living_players
-        .iter()
-        .filter(|p| p.role.as_ref() != Some(&Role::Werewolf))
-        .count();
-    let alive_werewolves = living_players
-        .iter()
-        .filter(|p| p.role.as_ref() == Some(&Role::Werewolf))
-        .count();
+//         if result != GameResult::InProgress {
+//             let (winner_message, details) = match result {
+//                 GameResult::VillagerWin => (
+//                     "Villagers team wins!",
+//                     format!("Remaining villagers: {}", alive_villagers),
+//                 ),
+//                 GameResult::WerewolfWin => (
+//                     "Werewolves team wins!",
+//                     format!(
+//                         "Remaining werewolves: {}, Remaining villagers: {}",
+//                         alive_werewolves, alive_villagers
+//                     ),
+//                 ),
+//                 GameResult::InProgress => unreachable!(),
+//             };
 
-    if state.debug_config.create_proof {
-        // 勝利判定の証明
-        let winner_inputs = json!({
-            "alive_villagers": alive_villagers,
-            "alive_werewolves": alive_werewolves,
-            "total_players": game.players.len(),
-            "is_game_in_progress": game.phase != GamePhase::Finished
-        });
+//             game.chat_log.add_message(ChatMessage::new(
+//                 "system".to_string(),
+//                 "System".to_string(),
+//                 format!("{} {}", winner_message, details),
+//                 ChatMessageType::System,
+//             ));
 
-        let winning_judge_circuit = zk_mpc::circuits::WinningJudgeCircuit::<MFr> {
-            num_alive: todo!(),
-            pedersen_param: todo!(),
-            am_werewolf: todo!(),
-            game_state: todo!(),
-            player_randomness: todo!(),
-            player_commitment: todo!(),
-        };
+//             game.phase = GamePhase::Finished;
+//         }
 
-        todo!();
-
-        // let proof_id = request_proof_with_output(
-        //     CircuitIdentifier::Built(BuiltinCircuit::WinningJudge(winning_judge_circuit)),
-        //     ProofOutputType::Public,
-        // )
-        // .await?;
-
-        // if check_status_with_retry(&proof_id).await? {
-        //     let result = if alive_werewolves == 0 {
-        //         GameResult::VillagerWin
-        //     } else if alive_werewolves >= alive_villagers {
-        //         GameResult::WerewolfWin
-        //     } else {
-        //         GameResult::InProgress
-        //     };
-
-        //     drop(games);
-        //     let mut games = state.games.lock().await;
-        //     let game = games.get_mut(room_id).ok_or("Game not found")?;
-        //     game.result = result.clone();
-        //     Ok(result)
-        // } else {
-        //     Err("勝利判定の証明に失敗しました".to_string())
-        // }
-    } else {
-        let result = if alive_werewolves == 0 {
-            GameResult::VillagerWin
-        } else if alive_werewolves >= alive_villagers {
-            GameResult::WerewolfWin
-        } else {
-            GameResult::InProgress
-        };
-
-        drop(games);
-        let mut games = state.games.lock().await;
-        let game = games.get_mut(room_id).ok_or("Game not found")?;
-
-        if result != GameResult::InProgress {
-            let (winner_message, details) = match result {
-                GameResult::VillagerWin => (
-                    "Villagers team wins!",
-                    format!("Remaining villagers: {}", alive_villagers),
-                ),
-                GameResult::WerewolfWin => (
-                    "Werewolves team wins!",
-                    format!(
-                        "Remaining werewolves: {}, Remaining villagers: {}",
-                        alive_werewolves, alive_villagers
-                    ),
-                ),
-                GameResult::InProgress => unreachable!(),
-            };
-
-            game.chat_log.add_message(ChatMessage::new(
-                "system".to_string(),
-                "System".to_string(),
-                format!("{} {}", winner_message, details),
-                ChatMessageType::System,
-            ));
-
-            game.phase = GamePhase::Finished;
-        }
-
-        game.result = result.clone();
-        Ok(result)
-    }
-}
+//         game.result = result.clone();
+//         Ok(result)
+//     }
+// }
 
 // 役職の振り分け
 pub fn assign_roles(players_count: usize) -> Result<Vec<Role>, String> {
@@ -445,100 +327,6 @@ pub fn assign_roles(players_count: usize) -> Result<Vec<Role>, String> {
     roles.shuffle(&mut rng);
 
     Ok(roles)
-}
-
-// make and store zkp parameters
-pub async fn preprocessing_werewolf(state: AppState, game: &mut Game) -> Result<(), String> {
-    if !state.debug_config.create_crypto_parameters {
-        if state.debug_config.create_proof {
-            return Err("create_crypto_parameters is required".to_string());
-        }
-        return Ok(());
-    }
-
-    let num_players = game.players.len();
-
-    println!("num_players: {}", num_players);
-
-    let rng = &mut rand::thread_rng();
-
-    // generate pedersen_commitment parameters
-    // TODO: revise. generate randomness secretly
-    let pedersen_param = <Fr as LocalOrMPC<Fr>>::PedersenComScheme::setup(rng).unwrap();
-
-    let player_randomness = (0..num_players).map(|_| Fr::rand(rng)).collect::<Vec<_>>();
-
-    let player_commitment = player_randomness
-        .clone()
-        .iter()
-        .map(|r| {
-            <Fr as LocalOrMPC<Fr>>::PedersenComScheme::commit(
-                &pedersen_param,
-                &r.convert_input(),
-                &<Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
-            )
-            .unwrap()
-        })
-        .collect::<Vec<_>>();
-
-    // hoge.
-    let mut pub_key_or_dummy_x = vec![Fr::from(0); num_players];
-    let mut pub_key_or_dummy_y = vec![Fr::from(0); num_players];
-    let is_fortune_teller = vec![Fr::from(0); num_players];
-
-    // generate elgamal parameters
-
-    println!("generate elgamal parameters");
-    let elgamal_param = <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme::setup(rng).unwrap();
-
-    // fortune teller public key
-    let (pk, sk) =
-        <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme::keygen(&elgamal_param, rng).unwrap();
-    pub_key_or_dummy_x[1] = pk.x;
-    pub_key_or_dummy_y[1] = pk.y;
-
-    // let mpc_input = WerewolfKeyInput::rand(rng);
-    // let key_publicize_circuit = KeyPublicizeCircuit { mpc_input };
-
-    todo!();
-
-    // let mpc_input = WerewolfKeyInput::init();
-    // mpc_input.set_public_input(rng, None);
-
-    // // TODO: revise. generate randomness secretly & fix error occured here.
-    // mpc_input.set_private_input(Some((
-    //     pub_key_or_dummy_x,
-    //     pub_key_or_dummy_y,
-    //     is_fortune_teller,
-    // )));
-    // mpc_input.generate_input(rng);
-
-    // let key_publicize_circuit = KeyPublicizeCircuit {
-    //     mpc_input: mpc_input.clone(),
-    // };
-
-    // println!("proof request");
-
-    // // proof request
-    // let proof_id = request_proof_with_output(
-    //     CircuitIdentifier::Built(BuiltinCircuit::KeyPublicize(key_publicize_circuit)),
-    //     ProofOutputType::Public,
-    // )
-    // .await?;
-
-    // println!("proof id: {}", proof_id);
-
-    // 各ゲームのZKPパラメータを更新
-    let crypto_parameters = Some(crate::models::game::CryptoParameters {
-        pedersen_param,
-        player_commitment: player_commitment.clone(),
-        fortune_teller_public_key: None,
-        elgamal_param,
-    });
-
-    game.crypto_parameters = crypto_parameters.clone();
-
-    Ok(())
 }
 
 // 暗号パラメータの初期化関数

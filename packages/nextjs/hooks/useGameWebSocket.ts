@@ -28,8 +28,9 @@ export const useGameWebSocket = (
     };
 
     ws.onmessage = event => {
-      console.log("Message received:", event.data);
+      console.log("📩 WebSocket message received:", event.data);
       const data = JSON.parse(event.data);
+      console.log("📊 Parsed message type:", data.message_type);
 
       // フェーズ変更通知の場合
       if (data.message_type === "phase_change") {
@@ -87,7 +88,8 @@ export const useGameWebSocket = (
 
       // ゲームリセット通知の場合
       if (data.message_type === "game_reset") {
-        console.log("Game reset notification received");
+        console.log("🔄 Game reset notification received via WebSocket");
+        console.log("🔄 Room ID:", data.room_id, "Timestamp:", data.timestamp);
 
         // カスタムイベントを発行
         window.dispatchEvent(
@@ -98,6 +100,7 @@ export const useGameWebSocket = (
             },
           }),
         );
+        console.log("🔄 gameResetNotification event dispatched");
         return;
       }
 

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct Player {
     pub id: String,
     pub name: String,
-    pub role: Option<Role>,
+    // pub role: Option<Role>,
     pub is_dead: bool,
     pub is_ready: bool,
 }
@@ -18,7 +18,7 @@ impl Player {
         Self {
             id,
             name,
-            role,
+            // role,
             is_dead: false,
             is_ready: false,
         }

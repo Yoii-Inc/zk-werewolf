@@ -29,7 +29,6 @@ pub struct Game {
     pub name: String,
     pub players: Vec<Player>,
     pub max_players: usize,
-    pub roles: Vec<String>,
     pub phase: GamePhase,
     pub day_count: u32,
     pub result: GameResult,
@@ -108,15 +107,11 @@ pub enum GameResult {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NightAction {
     Attack { target_id: String }, // 人狼の襲撃
-    Divine { target_id: String }, // 占い師の占い
-    Guard { target_id: String },  // 騎士の護衛
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct NightActions {
-    pub attacks: Vec<String>,     // 襲撃対象
-    pub guards: Vec<String>,      // 護衛対象
-    pub divinations: Vec<String>, // 占い対象
+    pub attacks: Vec<String>, // 襲撃対象
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -305,7 +300,6 @@ impl Game {
             name: "".to_string(),
             players,
             max_players: 9,
-            roles: vec![],
             phase: GamePhase::Waiting,
             day_count: 1,
             result: GameResult::InProgress,
@@ -427,40 +421,27 @@ impl Game {
         Ok(())
     }
 
-    pub fn divine_player(&self, target_id: &str) -> Result<String, String> {
-        let target = self
-            .players
-            .iter()
-            .find(|p| p.id.to_string() == target_id)
-            .ok_or("Target player not found")?;
+    // pub fn divine_player(&self, target_id: &str) -> Result<String, String> {
+    //     let target = self
+    //         .players
+    //         .iter()
+    //         .find(|p| p.id.to_string() == target_id)
+    //         .ok_or("Target player not found")?;
 
-        match &target.role {
-            Some(role) => Ok(role.to_string()),
-            None => Ok("Unknown".to_string()),
-        }
-    }
-
-    pub fn register_guard(&mut self, target_id: &str) -> Result<(), String> {
-        if !self.players.iter().any(|p| p.id.to_string() == target_id) {
-            return Err("Target player not found".to_string());
-        }
-        self.night_actions.guards.push(target_id.to_string());
-        Ok(())
-    }
+    //     match &target.role {
+    //         Some(role) => Ok(role.to_string()),
+    //         None => Ok("Unknown".to_string()),
+    //     }
+    // }
 
     pub fn resolve_night_actions(&mut self) {
-        use std::collections::HashSet;
-        let protected_players: HashSet<_> = self.night_actions.guards.iter().collect();
-
         for target_id in &self.night_actions.attacks {
-            if !protected_players.contains(target_id) {
-                if let Some(player) = self
-                    .players
-                    .iter_mut()
-                    .find(|p| p.id.to_string() == *target_id)
-                {
-                    player.is_dead = true;
-                }
+            if let Some(player) = self
+                .players
+                .iter_mut()
+                .find(|p| p.id.to_string() == *target_id)
+            {
+                player.is_dead = true;
             }
         }
 
@@ -1080,6 +1061,8 @@ impl Game {
                                 }
                             };
 
+                            let mut player_role: Option<Role> = None;
+
                             // role_resultをゲームの結果に反映
                             let mut player_role_assignments = Vec::new();
                             for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
@@ -1093,7 +1076,7 @@ impl Game {
                                     None
                                 };
 
-                                player.role = assigned_role.clone();
+                                player_role = assigned_role.clone();
 
                                 if let Some(role) = assigned_role {
                                     player_role_assignments.push(PlayerRoleAssignment {
@@ -1113,14 +1096,14 @@ impl Game {
                                 })
                             );
 
-                            self.chat_log.add_system_message(format!(
-                                "Roles have been assigned: {}. Starting the game.",
-                                self.players
-                                    .iter()
-                                    .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            ));
+                            // self.chat_log.add_system_message(format!(
+                            //     "Roles have been assigned: {}. Starting the game.",
+                            //     self.players
+                            //         .iter()
+                            //         .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))
+                            //         .collect::<Vec<_>>()
+                            //         .join(", ")
+                            // ));
 
                             // 全プレイヤーに役職配布結果を通知
                             let role_assignments: Vec<_> = self
@@ -1130,7 +1113,7 @@ impl Game {
                                     serde_json::json!({
                                         "player_id": p.id,
                                         "player_name": p.name,
-                                        "role": p.role
+                                        "role": player_role
                                     })
                                 })
                                 .collect();

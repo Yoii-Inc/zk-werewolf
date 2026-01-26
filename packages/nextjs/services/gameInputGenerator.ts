@@ -282,6 +282,30 @@ export function clearRandomnessFromStorage(roomId: string): void {
 }
 
 /**
+ * 特定のルームのLocalStorageに保存されているElGamal鍵をすべてクリア
+ */
+function clearAllElGamalKeysForRoom(roomId: string): void {
+  const keysToRemove: string[] = [];
+
+  // localStorageから該当ルームのすべてのElGamal鍵を検索
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (
+      key &&
+      (key.startsWith(`elgamal_secret_key_${roomId}_`) || key.startsWith(`test_elgamal_public_key_${roomId}_`))
+    ) {
+      keysToRemove.push(key);
+    }
+  }
+
+  // 削除実行
+  keysToRemove.forEach(key => {
+    localStorage.removeItem(key);
+    console.log(`Cleared ElGamal key from localStorage: ${key}`);
+  });
+}
+
+/**
  * ゲームリセット時の全クライアント初期化状態クリア
  */
 export function resetGameCryptoState(roomId: string): void {
@@ -295,6 +319,9 @@ export function resetGameCryptoState(roomId: string): void {
 
   // LocalStorageから該当ルームのランダムネスを削除
   clearRandomnessFromStorage(roomId);
+
+  // LocalStorageから該当ルームのElGamal鍵を削除（占い師の秘密鍵など）
+  clearAllElGamalKeysForRoom(roomId);
 
   console.log(`Game crypto state reset completed for room: ${roomId}`);
 }

@@ -122,6 +122,7 @@ impl AppState {
     }
 
     pub async fn broadcast_game_reset(&self, room_id: &str) -> Result<(), String> {
+        println!("🔄 Broadcasting game reset for room: {}", room_id);
         let tx = self.get_or_create_room_channel(room_id).await;
 
         let reset_notification = serde_json::json!({
@@ -131,9 +132,12 @@ impl AppState {
         });
 
         if let Ok(message_text) = serde_json::to_string(&reset_notification) {
+            println!("📤 Sending game reset notification: {}", message_text);
             if let Err(e) = tx.send(Message::Text(message_text)) {
+                println!("❌ Failed to send game reset notification: {}", e);
                 return Err(format!("Failed to broadcast game reset: {}", e));
             }
+            println!("✅ Game reset notification sent successfully");
         }
 
         Ok(())

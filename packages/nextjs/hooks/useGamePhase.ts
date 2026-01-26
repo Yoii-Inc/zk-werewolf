@@ -306,18 +306,27 @@ export const useGamePhase = (
       const customEvent = event as CustomEvent;
       const { roomId: resetRoomId } = customEvent.detail;
 
-      console.log(`Game reset notification received in useGamePhase for room: ${resetRoomId}`);
+      console.log("🔄 [useGamePhase] Game reset notification received for room:", resetRoomId);
+      console.log("🔄 [useGamePhase] Current roomId:", roomId);
 
       if (resetRoomId === roomId) {
         // コミットメント準備完了フラグをリセット
         commitmentsReadyRef.current = false;
-        console.log("Commitments ready flag reset to false");
+        console.log("✅ [useGamePhase] Commitments ready flag reset to false");
+
+        // KeyPublicize実行済みフラグをリセット
+        keyPublicizeExecutedRef.current = false;
+        console.log("✅ [useGamePhase] KeyPublicize executed flag reset to false");
+      } else {
+        console.log("⚠️ [useGamePhase] Room ID mismatch, skipping reset");
       }
     };
 
+    console.log("🎯 [useGamePhase] Adding gameResetNotification listener for room:", roomId);
     window.addEventListener("gameResetNotification", handleGameReset);
 
     return () => {
+      console.log("🗑️ [useGamePhase] Removing gameResetNotification listener for room:", roomId);
       window.removeEventListener("gameResetNotification", handleGameReset);
     };
   }, [roomId]);
