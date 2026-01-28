@@ -71,19 +71,31 @@ export const useGameInfo = (
           const currentPlayer = data.players.find((player: any) => player.id === userId);
 
           if (currentPlayer) {
-            // PrivateGameInfoを初期化
-            const newPrivateInfo: PrivateGameInfo = {
-              playerId: userId,
-              playerRole: currentPlayer.role, // 役職を設定
-              hasActed: false,
-            };
+            // 既存のPrivateGameInfoを確認
+            const existingPrivateInfo = getPrivateGameInfo(roomId, userId);
 
-            // セッションストレージに保存
-            saveToStorage(roomId, newPrivateInfo);
-            console.log("PrivateGameInfo initialized for non-starter player:", newPrivateInfo);
+            // すでにRoleが割り当てられている場合は上書きしない
+            if (existingPrivateInfo && existingPrivateInfo.playerRole !== null) {
+              console.log(
+                "PrivateGameInfo already exists with role assigned, skipping initialization:",
+                existingPrivateInfo,
+              );
+              setPrivateGameInfoState(existingPrivateInfo);
+            } else {
+              // PrivateGameInfoを初期化（roleはMPC計算結果から後で設定）
+              const newPrivateInfo: PrivateGameInfo = {
+                playerId: userId,
+                playerRole: null as any, // Roleはまだ未決定
+                hasActed: false,
+              };
 
-            // ステート更新
-            setPrivateGameInfoState(newPrivateInfo);
+              // セッションストレージに保存
+              saveToStorage(roomId, newPrivateInfo);
+              console.log("PrivateGameInfo initialized for player (role not yet assigned):", newPrivateInfo);
+
+              // ステート更新
+              setPrivateGameInfoState(newPrivateInfo);
+            }
           }
         }
         // 通常の更新処理
@@ -91,7 +103,7 @@ export const useGameInfo = (
           const updatedPrivateInfo = getPrivateGameInfo(roomId, userId);
           if (updatedPrivateInfo) {
             setPrivateGameInfoState(updatedPrivateInfo);
-            console.log("PrivateGameInfo updated from session storage:", updatedPrivateInfo);
+            // console.log("PrivateGameInfo updated from session storage:", updatedPrivateInfo);
           }
         }
 

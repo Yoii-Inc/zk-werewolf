@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
-import { RoleAssignmentInput, RoleAssignmentOutput } from "~~/utils/crypto/type";
+import { KeyPublicizeInput, KeyPublicizeOutput } from "~~/utils/crypto/type";
 
-export const useRoleAssignment = () => {
+export const useKeyPublicize = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proofId, setProofId] = useState<string | null>(null);
@@ -15,8 +15,8 @@ export const useRoleAssignment = () => {
     process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY,
   ].filter((key): key is string => key != null);
 
-  const submitRoleAssignment = useCallback(
-    async (roomId: string, roleAssignmentData: RoleAssignmentInput, alivePlayerCount: number) => {
+  const submitKeyPublicize = useCallback(
+    async (roomId: string, keyPublicizeData: KeyPublicizeInput, alivePlayerCount: number) => {
       setIsLoading(true);
       setError(null);
       try {
@@ -24,25 +24,23 @@ export const useRoleAssignment = () => {
           throw new Error("MPC node public keys are not properly configured");
         }
 
-        console.log(roleAssignmentData);
+        console.log("Submitting key publicize request:", keyPublicizeData);
 
-        // Encrypt role assignment data (using MPC node public key)
-        const encryptedRoleAssignment: RoleAssignmentOutput =
-          await MPCEncryption.encryptRoleAssignment(roleAssignmentData);
+        // Encrypt key publicize data (using MPC node public key)
+        const encryptedKeyPublicize: KeyPublicizeOutput = await MPCEncryption.encryptKeyPublicize(keyPublicizeData);
 
-        console.log("Sending role assignment request.");
+        console.log("Sending key publicize request");
 
         const requestBody = {
-          proof_type: "RoleAssignment",
+          proof_type: "KeyPublicize",
           data: {
-            user_id: String(roleAssignmentData.privateInput.id),
+            user_id: String(keyPublicizeData.privateInput.id),
             prover_count: alivePlayerCount,
-            encrypted_data: encryptedRoleAssignment,
-            public_key: roleAssignmentData.publicKey, // プレイヤーの公開鍵を追加
+            encrypted_data: encryptedKeyPublicize,
           },
         };
 
-        console.log(requestBody);
+        console.log("Request body:", requestBody);
 
         const newProofId = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/proof`,
@@ -63,21 +61,53 @@ export const useRoleAssignment = () => {
 
         console.log("proof request is accepted. batch_id is ", await newProofId.json());
 
+        // setProofId(newProofId);
         setProofStatus("pending");
 
         return newProofId;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error occurred");
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        setError(errorMessage);
+        setProofStatus("failed");
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [],
+    [mpcPublicKeys],
   );
 
+  const checkProofStatus = useCallback(async (roomId: string, proofId: string) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/rooms/${roomId}/proof/${proofId}/status`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setProofStatus(data.status);
+
+      return data.status;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+      setError(errorMessage);
+      throw err;
+    }
+  }, []);
+
   return {
-    submitRoleAssignment,
+    submitKeyPublicize,
+    checkProofStatus,
     isLoading,
     error,
     proofId,

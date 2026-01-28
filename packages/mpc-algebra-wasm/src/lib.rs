@@ -148,6 +148,37 @@ pub fn fr_rand() -> Result<JsValue, JsValue> {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ElGamalKeygenInput {
+    pub elgamal_params: ElGamalParam,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ElGamalKeygenOutput {
+    pub public_key: ElGamalPubKey,
+    pub secret_key: ElGamalSecretKey,
+}
+
+#[wasm_bindgen]
+pub fn elgamal_keygen(input: JsValue) -> Result<JsValue, JsValue> {
+    let input: ElGamalKeygenInput = serde_wasm_bindgen::from_value(input)
+        .map_err(|e| JsValue::from_str(&format!("Deserialize error: {}", e)))?;
+
+    let (public_key, secret_key) = ElGamalScheme::keygen(&input.elgamal_params, &mut ark_std::rand::thread_rng())
+        .map_err(|e| JsValue::from_str(&format!("Keygen error: {}", e)))?;
+
+    let output = ElGamalKeygenOutput {
+        public_key,
+        secret_key,
+    };
+
+    let json_str = serde_json::to_string(&output)
+        .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
+    Ok(JsValue::from_str(&json_str))
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PedersenCommitmentInput {
     pub pedersen_params: PedersenParam,
     pub x: ark_bls12_377::Fr,

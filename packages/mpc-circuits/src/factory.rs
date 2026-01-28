@@ -1,4 +1,5 @@
 use ark_bls12_377::Fr;
+use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 use ark_std::{test_rng, UniformRand};
 use mpc_algebra::{crh::pedersen, reveal::Reveal};
@@ -418,7 +419,16 @@ impl CircuitFactory {
                 todo!()
             }
             BuiltinCircuit::KeyPublicize(circuit) => {
-                todo!()
+                let mut inputs = Vec::new();
+                let (pub_key_x, pub_key_y) = circuit.calculate_output();
+
+                let revealed_pub_key_x = pub_key_x.sync_reveal();
+                let revealed_pub_key_y = pub_key_y.sync_reveal();
+
+                // 公開鍵のX座標とY座標を入力として返す
+                inputs.push(revealed_pub_key_x);
+                inputs.push(revealed_pub_key_y);
+                inputs
             }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
         }
@@ -457,9 +467,14 @@ impl CircuitFactory {
             BuiltinCircuit::RoleAssignment(circuit) => {
                 let roles = circuit.calculate_output().sync_reveal();
 
-                let mut buffer = Vec::new();
-                CanonicalSerialize::serialize(&roles, &mut buffer).unwrap();
-                buffer
+                // Vec<Fr>を文字列の配列に変換してJSON化
+                let role_strings: Vec<String> = roles
+                    .iter()
+                    .map(|role_field| role_field.into_repr().to_string())
+                    .collect();
+
+                // JSONとしてシリアライズ
+                serde_json::to_vec(&role_strings).unwrap()
             }
             _ => panic!("Unsupported circuit type for get_circuit_outputs"),
         }

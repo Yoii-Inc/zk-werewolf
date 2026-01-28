@@ -12,6 +12,7 @@ use ark_bls12_377::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::CanonicalDeserialize;
+use base64;
 use chrono::{DateTime, Utc};
 use derivative::Derivative;
 use mpc_algebra_wasm::*;
@@ -19,7 +20,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
-use zk_mpc_node::{ProofOutputType, ProofRequest};
+use zk_mpc_node::{ProofOutputType, ProofRequest, UserPublicKey};
 
 #[derive(Serialize, Deserialize, Derivative, Clone)]
 #[derivative(Debug)]
@@ -28,7 +29,6 @@ pub struct Game {
     pub name: String,
     pub players: Vec<Player>,
     pub max_players: usize,
-    pub roles: Vec<String>,
     pub phase: GamePhase,
     pub day_count: u32,
     pub result: GameResult,
@@ -107,15 +107,11 @@ pub enum GameResult {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum NightAction {
     Attack { target_id: String }, // 人狼の襲撃
-    Divine { target_id: String }, // 占い師の占い
-    Guard { target_id: String },  // 騎士の護衛
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct NightActions {
-    pub attacks: Vec<String>,     // 襲撃対象
-    pub guards: Vec<String>,      // 護衛対象
-    pub divinations: Vec<String>, // 占い対象
+    pub attacks: Vec<String>, // 襲撃対象
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -141,6 +137,8 @@ pub struct ProverInfo {
     pub user_id: String,
     pub prover_count: usize,
     pub encrypted_data: String,
+    #[serde(default)]
+    pub public_key: Option<String>, // Curve25519公開鍵（Base64エンコード）
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -171,6 +169,16 @@ impl ClientRequestType {
             | ClientRequestType::WinningJudge(info)
             | ClientRequestType::RoleAssignment(info)
             | ClientRequestType::KeyPublicize(info) => info.user_id.as_str(),
+        }
+    }
+
+    fn get_public_key(&self) -> Option<&str> {
+        match self {
+            ClientRequestType::Divination(info)
+            | ClientRequestType::AnonymousVoting(info)
+            | ClientRequestType::WinningJudge(info)
+            | ClientRequestType::RoleAssignment(info)
+            | ClientRequestType::KeyPublicize(info) => info.public_key.as_deref(),
         }
     }
 }
@@ -292,7 +300,6 @@ impl Game {
             name: "".to_string(),
             players,
             max_players: 9,
-            roles: vec![],
             phase: GamePhase::Waiting,
             day_count: 1,
             result: GameResult::InProgress,
@@ -414,40 +421,27 @@ impl Game {
         Ok(())
     }
 
-    pub fn divine_player(&self, target_id: &str) -> Result<String, String> {
-        let target = self
-            .players
-            .iter()
-            .find(|p| p.id.to_string() == target_id)
-            .ok_or("Target player not found")?;
+    // pub fn divine_player(&self, target_id: &str) -> Result<String, String> {
+    //     let target = self
+    //         .players
+    //         .iter()
+    //         .find(|p| p.id.to_string() == target_id)
+    //         .ok_or("Target player not found")?;
 
-        match &target.role {
-            Some(role) => Ok(role.to_string()),
-            None => Ok("Unknown".to_string()),
-        }
-    }
-
-    pub fn register_guard(&mut self, target_id: &str) -> Result<(), String> {
-        if !self.players.iter().any(|p| p.id.to_string() == target_id) {
-            return Err("Target player not found".to_string());
-        }
-        self.night_actions.guards.push(target_id.to_string());
-        Ok(())
-    }
+    //     match &target.role {
+    //         Some(role) => Ok(role.to_string()),
+    //         None => Ok("Unknown".to_string()),
+    //     }
+    // }
 
     pub fn resolve_night_actions(&mut self) {
-        use std::collections::HashSet;
-        let protected_players: HashSet<_> = self.night_actions.guards.iter().collect();
-
         for target_id in &self.night_actions.attacks {
-            if !protected_players.contains(target_id) {
-                if let Some(player) = self
-                    .players
-                    .iter_mut()
-                    .find(|p| p.id.to_string() == *target_id)
-                {
-                    player.is_dead = true;
-                }
+            if let Some(player) = self
+                .players
+                .iter_mut()
+                .find(|p| p.id.to_string() == *target_id)
+            {
+                player.is_dead = true;
             }
         }
 
@@ -603,10 +597,46 @@ impl Game {
 
         let mut responses = Vec::new();
 
+        // RoleAssignmentの場合、プレイヤー公開鍵を収集
+        let output_type = match &identifier {
+            CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
+                let mut player_pubkeys = Vec::new();
+                for request in &self.batch_request.requests {
+                    if let Some(pubkey) = request.get_public_key() {
+                        player_pubkeys.push(UserPublicKey {
+                            user_id: request.get_user_id().to_string(),
+                            public_key: pubkey.to_string(),
+                        });
+                    } else {
+                        println!(
+                            "Warning: Request from user {} missing public_key",
+                            request.get_user_id()
+                        );
+                    }
+                }
+
+                if player_pubkeys.is_empty() {
+                    println!("ERROR: No player public keys found for RoleAssignment");
+                    self.batch_request.status = BatchStatus::Failed;
+                    self.chat_log.add_system_message(
+                        "Failed to process role assignment: No player public keys".to_string(),
+                    );
+                    return;
+                }
+
+                println!(
+                    "Collected {} player public keys for RoleAssignment",
+                    player_pubkeys.len()
+                );
+                ProofOutputType::PrivateToPublic(player_pubkeys)
+            }
+            _ => ProofOutputType::Public,
+        };
+
         let req_to_node = ProofRequest {
             proof_id: self.batch_request.batch_id.clone(),
             circuit_type: identifier.clone(),
-            output_type: ProofOutputType::Public,
+            output_type,
         };
 
         // identifierをzk-mpc-nodeに送信するなどの処理を行う
@@ -919,102 +949,109 @@ impl Game {
                         }
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
-                        // itemsを処理する
-                        let role_result: Vec<Fr> = match output.value {
-                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
-                                Ok(state) => state,
-                                Err(e) => {
-                                    println!("Failed to deserialize role_result: {}", e);
-                                    return;
-                                }
-                            },
-                            None => {
-                                println!("No output value found");
-                                return;
-                            }
-                        };
+                        println!("RoleAssignment process is starting...");
 
-                        // role_resultをゲームの結果に反映
-                        let mut player_role_assignments = Vec::new();
-                        for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
-                            let assigned_role = if *role == Fr::from(0u32) {
-                                Some(Role::Villager)
-                            } else if *role == Fr::from(1u32) {
-                                Some(Role::Seer)
-                            } else if *role == Fr::from(2u32) {
-                                Some(Role::Werewolf)
-                            } else {
-                                None
-                            };
+                        // ProofOutputからEncryptedSharesを取得
+                        if let Some(encrypted_shares) = output.shares {
+                            println!("Received {} encrypted role shares", encrypted_shares.len());
 
-                            player.role = assigned_role.clone();
+                            // 各プレイヤーに個別に暗号化された役職データを配信
+                            for encrypted_share in encrypted_shares {
+                                let user_index_str = encrypted_share.user_id.clone();
+                                let node_id = encrypted_share.node_id;
 
-                            if let Some(role) = assigned_role {
-                                player_role_assignments.push(PlayerRoleAssignment {
-                                    player_id: player.id.clone(),
-                                    role: format!("{:?}", role),
-                                });
-                            }
-                        }
-
-                        // 計算結果を保存
-                        self.save_role_assignment_result(
-                            self.batch_request.batch_id.clone(),
-                            player_role_assignments.clone(),
-                            serde_json::json!({
-                                "raw_role_result": role_result.iter().map(|r| r.into_repr().to_string()).collect::<Vec<_>>(),
-                                "computation_time": chrono::Utc::now().to_rfc3339()
-                            })
-                        );
-
-                        self.chat_log.add_system_message(format!(
-                            "Roles have been assigned: {}. Starting the game.",
-                            self.players
-                                .iter()
-                                .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ));
-
-                        // 全プレイヤーに役職配布結果を通知
-                        let role_assignments: Vec<_> = self
-                            .players
-                            .iter()
-                            .map(|p| {
-                                serde_json::json!({
-                                    "player_id": p.id,
-                                    "player_name": p.name,
-                                    "role": p.role
-                                })
-                            })
-                            .collect();
-
-                        let result_data = serde_json::json!({
-                            "role_assignments": role_assignments,
-                            "status": "completed"
-                        });
-
-                        if let Err(e) = app_state
-                            .broadcast_computation_result(
-                                &self.room_id,
-                                "role_assignment",
-                                result_data,
-                                None, // 全プレイヤーに送信
-                                &self.batch_request.batch_id,
-                            )
-                            .await
-                        {
-                            println!("Failed to broadcast role assignment result: {}", e);
-                        }
-                    }
-                    CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
-                        // itemsを処理する
-                        let public_key: <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey =
-                            match output.value {
-                                Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
-                                    Ok(key) => key,
+                                // user_idは配列のインデックス（文字列）なので、実際のプレイヤーIDに変換
+                                let user_index: usize = match user_index_str.parse() {
+                                    Ok(idx) => idx,
                                     Err(e) => {
-                                        println!("Failed to deserialize public key: {}", e);
+                                        println!(
+                                            "ERROR: Failed to parse user_id '{}' as index: {}",
+                                            user_index_str, e
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                // インデックスからプレイヤーIDを取得
+                                let actual_player_id = if user_index < self.players.len() {
+                                    self.players[user_index].id.clone()
+                                } else {
+                                    println!(
+                                        "ERROR: Player index {} out of bounds (total players: {})",
+                                        user_index,
+                                        self.players.len()
+                                    );
+                                    continue;
+                                };
+
+                                println!(
+                                    "Converting user_index {} to player_id {}",
+                                    user_index, actual_player_id
+                                );
+
+                                // encrypted_dataは [nonce(24バイト) + ciphertext] の形式
+                                if encrypted_share.encrypted_data.len() < 24 {
+                                    println!(
+                                        "ERROR: Encrypted data too short for player {} (index {})",
+                                        actual_player_id, user_index
+                                    );
+                                    continue;
+                                }
+
+                                // nonceとciphertextを分離
+                                let nonce = &encrypted_share.encrypted_data[..24];
+                                let ciphertext = &encrypted_share.encrypted_data[24..];
+
+                                // Base64エンコード
+                                let nonce_b64 = base64::encode(nonce);
+                                let ciphertext_b64 = base64::encode(ciphertext);
+
+                                // サーバーは中継のみ - node_idを送信してクライアント側で公開鍵を解決
+                                let result_data = serde_json::json!({
+                                    "encrypted_role": {
+                                        "encrypted": ciphertext_b64,
+                                        "nonce": nonce_b64,
+                                        "node_id": node_id
+                                    },
+                                    "status": "ready"
+                                });
+
+                                println!(
+                                    "Sending encrypted role to player {} (index {}, from node {})",
+                                    actual_player_id, user_index, node_id
+                                );
+
+                                // 特定のプレイヤーにのみ送信（実際のプレイヤーIDを使用）
+                                if let Err(e) = app_state
+                                    .broadcast_computation_result(
+                                        &self.room_id,
+                                        "role_assignment",
+                                        result_data,
+                                        Some(actual_player_id.clone()), // 実際のプレイヤーIDを使用
+                                        &self.batch_request.batch_id,
+                                    )
+                                    .await
+                                {
+                                    println!(
+                                        "Failed to send encrypted role to player {}: {}",
+                                        actual_player_id, e
+                                    );
+                                }
+                            }
+
+                            self.chat_log.add_system_message(
+                                "Roles have been assigned. Check your private information."
+                                    .to_string(),
+                            );
+                        } else {
+                            // 後方互換性のため、古い実装も残す（デバッグモード用）
+                            println!("No encrypted shares found, using fallback role assignment");
+
+                            let role_result: Vec<Fr> = match output.value {
+                                Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                    Ok(state) => state,
+                                    Err(e) => {
+                                        println!("Failed to deserialize role_result: {}", e);
                                         return;
                                     }
                                 },
@@ -1024,10 +1061,145 @@ impl Game {
                                 }
                             };
 
-                        self.crypto_parameters = Some(CryptoParameters {
-                            fortune_teller_public_key: public_key,
-                            ..self.crypto_parameters.clone().unwrap()
+                            let mut player_role: Option<Role> = None;
+
+                            // role_resultをゲームの結果に反映
+                            let mut player_role_assignments = Vec::new();
+                            for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
+                                let assigned_role = if *role == Fr::from(0u32) {
+                                    Some(Role::Villager)
+                                } else if *role == Fr::from(1u32) {
+                                    Some(Role::Seer)
+                                } else if *role == Fr::from(2u32) {
+                                    Some(Role::Werewolf)
+                                } else {
+                                    None
+                                };
+
+                                player_role = assigned_role.clone();
+
+                                if let Some(role) = assigned_role {
+                                    player_role_assignments.push(PlayerRoleAssignment {
+                                        player_id: player.id.clone(),
+                                        role: format!("{:?}", role),
+                                    });
+                                }
+                            }
+
+                            // 計算結果を保存
+                            self.save_role_assignment_result(
+                                self.batch_request.batch_id.clone(),
+                                player_role_assignments.clone(),
+                                serde_json::json!({
+                                    "raw_role_result": role_result.iter().map(|r| r.into_repr().to_string()).collect::<Vec<_>>(),
+                                    "computation_time": chrono::Utc::now().to_rfc3339()
+                                })
+                            );
+
+                            // self.chat_log.add_system_message(format!(
+                            //     "Roles have been assigned: {}. Starting the game.",
+                            //     self.players
+                            //         .iter()
+                            //         .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))
+                            //         .collect::<Vec<_>>()
+                            //         .join(", ")
+                            // ));
+
+                            // 全プレイヤーに役職配布結果を通知
+                            let role_assignments: Vec<_> = self
+                                .players
+                                .iter()
+                                .map(|p| {
+                                    serde_json::json!({
+                                        "player_id": p.id,
+                                        "player_name": p.name,
+                                        "role": player_role
+                                    })
+                                })
+                                .collect();
+
+                            let result_data = serde_json::json!({
+                                "role_assignments": role_assignments,
+                                "status": "completed"
+                            });
+
+                            if let Err(e) = app_state
+                                .broadcast_computation_result(
+                                    &self.room_id,
+                                    "role_assignment",
+                                    result_data,
+                                    None, // 全プレイヤーに送信
+                                    &self.batch_request.batch_id,
+                                )
+                                .await
+                            {
+                                println!("Failed to broadcast role assignment result: {}", e);
+                            }
+                        }
+                    }
+                    CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
+                        println!("KeyPublicize process is starting...");
+
+                        // ProofOutputから公開鍵を取得
+                        let (pub_key_x, pub_key_y): (Fr, Fr) = match output.value {
+                            Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
+                                Ok(key) => key,
+                                Err(e) => {
+                                    println!("Failed to deserialize divination public key: {}", e);
+                                    return;
+                                }
+                            },
+                            None => {
+                                println!("No divination public key found in output");
+                                return;
+                            }
+                        };
+
+                        println!("Fortune teller public key received from KeyPublicize MPC:");
+                        println!("  X: {}", serde_json::to_string(&pub_key_x).unwrap());
+                        println!("  Y: {}", serde_json::to_string(&pub_key_y).unwrap());
+
+                        // EdwardsProjectiveに変換してcrypto_parametersに保存
+
+                        let mut curve_pt = <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalPubKey::default();
+
+                        curve_pt.x = pub_key_x;
+                        curve_pt.y = pub_key_y;
+
+                        // crypto_parametersのfortune_teller_public_keyを更新
+                        if let Some(ref mut crypto_params) = self.crypto_parameters {
+                            crypto_params.fortune_teller_public_key = Some(curve_pt);
+                            println!("Updated crypto_parameters.fortune_teller_public_key with KeyPublicize result");
+                        } else {
+                            println!("WARNING: crypto_parameters is None, cannot update fortune_teller_public_key");
+                        }
+
+                        // 全プレイヤーに占い公開鍵を配信（フロントエンド互換形式）
+                        let key_data = serde_json::json!({
+                            "divination_public_key": {
+                                "x": serde_json::to_string(&pub_key_x).unwrap(),
+                                "y": serde_json::to_string(&pub_key_y).unwrap(),
+                                "_params": null
+                            },
+                            "status": "completed"
                         });
+
+                        if let Err(e) = app_state
+                            .broadcast_computation_result(
+                                &self.room_id,
+                                "divination_key_ready",
+                                key_data,
+                                None, // 全プレイヤーに送信
+                                &self.batch_request.batch_id,
+                            )
+                            .await
+                        {
+                            println!("Failed to broadcast divination key ready event: {}", e);
+                        }
+
+                        self.chat_log.add_system_message(
+                            "Fortune teller public key has been generated via MPC.".to_string(),
+                        );
                     }
                 }
 
@@ -1055,34 +1227,24 @@ impl std::fmt::Display for Game {
 
 #[derive(Serialize, Deserialize)]
 pub struct CryptoParameters {
-    // public
+    // public parameters only - secret information is NOT stored here
     pub pedersen_param: <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Parameters,
     pub player_commitment:
         Vec<<<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output>,
-    pub fortune_teller_public_key:
+    pub fortune_teller_public_key: Option<
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey,
+    >,
     pub elgamal_param:
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Parameters,
-
-    // TODO: do not put the secret key in the struct
-    // secret
-    pub player_randomness: Vec<Fr>,
-    pub secret_key:
-        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::SecretKey,
 }
 
 impl Clone for CryptoParameters {
     fn clone(&self) -> Self {
-        // Dummy implementation
         Self {
             pedersen_param: self.pedersen_param.clone(),
             player_commitment: self.player_commitment.clone(),
             fortune_teller_public_key: self.fortune_teller_public_key,
             elgamal_param: self.elgamal_param.clone(),
-            player_randomness: self.player_randomness.clone(),
-            secret_key: ark_crypto_primitives::encryption::elgamal::SecretKey(
-                self.secret_key.0.clone(),
-            ),
         }
     }
 }

@@ -31,6 +31,7 @@ export type RoleAssignmentInput = {
   publicInput: RoleAssignmentPublicInput;
   nodeKeys: NodeKey[];
   scheme: SecretSharingScheme;
+  publicKey?: string; // Curve25519公開鍵（Base64エンコード）
 };
 
 export type RoleAssignmentOutput = string;
@@ -82,19 +83,19 @@ export interface PedersenCommitment {
 
 export interface ElGamalParam {
   generator: {
-    x: Field;
-    y: Field;
+    x: Field[];
+    y: Field[];
     _params: null;
   };
 }
 
 export interface ElGamalPublicKey {
-  x: Field;
-  y: Field;
+  x: Field[];
+  y: Field[];
   _params: null;
 }
 
-export type ElGamalSecretKey = Field;
+export type ElGamalSecretKey = Field[];
 
 export interface AnonymousVotingPrivateInput {
   id: number;
@@ -110,9 +111,9 @@ export interface AnonymousVotingPublicInput {
 
 export interface KeyPublicizePrivateInput {
   id: number;
-  pub_key_or_dummy_x: number[] | null;
-  pub_key_or_dummy_y: number[] | null;
-  is_fortune_teller: number[] | null;
+  pubKeyOrDummyX: Field[] | null;
+  pubKeyOrDummyY: Field[] | null;
+  isFortuneTeller: Field[] | null;
 }
 export interface KeyPublicizePublicInput {
   pedersenParam: PedersenParam;
@@ -150,11 +151,11 @@ export interface DivinationPrivateInput {
   isWerewolf: Field[];
   isTarget: Field[][];
   //   randomness: (number[] | null)[];
-  randomness: any;
+  randomness: Field[];
 }
 export interface DivinationPublicInput {
   pedersenParam: PedersenParam;
-  elgamalParam: any;
+  elgamalParam: ElGamalParam;
   pubKey: any;
   playerNum: any;
   //   playerCommitment: PedersenCommitment[];
@@ -171,11 +172,27 @@ export interface WinningJudgementPublicInput {
 }
 
 export interface ElGamalDecryptInput {
-  elgamalParams: any;
-  secretKey: any;
+  elgamalParams: ElGamalParam;
+  secretKey: ElGamalSecretKey;
   ciphertext: any;
 }
 
 export interface ElGamalDecryptOutput {
   plaintext: any;
+}
+
+export interface ElGamalKeygenInput {
+  elgamalParams: ElGamalParam;
+}
+
+export interface ElGamalKeygenOutput {
+  publicKey: ElGamalPublicKey;
+  secretKey: ElGamalSecretKey;
+}
+
+export interface ElGamalEncryptInput {
+  elgamalParams: ElGamalParam;
+  publicKey: ElGamalPublicKey;
+  message: any;
+  randomness: Field[];
 }

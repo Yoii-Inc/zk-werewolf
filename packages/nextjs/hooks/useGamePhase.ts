@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useBackgroundNightAction } from "./useBackgroundNightAction";
 import { useDivination } from "./useDivination";
 import { useGameInputGenerator } from "./useGameInputGenerator";
+import { useKeyPublicize } from "./useKeyPublicize";
 import { useRoleAssignment } from "./useRoleAssignment";
 import { useWinningJudge } from "./useWinningJudge";
 import JSONbig from "json-bigint";
@@ -29,6 +30,7 @@ export const useGamePhase = (
   const prevPhaseRef = useRef(gameInfo?.phase);
   const { submitWinningJudge } = useWinningJudge();
   const { submitRoleAssignment } = useRoleAssignment();
+  const { submitKeyPublicize } = useKeyPublicize();
   const { handleBackgroundNightAction } = useBackgroundNightAction();
   const { proofStatus } = useDivination();
   const { isReady, generateRoleAssignmentInput, generateWinningJudgementInput } = useGameInputGenerator(
@@ -304,18 +306,27 @@ export const useGamePhase = (
       const customEvent = event as CustomEvent;
       const { roomId: resetRoomId } = customEvent.detail;
 
-      console.log(`Game reset notification received in useGamePhase for room: ${resetRoomId}`);
+      console.log("🔄 [useGamePhase] Game reset notification received for room:", resetRoomId);
+      console.log("🔄 [useGamePhase] Current roomId:", roomId);
 
       if (resetRoomId === roomId) {
         // コミットメント準備完了フラグをリセット
         commitmentsReadyRef.current = false;
-        console.log("Commitments ready flag reset to false");
+        console.log("✅ [useGamePhase] Commitments ready flag reset to false");
+
+        // KeyPublicize実行済みフラグをリセット
+        keyPublicizeExecutedRef.current = false;
+        console.log("✅ [useGamePhase] KeyPublicize executed flag reset to false");
+      } else {
+        console.log("⚠️ [useGamePhase] Room ID mismatch, skipping reset");
       }
     };
 
+    console.log("🎯 [useGamePhase] Adding gameResetNotification listener for room:", roomId);
     window.addEventListener("gameResetNotification", handleGameReset);
 
     return () => {
+      console.log("🗑️ [useGamePhase] Removing gameResetNotification listener for room:", roomId);
       window.removeEventListener("gameResetNotification", handleGameReset);
     };
   }, [roomId]);
@@ -426,6 +437,65 @@ export const useGamePhase = (
       console.log(`Phase change detected: ${prevPhase} → ${gameInfo.phase}`);
     }
   }, [gameInfo?.phase]);
+
+  // KeyPublicize実行済みフラグ（重複実行防止）
+  const keyPublicizeExecutedRef = useRef(false);
+
+  // 役職配布完了後にKeyPublicizeを実行
+  useEffect(() => {
+    const handleRoleAssignmentCompleted = async () => {
+      // 既に実行済みの場合はスキップ
+      if (keyPublicizeExecutedRef.current) {
+        console.log("KeyPublicize: Already executed, skipping...");
+        return;
+      }
+
+      if (!username || !roomId) {
+        console.log("KeyPublicize: Missing required data (username or roomId)");
+        return;
+      }
+
+      console.log("Role assignment completed event received, starting KeyPublicize...");
+
+      // 実行済みフラグを立てる
+      keyPublicizeExecutedRef.current = true;
+
+      try {
+        // 最新のゲーム状態を取得
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/state`,
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch latest game state");
+        }
+        const latestGameInfo = await response.json();
+
+        // KeyPublicize入力を生成
+        const keyPublicizeData = await GameInputGenerator.generateKeyPublicizeInput(roomId, username, latestGameInfo);
+
+        const alivePlayersCount = latestGameInfo.players.filter((player: any) => !player.is_dead).length;
+
+        console.log("Submitting KeyPublicize request...");
+        await submitKeyPublicize(roomId, keyPublicizeData, alivePlayersCount);
+        console.log("KeyPublicize request submitted successfully");
+      } catch (error) {
+        console.error("KeyPublicize error:", error);
+        addMessage({
+          id: Date.now().toString(),
+          sender: "System",
+          message: `Failed to submit KeyPublicize: ${error instanceof Error ? error.message : String(error)}`,
+          timestamp: new Date().toISOString(),
+          type: "system",
+        });
+      }
+    };
+
+    window.addEventListener("roleAssignmentCompleted", handleRoleAssignmentCompleted);
+
+    return () => {
+      window.removeEventListener("roleAssignmentCompleted", handleRoleAssignmentCompleted);
+    };
+  }, [username, roomId, submitKeyPublicize, addMessage]);
 
   return { prevPhase: prevPhaseRef.current };
 };
