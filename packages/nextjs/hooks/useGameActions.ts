@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ChatMessage, GameInfo, PrivateGameInfo } from "~~/types/game";
 import {
   clearPrivateGameInfo,
+  getPrivateGameInfo,
   initializePrivateGameInfo,
   setPrivateGameInfo as saveToStorage,
   updateHasActed,
@@ -32,8 +33,14 @@ export const useGameActions = (
       // Initialize PrivateGameInfo with null role (undetermined) when game starts
       if (userId) {
         try {
-          initializePrivateGameInfo(roomId, userId);
-          console.log("PrivateGameInfo initialized with null role in session storage");
+          // すでにRoleが割り当てられている場合は上書きしない
+          const existingInfo = getPrivateGameInfo(roomId, userId);
+          if (existingInfo && existingInfo.playerRole !== null) {
+            console.log("PrivateGameInfo already has role assigned, skipping initialization:", existingInfo);
+          } else {
+            initializePrivateGameInfo(roomId, userId);
+            console.log("PrivateGameInfo initialized with null role in session storage");
+          }
         } catch (storageError) {
           console.error("PrivateGameInfo initialization error:", storageError);
         }

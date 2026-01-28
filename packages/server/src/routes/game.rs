@@ -45,21 +45,19 @@ pub fn routes(state: AppState) -> Router {
                 // ゲームアクション
                 .nest(
                     "/actions",
-                    Router::new()
-                        .route("/vote", post(cast_vote_handler))
-                        .route("/night-action", post(night_action_handler)),
+                    Router::new().route("/night-action", post(night_action_handler)),
                 )
                 .route("/proof", post(proof_handler))
                 // 暗号パラメータとコミットメント管理
                 .route("/crypto-params", get(get_crypto_params))
                 .route("/commitment", post(submit_commitment))
                 // デバッグ用エンドポイント
-                .route("/debug/change-role", post(change_player_role))
+                // .route("/debug/change-role", post(change_player_role))
                 .route("/debug/reset", post(reset_game_handler))
                 .route("/debug/reset-batch", post(reset_batch_request_handler))
                 // ゲーム進行の管理
                 .route("/phase/next", post(advance_phase_handler))
-                .route("/check-winner", get(check_winner_handler))
+                // .route("/check-winner", get(check_winner_handler))
                 .route("/messages/:player_id", get(get_messages)),
         )
         .with_state(state)
@@ -109,26 +107,6 @@ async fn night_action_handler(
     }
 }
 
-async fn cast_vote_handler(
-    State(state): State<AppState>,
-    Path(room_id): Path<String>,
-    Json(_vote_action): Json<VoteAction>,
-) -> impl IntoResponse {
-    match game_service::handle_vote(
-        state,
-        &room_id,
-        // &vote_action.voter_id,
-        // &vote_action.target_id,
-        &String::from("1"), // voter_idは未使用のため空文字列を渡す
-        &String::from("1"), // target_idは未使用のため空文字列を渡す
-    )
-    .await
-    {
-        Ok(message) => (StatusCode::OK, Json(message)),
-        Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
-    }
-}
-
 pub async fn proof_handler(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
@@ -150,68 +128,70 @@ async fn advance_phase_handler(
     }
 }
 
-async fn check_winner_handler(
-    State(state): State<AppState>,
-    Path(room_id): Path<String>,
-) -> impl IntoResponse {
-    match game_service::check_winner(state, &room_id).await {
-        Ok(winner) => match winner {
-            GameResult::InProgress => (StatusCode::OK, Json("Game in progress".to_string())),
-            GameResult::VillagerWin => (StatusCode::OK, Json("Villagers team wins".to_string())),
-            GameResult::WerewolfWin => (StatusCode::OK, Json("Werewolves team wins".to_string())),
-        },
-        Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
-    }
-}
+// async fn check_winner_handler(
+//     State(state): State<AppState>,
+//     Path(room_id): Path<String>,
+// ) -> impl IntoResponse {
+//     match game_service::check_winner(state, &room_id).await {
+//         Ok(winner) => match winner {
+//             GameResult::InProgress => (StatusCode::OK, Json("Game in progress".to_string())),
+//             GameResult::VillagerWin => (StatusCode::OK, Json("Villagers team wins".to_string())),
+//             GameResult::WerewolfWin => (StatusCode::OK, Json("Werewolves team wins".to_string())),
+//         },
+//         Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
+//     }
+// }
 
-pub async fn change_player_role(
-    Path(room_id): Path<String>,
-    State(state): State<AppState>,
-    Json(payload): Json<ChangeRoleRequest>,
-) -> impl IntoResponse {
-    let mut games = state.games.lock().await;
+// pub async fn change_player_role(
+//     Path(room_id): Path<String>,
+//     State(state): State<AppState>,
+//     Json(payload): Json<ChangeRoleRequest>,
+// ) -> impl IntoResponse {
+//     // WARNING: This endpoint is for debugging only and should NOT be used in production
+//     // In production, roles should only be assigned via MPC and never stored on server
+//     let mut games = state.games.lock().await;
 
-    if let Some(game) = games.get_mut(&room_id) {
-        if let Some(player) = game.players.iter_mut().find(|p| p.id == payload.player_id) {
-            // 文字列から Role を変換
-            let new_role = match payload.new_role.as_str() {
-                "Villager" => Some(Role::Villager),
-                "Werewolf" => Some(Role::Werewolf),
-                "Seer" => Some(Role::Seer),
-                _ => None,
-            };
+//     if let Some(game) = games.get_mut(&room_id) {
+//         if let Some(player) = game.players.iter_mut().find(|p| p.id == payload.player_id) {
+//             // 文字列から Role を変換
+//             let new_role = match payload.new_role.as_str() {
+//                 "Villager" => Some(Role::Villager),
+//                 "Werewolf" => Some(Role::Werewolf),
+//                 "Seer" => Some(Role::Seer),
+//                 _ => None,
+//             };
 
-            player.role = new_role;
+//             player.role = new_role;
 
-            game.chat_log.add_system_message(format!(
-                "{}の役職が{}に変更されました",
-                player.name, payload.new_role
-            ));
+//             game.chat_log.add_system_message(format!(
+//                 "{}の役職が{}に変更されました",
+//                 player.name, payload.new_role
+//             ));
 
-            (
-                StatusCode::OK,
-                Json(json!({
-                    "success": true,
-                    "message": "役職を変更しました"
-                })),
-            )
-        } else {
-            (
-                StatusCode::NOT_FOUND,
-                Json(json!({
-                    "error": "プレイヤーが見つかりません"
-                })),
-            )
-        }
-    } else {
-        (
-            StatusCode::NOT_FOUND,
-            Json(json!({
-                "error": "ゲームが見つかりません"
-            })),
-        )
-    }
-}
+//             (
+//                 StatusCode::OK,
+//                 Json(json!({
+//                     "success": true,
+//                     "message": "役職を変更しました"
+//                 })),
+//             )
+//         } else {
+//             (
+//                 StatusCode::NOT_FOUND,
+//                 Json(json!({
+//                     "error": "プレイヤーが見つかりません"
+//                 })),
+//             )
+//         }
+//     } else {
+//         (
+//             StatusCode::NOT_FOUND,
+//             Json(json!({
+//                 "error": "ゲームが見つかりません"
+//             })),
+//         )
+//     }
+// }
 
 pub async fn get_messages(
     State(state): State<AppState>,
@@ -239,7 +219,7 @@ pub async fn get_messages(
             .messages
             .iter()
             .filter(|msg| match msg.message_type {
-                ChatMessageType::Wolf => player.unwrap().role == Some(Role::Werewolf),
+                // ChatMessageType::Wolf => player.unwrap().role == Some(Role::Werewolf),
                 ChatMessageType::Private => msg.player_id == player_id,
                 _ => true,
             })
@@ -278,7 +258,7 @@ async fn reset_game_handler(
 
         // プレイヤーの状態をリセット
         for mut player in reset_game.players.iter_mut() {
-            player.role = None;
+            // player.role = None;
             player.is_dead = false;
             // player.has_voted = false;
             // player.vote_count = 0;
@@ -474,7 +454,7 @@ mod tests {
 
         // プレイヤーの状態を確認
         for player in &game.players {
-            assert!(player.role.is_none());
+            // assert!(player.role.is_none());
             assert!(!player.is_dead);
             // assert!(!player.has_voted);
             // assert_eq!(player.vote_count, 0);

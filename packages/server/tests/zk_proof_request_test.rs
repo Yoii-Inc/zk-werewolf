@@ -209,6 +209,7 @@ fn setup_voting_dummy() -> ClientRequestType {
         user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&anon_voting_output).unwrap(),
+        public_key: None,
     };
     ClientRequestType::AnonymousVoting(prover_info)
 }
@@ -219,28 +220,28 @@ async fn setup_test_room_with_players(state: &AppState) -> String {
         Player {
             id: "1".to_string(),
             name: "Player1".to_string(),
-            role: Some(Role::Villager),
+            // role: Some(Role::Villager),
             is_dead: false,
             is_ready: false,
         },
         Player {
             id: "2".to_string(),
             name: "Player2".to_string(),
-            role: Some(Role::Seer),
+            // role: Some(Role::Seer),
             is_dead: false,
             is_ready: false,
         },
         Player {
             id: "3".to_string(),
             name: "Player3".to_string(),
-            role: Some(Role::Werewolf),
+            // role: Some(Role::Werewolf),
             is_dead: false,
             is_ready: false,
         },
         Player {
             id: "4".to_string(),
             name: "Player4".to_string(),
-            role: Some(Role::Villager),
+            // role: Some(Role::Villager),
             is_dead: false,
             is_ready: false,
         },
@@ -280,6 +281,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[0]).unwrap(),
+        public_key: None,
     };
     let request1 = ClientRequestType::AnonymousVoting(prover_info_1);
     let batch_id1 = game.add_request(request1, &state).await;
@@ -289,6 +291,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         user_id: "1".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[1]).unwrap(),
+        public_key: None,
     };
     let request2 = ClientRequestType::AnonymousVoting(prover_info_2);
     let batch_id2 = game.add_request(request2, &state).await;
@@ -298,6 +301,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         user_id: "2".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[2]).unwrap(),
+        public_key: None,
     };
     let request3 = ClientRequestType::AnonymousVoting(prover_info_3);
     let batch_id3 = game.add_request(request3, &state).await;

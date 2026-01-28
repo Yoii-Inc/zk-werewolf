@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import JSONbig from "json-bigint";
-import { loadCryptoParams } from "~~/services/gameInputGenerator";
-import type { ChatMessage } from "~~/types/game";
+import { getFortuneTellerSecretKey, loadCryptoParams } from "~~/services/gameInputGenerator";
+import type { ChatMessage, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
-import { getPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
+import { CryptoManager } from "~~/utils/crypto/encryption";
+import { getPrivateGameInfo, setPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
@@ -60,9 +61,11 @@ export const useComputationResults = (
       const result: ComputationResult = customEvent.detail;
 
       console.log(`Computation result received: ${result.computationType}`, result);
+      console.log(`Target player ID: ${result.targetPlayerId}, My player ID: ${playerId}`);
 
       // 対象プレイヤーのチェック（指定がある場合）
       if (result.targetPlayerId && result.targetPlayerId !== playerId) {
+        console.log(`Skipping message not for me (target: ${result.targetPlayerId}, me: ${playerId})`);
         return; // 自分宛てでない場合はスキップ
       }
 
@@ -81,14 +84,14 @@ export const useComputationResults = (
               console.log("Decrypting divination result as Seer");
 
               try {
-                // ElGamal秘密鍵をJSONファイルから読み取り
-                const secretKeyResponse = await fetch("/elgamal_secret_key.json");
-                if (!secretKeyResponse.ok) {
-                  throw new Error("Failed to load ElGamal secret key");
+                // KeyPublicize時に保存したElGamal秘密鍵を取得
+                const secretKey = getFortuneTellerSecretKey(roomId, playerId);
+
+                if (!secretKey) {
+                  throw new Error("ElGamal secret key not found. Please complete KeyPublicize first.");
                 }
 
-                const secretKeyText = await secretKeyResponse.text();
-                const secretKey = JSONbigNative.parse(secretKeyText);
+                console.log("ElGamal secret key loaded from localStorage");
 
                 // ElGamalパラメータを取得（キャッシュされたcryptoParamsから）
                 const cryptoParams = await loadCryptoParams();
@@ -192,55 +195,141 @@ export const useComputationResults = (
           case "role_assignment":
             setRoleAssignmentResult(result.resultData);
 
-            // ダミーコード: gameInfoから役職を取得してprivateGameInfoを更新
-            console.log("Role assignment result received, retrieving role from gameInfo");
+            // Role情報の復号処理
+            try {
+              console.log("Starting role assignment decryption process");
+              console.log("Result data:", result.resultData);
 
-            if (gameInfo && gameInfo.players) {
-              const currentPlayer = gameInfo.players.find((player: any) => player.id === playerId);
-
-              if (currentPlayer && currentPlayer.role) {
-                console.log("Role retrieved from gameInfo:", currentPlayer.role);
-
-                // privateGameInfoを更新
-                const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
-                  playerRole: currentPlayer.role,
-                });
-
-                if (updatedInfo) {
-                  console.log("privateGameInfo updated (gameInfo based):", updatedInfo);
-
-                  addMessage({
-                    id: Date.now().toString(),
-                    sender: "System",
-                    message: `Your role is "${currentPlayer.role}"`,
-                    timestamp: new Date().toISOString(),
-                    type: "system",
-                  });
-                } else {
-                  console.warn("Failed to update privateGameInfo. It may not be initialized.");
-
-                  addMessage({
-                    id: Date.now().toString(),
-                    sender: "System",
-                    message: "Failed to update role information. Please restart the game.",
-                    timestamp: new Date().toISOString(),
-                    type: "system",
-                  });
-                }
-              } else {
-                console.warn("Could not retrieve role information from gameInfo");
+              // 暗号化されたRoleデータを取得
+              if (!result.resultData.encrypted_role) {
+                throw new Error("No encrypted role data in result");
               }
-            } else {
-              console.warn("gameInfo is not available");
-            }
 
-            addMessage({
-              id: Date.now().toString(),
-              sender: "System",
-              message: "Role assignment completed.",
-              timestamp: new Date().toISOString(),
-              type: "system",
-            });
+              const { encrypted, nonce, node_id } = result.resultData.encrypted_role;
+
+              if (!encrypted || !nonce || node_id === undefined) {
+                throw new Error("Invalid encrypted role data structure");
+              }
+
+              // node_idからMPCノードの公開鍵を取得
+              const MPC_NODE_PUBLIC_KEYS = [
+                process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
+                process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
+                process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
+              ];
+
+              const sender_public_key = MPC_NODE_PUBLIC_KEYS[node_id];
+
+              if (!sender_public_key) {
+                throw new Error(`MPC node ${node_id} public key not configured`);
+              }
+
+              // CryptoManagerで復号
+              const cryptoManager = new CryptoManager(playerId);
+
+              if (!cryptoManager.hasKeyPair()) {
+                throw new Error("No keypair found. Cannot decrypt role.");
+              }
+
+              console.log("Decrypting role with CryptoManager");
+              console.log("Encrypted (first 50 chars):", encrypted.substring(0, 50));
+              console.log("Nonce:", nonce);
+              console.log("Sender public key (first 20 chars):", sender_public_key.substring(0, 20));
+
+              // バイナリデータとして復号
+              const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, sender_public_key);
+
+              console.log("Role decrypted successfully. Binary length:", decryptedBinary.length);
+
+              // バイナリデータをUTF8文字列に変換
+              const decoder = new TextDecoder("utf-8");
+              const decryptedString = decoder.decode(decryptedBinary);
+
+              console.log("Decrypted string:", decryptedString);
+
+              // JSONとしてパース（Vec<String>形式を想定）
+              let roleData: string[] | null = null;
+              try {
+                roleData = JSON.parse(decryptedString);
+                console.log("Parsed role data:", roleData);
+              } catch (parseError) {
+                console.error("Failed to parse role data as JSON:", parseError);
+                console.log("Raw data (first 200 chars):", decryptedString.substring(0, 200));
+                throw new Error("Invalid role data format");
+              }
+
+              // roleDataから実際のRole情報を抽出
+              // 修正後: 各プレイヤーには自分のRole IDのみが配列として送られる
+              // 例: ["0000000000000000000000000000000000000000000000000000000000000002"]
+              // 値はBigInt形式の16進数文字列で、0=Villager, 1=FortuneTeller, 2=Werewolf
+
+              if (!roleData || roleData.length === 0) {
+                throw new Error("Empty role data received");
+              }
+
+              // 配列の最初（唯一）の要素がこのプレイヤーのRole ID
+              const roleIdStr = roleData[0];
+
+              // 16進数文字列をBigIntとしてパース
+              const roleIdBigInt = BigInt("0x" + roleIdStr);
+              const roleId = roleIdBigInt % BigInt(3); // 0, 1, 2 のいずれか
+
+              const ROLE_MAPPING: Record<string, string> = {
+                "0": "Villager",
+                "1": "Seer",
+                "2": "Werewolf",
+              };
+
+              const roleName = ROLE_MAPPING[roleId.toString()] || "Unknown";
+
+              console.log("Role ID:", roleId.toString(), "Role Name:", roleName);
+
+              // 復号したRoleをprivateGameInfoに保存
+              // まず既存の情報を確認し、なければ初期化してから更新
+              let existingInfo = getPrivateGameInfo(roomId, playerId);
+
+              if (!existingInfo) {
+                console.log("PrivateGameInfo not found, initializing before role assignment");
+                const initialInfo: PrivateGameInfo = {
+                  playerId: playerId,
+                  playerRole: null as any,
+                  hasActed: false,
+                };
+                setPrivateGameInfo(roomId, initialInfo);
+                existingInfo = initialInfo;
+              }
+
+              const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
+                playerRole: roleName as "Villager" | "Werewolf" | "Seer",
+              });
+
+              if (updatedInfo) {
+                console.log("PrivateGameInfo updated successfully:", updatedInfo);
+              } else {
+                console.error("Failed to update PrivateGameInfo even after initialization attempt");
+              }
+
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: `Your role has been assigned: ${roleName} (from node ${node_id})`,
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+
+              // Role割り当て完了イベントを発火
+              window.dispatchEvent(new CustomEvent("roleAssignmentCompleted"));
+              console.log("Role assignment completion event dispatched");
+            } catch (error) {
+              console.error("Role decryption error:", error);
+              addMessage({
+                id: Date.now().toString(),
+                sender: "System",
+                message: `Failed to decrypt role: ${error instanceof Error ? error.message : String(error)}`,
+                timestamp: new Date().toISOString(),
+                type: "system",
+              });
+            }
             break;
           case "winning_judge":
             setWinningJudgeResult(result.resultData);

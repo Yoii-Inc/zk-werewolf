@@ -177,8 +177,23 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         output: &[u8],
         pubkeys: &[UserPublicKey],
     ) -> Result<Vec<EncryptedShare>, Box<dyn std::error::Error>> {
-        // 出力をシェアに分割（実際の分割ロジックは省略）
-        let shares = vec![output.to_vec(); pubkeys.len()]; // TODO: 実際のシェア分割を実装
+        // outputをJSONとしてパース（RoleAssignmentの場合は配列）
+        let output_str = std::str::from_utf8(output)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        
+        // JSON配列として解釈を試みる
+        let shares: Vec<Vec<u8>> = if let Ok(role_array) = serde_json::from_str::<Vec<String>>(output_str) {
+            // RoleAssignmentの場合：各プレイヤーに対応するインデックスの値のみを送る
+            role_array
+                .iter()
+                .take(pubkeys.len())
+                .map(|role| serde_json::to_vec(&vec![role]).unwrap())
+                .collect()
+        } else {
+            // その他の場合：全データを各プレイヤーに送る（従来の動作）
+            vec![output.to_vec(); pubkeys.len()]
+        };
+
         let pubkeys = pubkeys.to_vec();
 
         // 各シェアを暗号化

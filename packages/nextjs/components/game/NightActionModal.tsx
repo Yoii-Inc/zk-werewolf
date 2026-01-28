@@ -39,14 +39,20 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // もし占い師の場合は、占い処理を行う
+      // 占い師の場合は占い処理を行う
       if (role === "Seer") {
         if (!isReady) {
           throw new Error("Game crypto is not ready");
         }
 
+        // 占い対象をlocalStorageに保存（結果受信時に使用）
+        localStorage.setItem(`divination_target_${roomId}`, selectedPlayer);
+        console.log("Divination target saved to localStorage:", selectedPlayer);
+
         // 占いデータを生成
         const divinationData = await generateDivinationInput(selectedPlayer, false);
+
+        console.log("占いデータ:", divinationData);
 
         if (!divinationData) {
           throw new Error("Failed to generate divination data");
@@ -56,6 +62,36 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
 
         console.log("Executing divination.");
         await submitDivination(roomId, divinationData, alivePlayerCount);
+      }
+      // 人狼の場合は襲撃処理を行う
+      else if (role === "Werewolf") {
+        console.log("Executing werewolf attack:", selectedPlayer);
+
+        // サーバーに襲撃リクエストを送信
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/actions/night-action`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              player_id: myId,
+              action: {
+                Attack: {
+                  target_id: selectedPlayer,
+                },
+              },
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to submit attack: ${errorText}`);
+        }
+
+        console.log("Werewolf attack submitted successfully");
       }
 
       // 親コンポーネントのonSubmit関数を呼び出す
@@ -69,7 +105,9 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
   }; // Filter selectable players based on role
   const selectablePlayers = players.filter(p => {
     if (p.is_dead === true) return false;
-    if (role === "Werewolf" && p.role === "Werewolf") return false;
+    if (p.id === myId) return false; // 自分自身は選択できない
+    // Note: Werewolf同士の識別情報はサーバーが保持していないため、
+    // 将来的にMPC計算結果として共有する必要がある
     return true;
   });
 

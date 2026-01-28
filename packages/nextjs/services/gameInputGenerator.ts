@@ -1,6 +1,7 @@
 import JSONbig from "json-bigint";
-import { GameInfo } from "~~/types/game";
+import { GameInfo, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
+import { CryptoManager } from "~~/utils/crypto/encryption";
 import {
   AnonymousVotingInput,
   AnonymousVotingPrivateInput,
@@ -9,6 +10,9 @@ import {
   DivinationPrivateInput,
   DivinationPublicInput,
   Field,
+  KeyPublicizeInput,
+  KeyPublicizePrivateInput,
+  KeyPublicizePublicInput,
   NodeKey,
   PedersenCommitment,
   PedersenParam,
@@ -20,6 +24,7 @@ import {
   WinningJudgementPrivateInput,
   WinningJudgementPublicInput,
 } from "~~/utils/crypto/type";
+import { getPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
@@ -60,11 +65,17 @@ export async function loadCryptoParams(gameInfo?: GameInfo): Promise<any> {
     console.log("Using cached crypto params");
     // If gameInfo has updated player commitments, refresh that piece of cache
     const gp = gameInfo?.crypto_parameters;
-    if (gp && gp.player_commitment) {
-      cryptoParamsCache.playerCommitments = gp.player_commitment;
-      // keep pedersenCommitment in sync with first element if available
-      cryptoParamsCache.pedersenCommitment = gp.player_commitment?.[0] ?? cryptoParamsCache.pedersenCommitment;
-      console.log("Updated cached playerCommitments from gameInfo");
+    if (gp) {
+      if (gp.player_commitment) {
+        cryptoParamsCache.playerCommitments = gp.player_commitment;
+        cryptoParamsCache.pedersenCommitment = gp.player_commitment?.[0] ?? cryptoParamsCache.pedersenCommitment;
+        console.log("Updated cached playerCommitments from gameInfo");
+      }
+      // Update ElGamal public key if KeyPublicize has been executed
+      if (gp.fortune_teller_public_key) {
+        cryptoParamsCache.elgamalPublicKey = gp.fortune_teller_public_key;
+        console.log("Updated cached fortune_teller_public_key from gameInfo");
+      }
     }
     return cryptoParamsCache;
   }
@@ -121,6 +132,78 @@ export async function loadCryptoParams(gameInfo?: GameInfo): Promise<any> {
  */
 export function clearCryptoParamsCache(): void {
   cryptoParamsCache = null;
+}
+
+// ============================================================================
+// ElGamal秘密鍵管理（占い師用）
+// ============================================================================
+
+/**
+ * 占い師のElGamal秘密鍵を保存
+ */
+export function saveFortuneTellerSecretKey(roomId: string, playerId: string, secretKey: any): void {
+  const storageKey = `elgamal_secret_key_${roomId}_${playerId}`;
+  localStorage.setItem(storageKey, JSON.stringify(secretKey));
+  console.log("Fortune teller secret key saved to localStorage:", storageKey);
+}
+
+/**
+ * 占い師のElGamal秘密鍵を取得
+ */
+export function getFortuneTellerSecretKey(roomId: string, playerId: string): any | null {
+  const storageKey = `elgamal_secret_key_${roomId}_${playerId}`;
+  const stored = localStorage.getItem(storageKey);
+
+  if (stored) {
+    console.log("Fortune teller secret key loaded from localStorage:", storageKey);
+    return JSONbigNative.parse(stored);
+  }
+
+  console.warn("No fortune teller secret key found in localStorage for:", storageKey);
+  return null;
+}
+
+/**
+ * 占い師のElGamal秘密鍵を削除（ゲームリセット時など）
+ */
+export function clearFortuneTellerSecretKey(roomId: string, playerId: string): void {
+  const storageKey = `elgamal_secret_key_${roomId}_${playerId}`;
+  localStorage.removeItem(storageKey);
+  console.log("Fortune teller secret key cleared from localStorage:", storageKey);
+}
+
+/**
+ * テスト用: ElGamal公開鍵を保存
+ */
+export function saveTestElGamalPublicKey(roomId: string, playerId: string, publicKey: any): void {
+  const storageKey = `test_elgamal_public_key_${roomId}_${playerId}`;
+  localStorage.setItem(storageKey, JSON.stringify(publicKey));
+  console.log("Test ElGamal public key saved to localStorage:", storageKey);
+}
+
+/**
+ * テスト用: ElGamal公開鍵を取得
+ */
+export function getTestElGamalPublicKey(roomId: string, playerId: string): any | null {
+  const storageKey = `test_elgamal_public_key_${roomId}_${playerId}`;
+  const stored = localStorage.getItem(storageKey);
+
+  if (stored) {
+    console.log("Test ElGamal public key loaded from localStorage:", storageKey);
+    return JSONbigNative.parse(stored);
+  }
+
+  console.warn("No test ElGamal public key found in localStorage for:", storageKey);
+  return null;
+}
+
+/**
+ * テスト用: ElGamal公開鍵を削除
+ */
+export function clearTestElGamalPublicKey(roomId: string, playerId: string): void {
+  const storageKey = `test_elgamal_public_key_${roomId}_${playerId}`;
+  localStorage.removeItem(storageKey);
+  console.log("Test ElGamal public key cleared from localStorage:", storageKey);
 }
 
 // ============================================================================
@@ -199,6 +282,30 @@ export function clearRandomnessFromStorage(roomId: string): void {
 }
 
 /**
+ * 特定のルームのLocalStorageに保存されているElGamal鍵をすべてクリア
+ */
+function clearAllElGamalKeysForRoom(roomId: string): void {
+  const keysToRemove: string[] = [];
+
+  // localStorageから該当ルームのすべてのElGamal鍵を検索
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (
+      key &&
+      (key.startsWith(`elgamal_secret_key_${roomId}_`) || key.startsWith(`test_elgamal_public_key_${roomId}_`))
+    ) {
+      keysToRemove.push(key);
+    }
+  }
+
+  // 削除実行
+  keysToRemove.forEach(key => {
+    localStorage.removeItem(key);
+    console.log(`Cleared ElGamal key from localStorage: ${key}`);
+  });
+}
+
+/**
  * ゲームリセット時の全クライアント初期化状態クリア
  */
 export function resetGameCryptoState(roomId: string): void {
@@ -212,6 +319,9 @@ export function resetGameCryptoState(roomId: string): void {
 
   // LocalStorageから該当ルームのランダムネスを削除
   clearRandomnessFromStorage(roomId);
+
+  // LocalStorageから該当ルームのElGamal鍵を削除（占い師の秘密鍵など）
+  clearAllElGamalKeysForRoom(roomId);
 
   console.log(`Game crypto state reset completed for room: ${roomId}`);
 }
@@ -229,13 +339,8 @@ function getMyPlayerId(gameInfo: GameInfo, username: string): string | null {
   return player ? player.id : null;
 }
 
-function getMyRole(gameInfo: GameInfo, username: string): string | null {
-  const player = gameInfo.players.find(p => p.name === username);
-  return player?.role || null;
-}
-
-function isWerewolf(gameInfo: GameInfo, username: string): boolean {
-  return getMyRole(gameInfo, username) === "Werewolf";
+function isWerewolf(privateGameInfo: PrivateGameInfo | null): boolean {
+  return privateGameInfo?.playerRole === "Werewolf";
 }
 
 function getNodeKeys(): NodeKey[] {
@@ -270,7 +375,7 @@ export function generateIndividualShuffleMatrix(n: number, m: number, rng?: () =
   }
 
   // 平坦化された行列をゼロ要素で初期化
-  const mat: Field[][] = new Array(total);
+  const mat: Field[][] = new Array(size);
   for (let idx = 0; idx < total; idx++) {
     mat[idx] = FINITE_FIELD_ZERO;
   }
@@ -294,7 +399,7 @@ export function generateIndividualShuffleMatrix(n: number, m: number, rng?: () =
  * WASM に渡す形式（JSONbig.parse と同じ形）で生成するヘルパー
  * 返り値は [matrixFlatArray, size, size] の形になります。
  */
-export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () => number): any[] {
+export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () => number): [Field[][], number, number] {
   const mat = generateIndividualShuffleMatrix(n, m, rng);
   const size = n + m;
   return [mat, size, size];
@@ -304,7 +409,7 @@ export function generateShuffleMatricesForWasm(n: number, m: number, rng?: () =>
  * tau matrix を WASM/JSONbig と同じ形式で生成する。
  * groupingParameter の走査順はオブジェクトの列挙順に従う。
  */
-export function generateTauMatrixForWasm(groupingParameter: any, numPlayers: number): any[] {
+export function generateTauMatrixForWasm(groupingParameter: any, numPlayers: number): [Field[], number, number] {
   // compute num_groups according to Rust logic
   let numGroups = 0;
   for (const key of Object.keys(groupingParameter)) {
@@ -543,11 +648,25 @@ export async function generateRoleAssignmentInput(
     playerCommitment: playerCommitments,
   };
 
+  // プレイヤーの公開鍵を取得または生成
+  const playerId = getMyPlayerId(latestGameInfo, username);
+  const cryptoManager = new CryptoManager(playerId || username);
+
+  let publicKey: string | undefined;
+  if (!cryptoManager.hasKeyPair()) {
+    console.log("Generating new keypair for role assignment");
+    const keyPair = cryptoManager.generateKeyPair(playerId || username);
+    publicKey = keyPair.publicKey;
+  } else {
+    publicKey = cryptoManager.getPublicKey();
+  }
+
   return {
     privateInput,
     publicInput,
     nodeKeys: getNodeKeys(),
     scheme: getScheme(),
+    publicKey,
   };
 }
 
@@ -565,7 +684,10 @@ export async function generateDivinationInput(
   const randomness = await getRandomness(roomId, username);
   const myIndex = getMyPlayerIndex(gameInfo, username);
 
-  const isWerewolfValue = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
+  // PrivateGameInfoから自分の役職を取得
+  const playerId = getMyPlayerId(gameInfo, username);
+  const privateGameInfo = playerId ? getPrivateGameInfo(roomId, playerId) : null;
+  const isWerewolfValue = isWerewolf(privateGameInfo) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: DivinationPrivateInput =
     isDummy === false
@@ -654,6 +776,111 @@ export async function encryptVotingData(
 }
 
 /**
+ * 占い公開鍵生成用の入力を生成
+ */
+export async function generateKeyPublicizeInput(
+  roomId: string,
+  username: string,
+  gameInfo: GameInfo,
+): Promise<KeyPublicizeInput> {
+  const cryptoParams = await loadCryptoParams(gameInfo);
+  const myIndex = getMyPlayerIndex(gameInfo, username);
+
+  // PrivateGameInfoから自分の役職を取得
+  const playerId = getMyPlayerId(gameInfo, username);
+  const privateGameInfo = playerId ? getPrivateGameInfo(roomId, playerId) : null;
+
+  // 自分が占い師かどうかを判定
+  const isFortuneTeller = privateGameInfo?.playerRole === "Seer";
+
+  let publicKeyX: Field[];
+  let publicKeyY: Field[];
+  let isFortuneTellerFlag: Field[];
+
+  if (isFortuneTeller) {
+    // 占い師の場合: ElGamal鍵ペアを生成または取得
+    let publicKey: any;
+    let secretKey: any;
+
+    // 既に保存されている鍵ペアを確認
+    const existingPublicKey = getTestElGamalPublicKey(roomId, playerId || username);
+    const existingSecretKey = getFortuneTellerSecretKey(roomId, playerId || username);
+
+    if (existingPublicKey && existingSecretKey) {
+      // 既存の鍵ペアを使用
+      console.log("KeyPublicize: Using existing ElGamal keypair from localStorage");
+      publicKey = existingPublicKey;
+      secretKey = existingSecretKey;
+
+      console.log("KeyPublicize: Reusing existing keypair:");
+      console.log("  Public key X:", publicKey.x);
+      console.log("  Public key Y:", publicKey.y);
+    } else {
+      // 新規に鍵ペアを生成
+      console.log("KeyPublicize: Generating new ElGamal keypair for Fortune Teller");
+
+      const elgamalKeyPair = await MPCEncryption.elgamalKeygen({
+        elgamalParams: cryptoParams.elgamalParam,
+      });
+
+      console.log("KeyPublicize: elgamalKeyPair received:", elgamalKeyPair);
+
+      // elgamalKeygenの出力形式: { publicKey: { x: [[...], null], y: [[...], null] }, secretKey: [[...], null] }
+      if (!elgamalKeyPair || !elgamalKeyPair.publicKey) {
+        throw new Error("Failed to generate ElGamal keypair: publicKey is undefined");
+      }
+
+      publicKey = elgamalKeyPair.publicKey;
+      secretKey = elgamalKeyPair.secretKey;
+
+      // 秘密鍵をLocalStorageに保存（占い結果の復号に使用）
+      saveFortuneTellerSecretKey(roomId, playerId || username, secretKey);
+
+      // テスト用: 公開鍵も保存
+      saveTestElGamalPublicKey(roomId, playerId || username, publicKey);
+
+      console.log("KeyPublicize: Generated NEW ElGamal public key (Fortune Teller)");
+      console.log("  Secret key saved to localStorage");
+      console.log("  Public key saved to localStorage (for testing)");
+    }
+
+    // publicKeyはオブジェクト形式 { x: Field[], y: Field[] }
+    publicKeyX = publicKey.x;
+    publicKeyY = publicKey.y;
+    isFortuneTellerFlag = FINITE_FIELD_ONE;
+
+    console.log("KeyPublicize: Using public key (Fortune Teller)");
+    console.log("  X:", publicKey.x);
+    console.log("  Y:", publicKey.y);
+  } else {
+    // 占い師以外の場合: ゼロ値を使用
+    publicKeyX = FINITE_FIELD_ZERO;
+    publicKeyY = FINITE_FIELD_ZERO;
+    isFortuneTellerFlag = FINITE_FIELD_ZERO;
+
+    console.log("KeyPublicize: Using zero values (not Fortune Teller)");
+  }
+
+  const privateInput: KeyPublicizePrivateInput = {
+    id: myIndex,
+    pubKeyOrDummyX: publicKeyX as any,
+    pubKeyOrDummyY: publicKeyY as any,
+    isFortuneTeller: isFortuneTellerFlag as any,
+  };
+
+  const publicInput: KeyPublicizePublicInput = {
+    pedersenParam: cryptoParams.pedersenParam,
+  };
+
+  return {
+    privateInput,
+    publicInput,
+    nodeKeys: getNodeKeys(),
+    scheme: getScheme(),
+  };
+}
+
+/**
  * 勝敗判定用の入力を生成
  */
 export async function generateWinningJudgementInput(
@@ -664,7 +891,11 @@ export async function generateWinningJudgementInput(
   const cryptoParams = await loadCryptoParams(gameInfo);
   const randomness = await getRandomness(roomId, username);
   const myIndex = getMyPlayerIndex(gameInfo, username);
-  const amWerewolfValues = isWerewolf(gameInfo, username) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
+
+  // PrivateGameInfoから自分の役職を取得
+  const playerId = getMyPlayerId(gameInfo, username);
+  const privateGameInfo = playerId ? getPrivateGameInfo(roomId, playerId) : null;
+  const amWerewolfValues = isWerewolf(privateGameInfo) ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO;
 
   const privateInput: WinningJudgementPrivateInput = {
     id: myIndex,
