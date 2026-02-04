@@ -1,4 +1,5 @@
 use crate::mpc_circuits_wasm::*;
+use crate::PedersenRandomness;
 use ark_bls12_377::Fr;
 use ark_crypto_primitives::encryption::elgamal::Randomness;
 use ark_ec::ProjectiveCurve;
@@ -228,17 +229,19 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
         let scheme = &input.scheme;
         let private_input = &input.private_input;
 
+        let shuffle_matrix_share = split_matrix(private_input.shuffle_matrices.clone(), scheme);
+
         // let randomness_share = split_vec_fr(private_input.randomness.clone(), scheme);
         let player_randomness_share = split_fr(private_input.player_randomness, scheme);
-        // let player_randomness_share = split_fr(private_input.player_randomness, scheme);
+        let randomness_share = split_pedersen_randomness(private_input.randomness.clone(), scheme);
 
         (0..scheme.total_shares)
             .map(|i| RoleAssignmentPrivateInput {
                 id: private_input.id,
-                shuffle_matrices: private_input.shuffle_matrices.clone(),
+                shuffle_matrices: shuffle_matrix_share[i].clone(),
                 // is_target_id: is_target_share.iter().map(|row| row[i]).collect(),
                 player_randomness: player_randomness_share[i],
-                randomness: private_input.randomness.clone(),
+                randomness: randomness_share[i].clone(),
             })
             .collect::<Vec<_>>()
     }
@@ -379,6 +382,55 @@ fn split_fr(x: Fr, scheme: &SecretSharingScheme) -> Vec<Fr> {
     }
     let last_share = x - sum;
     shares.push(last_share);
+
+    shares
+}
+
+fn split_matrix(
+    x: nalgebra::DMatrix<Fr>,
+    scheme: &SecretSharingScheme,
+) -> Vec<nalgebra::DMatrix<Fr>> {
+    let rows = x.nrows();
+    let cols = x.ncols();
+    let mut shares = Vec::new();
+    let mut sum = nalgebra::DMatrix::<Fr>::zeros(rows, cols);
+
+    let rng = &mut rand::thread_rng();
+
+    for _ in 0..(scheme.total_shares - 1) {
+        let mut share = nalgebra::DMatrix::<Fr>::zeros(rows, cols);
+        for i in 0..rows {
+            for j in 0..cols {
+                share[(i, j)] = Fr::pub_rand(rng);
+            }
+        }
+        sum += &share;
+        shares.push(share);
+    }
+
+    let last_share = &x - &sum;
+    shares.push(last_share);
+
+    shares
+}
+
+fn split_pedersen_randomness(
+    x: PedersenRandomness,
+    scheme: &SecretSharingScheme,
+) -> Vec<PedersenRandomness> {
+    let mut shares = vec![PedersenRandomness::default(); scheme.total_shares];
+    let mut sum = <ark_ed_on_bls12_377::EdwardsProjective as ProjectiveCurve>::ScalarField::zero();
+
+    let rng = &mut rand::thread_rng();
+
+    for i in 0..(scheme.total_shares - 1) {
+        let share =
+            <ark_ed_on_bls12_377::EdwardsProjective as ProjectiveCurve>::ScalarField::pub_rand(rng);
+        shares[i].0 = share;
+        sum += share;
+    }
+    let last_share = x.0 - sum;
+    shares[scheme.total_shares - 1].0 = last_share;
 
     shares
 }

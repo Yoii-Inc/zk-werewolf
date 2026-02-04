@@ -164,8 +164,9 @@ pub fn elgamal_keygen(input: JsValue) -> Result<JsValue, JsValue> {
     let input: ElGamalKeygenInput = serde_wasm_bindgen::from_value(input)
         .map_err(|e| JsValue::from_str(&format!("Deserialize error: {}", e)))?;
 
-    let (public_key, secret_key) = ElGamalScheme::keygen(&input.elgamal_params, &mut ark_std::rand::thread_rng())
-        .map_err(|e| JsValue::from_str(&format!("Keygen error: {}", e)))?;
+    let (public_key, secret_key) =
+        ElGamalScheme::keygen(&input.elgamal_params, &mut ark_std::rand::thread_rng())
+            .map_err(|e| JsValue::from_str(&format!("Keygen error: {}", e)))?;
 
     let output = ElGamalKeygenOutput {
         public_key,
