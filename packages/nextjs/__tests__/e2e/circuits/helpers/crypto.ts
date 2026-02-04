@@ -13,6 +13,7 @@ import type {
   //   ElGamalKeyPair,
   AnonymousVotingInput,
   DivinationInput,
+  ElGamalKeygenOutput,
   ElGamalParam,
   KeyPublicizeInput,
   RoleAssignmentInput,
@@ -55,9 +56,9 @@ export class CryptoHelper {
   /**
    * ElGamal鍵ペアを生成
    */
-  static async generateKeyPair(params: CryptoParameters): Promise<ElGamalParam> {
+  static async generateKeyPair(params: CryptoParameters): Promise<ElGamalKeygenOutput> {
     return await MPCEncryption.elgamalKeygen({
-      elgamal_params: params.elgamal_param,
+      elgamalParams: params.elgamal_param,
     });
   }
 

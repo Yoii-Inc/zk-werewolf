@@ -7,9 +7,9 @@ import { GameSetupHelper, type TestPlayer } from "./helpers/game-setup";
 import type { CryptoParameters } from "~~/types/game";
 
 // ============================================================================
-// localStorage モック（Node.js環境用）
+// localStorage / sessionStorage モック（Node.js環境用）
 // ============================================================================
-class LocalStorageMock {
+class StorageMock {
   private store: Map<string, string> = new Map();
 
   getItem(key: string): string | null {
@@ -38,9 +38,11 @@ class LocalStorageMock {
   }
 }
 
-// グローバルにlocalStorageを設定
+// グローバルにlocalStorageとsessionStorageを設定
 if (typeof window === "undefined") {
-  (global as any).localStorage = new LocalStorageMock();
+  (global as any).localStorage = new StorageMock();
+  (global as any).sessionStorage = new StorageMock();
+  console.log("✅ localStorage and sessionStorage mocks initialized for E2E tests");
 }
 
 // グローバル型定義拡張
@@ -134,9 +136,21 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
                 );
               }
 
-              // 計算結果通知の場合
+              // 計算結果通知の場合 - 役職配布の結果をログに記録
               if (data.message_type === "computation_result") {
                 console.log(`   🧮 [${player.name}] Computation result: ${data.computation_type}`);
+
+                // 役職配布の場合、計算結果を受け取ったことをログに記録
+                // 注: E2Eテストでは実際の復号化はuseComputationResultsフックが行う
+                // ここではsessionStorageモックが正常に動作することを確認するためのログ出力のみ
+                if (data.computation_type === "role_assignment" && data.target_player_id) {
+                  console.log(
+                    `   💾 [${player.name}] Role assignment result received for player_id: ${data.target_player_id}`,
+                  );
+                  console.log(
+                    `   ℹ️  Note: Role decryption will be handled by useComputationResults hook with sessionStorage mock`,
+                  );
+                }
               }
 
               // ゲームリセット通知の場合

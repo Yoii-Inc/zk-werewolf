@@ -1,5 +1,6 @@
 "use client";
 
+// Browser用のWASMインポート（default export）
 import init, {
   init as RustInit,
   divination,
@@ -11,7 +12,7 @@ import init, {
   role_assignment,
   voting_split_and_encrypt,
   winning_judgement,
-} from "../../../mpc-algebra-wasm/pkg-node/mpc_algebra_wasm";
+} from "../../../mpc-algebra-wasm/pkg-web/mpc_algebra_wasm";
 import {
   AnonymousVotingInput,
   AnonymousVotingOutput,
@@ -23,11 +24,17 @@ import {
   ElGamalKeygenOutput,
   KeyPublicizeInput,
   KeyPublicizeOutput,
+  PedersenCommitment,
+  PedersenCommitmentInput,
   RoleAssignmentInput,
   RoleAssignmentOutput,
   WinningJudgementInput,
   WinningJudgementOutput,
 } from "./type";
+import JSONbig from "json-bigint";
+
+// BigIntを文字列として扱うJSONbig設定
+const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
 export class MPCEncryption {
   private static isInitialized = false;
@@ -114,8 +121,9 @@ export class MPCEncryption {
   public static async decryptElGamal(input: ElGamalDecryptInput): Promise<any> {
     await this.initializeWasm();
     try {
-      const result = elgamal_decrypt(input);
-      return JSON.parse(result);
+      const inputStr = JSONbigNative.stringify(input);
+      const result = elgamal_decrypt(inputStr);
+      return JSONbigNative.parse(result);
     } catch (error) {
       console.error("ElGamal decryption failed:", error);
       throw new Error(`Failed to decrypt ElGamal cipher: ${error}`);
@@ -129,7 +137,7 @@ export class MPCEncryption {
     await this.initializeWasm();
     try {
       const result = fr_rand();
-      return JSON.parse(result);
+      return JSONbigNative.parse(result);
     } catch (error) {
       console.error("Fr random generation failed:", error);
       throw new Error(`Failed to generate Fr random: ${error}`);
@@ -140,11 +148,11 @@ export class MPCEncryption {
    * Pedersen commitment wrapper
    * Expects input: { pedersen_params, x, pedersen_randomness }
    */
-  public static async pedersenCommitment(input: any): Promise<any> {
+  public static async pedersenCommitment(input: PedersenCommitmentInput): Promise<PedersenCommitment> {
     await this.initializeWasm();
     try {
       const result = pedersen_commitment(input);
-      return JSON.parse(result);
+      return JSONbigNative.parse(result);
     } catch (error) {
       console.error("Pedersen commitment failed:", error);
       throw new Error(`Failed to compute pedersen commitment`);
@@ -154,11 +162,11 @@ export class MPCEncryption {
    * ElGamal鍵ペア生成
    * Expects input: { elgamalParams }
    */
-  public static async elgamalKeygen(input: any): Promise<any> {
+  public static async elgamalKeygen(input: any): Promise<ElGamalKeygenOutput> {
     await this.initializeWasm();
     try {
       const result = elgamal_keygen(input);
-      return JSON.parse(result);
+      return JSONbigNative.parse(result);
     } catch (error) {
       console.error("ElGamal keygen failed:", error);
       throw new Error(`Failed to generate ElGamal keypair: ${error}`);

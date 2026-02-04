@@ -336,9 +336,9 @@ export class CircuitTestClient {
 
     const requestBody = {
       proof_type: "RoleAssignment",
-      proof_data: {
+      data: {
         user_id: String(roleAssignmentInput.privateInput.id),
-        player_count: playerCount,
+        prover_count: playerCount,
         encrypted_data: encryptedRoleAssignment,
         public_key: roleAssignmentInput.publicKey,
       },
@@ -353,6 +353,172 @@ export class CircuitTestClient {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Role assignment submission failed (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * KeyPublicizeリクエストを送信
+   * 本番環境では useKeyPublicize フックが行う処理
+   */
+  async submitKeyPublicize(
+    roomId: string,
+    keyPublicizeInput: any,
+    playerCount: number,
+    authToken?: string,
+  ): Promise<any> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    // MPCEncryption.encryptKeyPublicize() の結果を使用
+    const encryptedKeyPublicize = await MPCEncryption.encryptKeyPublicize(keyPublicizeInput);
+
+    const requestBody = {
+      proof_type: "KeyPublicize",
+      data: {
+        user_id: String(keyPublicizeInput.privateInput.id),
+        prover_count: playerCount,
+        encrypted_data: encryptedKeyPublicize,
+      },
+    };
+
+    const response = await fetch(`${this.baseUrl}/api/game/${roomId}/proof`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`KeyPublicize submission failed (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Divinationリクエストを送信
+   * 本番環境では useDivination フックが行う処理
+   */
+  async submitDivination(roomId: string, divinationInput: any, playerCount: number, authToken?: string): Promise<any> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    // MPCEncryption.encryptDivination() の結果を使用
+    const encryptedDivination = await MPCEncryption.encryptDivination(divinationInput);
+
+    const requestBody = {
+      proof_type: "Divination",
+      data: {
+        user_id: String(divinationInput.privateInput.id),
+        prover_count: playerCount,
+        encrypted_data: encryptedDivination,
+      },
+    };
+
+    const response = await fetch(`${this.baseUrl}/api/game/${roomId}/proof`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Divination submission failed (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * AnonymousVotingリクエストを送信
+   * 本番環境では useVoting フックが行う処理
+   */
+  async submitVoting(roomId: string, votingInput: any, playerCount: number, authToken?: string): Promise<any> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    // MPCEncryption.encryptAnonymousVoting() の結果を使用
+    const encryptedVoting = await MPCEncryption.encryptAnonymousVoting(votingInput);
+
+    const requestBody = {
+      proof_type: "AnonymousVoting",
+      data: {
+        user_id: String(votingInput.privateInput.id),
+        prover_count: playerCount,
+        encrypted_data: encryptedVoting,
+      },
+    };
+
+    const response = await fetch(`${this.baseUrl}/api/game/${roomId}/proof`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Voting submission failed (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * WinningJudgementリクエストを送信
+   * 本番環境では useWinningJudge フックが行う処理
+   */
+  async submitWinningJudgement(
+    roomId: string,
+    winningJudgementInput: any,
+    playerCount: number,
+    authToken?: string,
+  ): Promise<any> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    // MPCEncryption.encryptWinningJudgement() の結果を使用
+    const encryptedWinningJudgement = await MPCEncryption.encryptWinningJudgement(winningJudgementInput);
+
+    const requestBody = {
+      proof_type: "WinningJudge",
+      data: {
+        user_id: String(winningJudgementInput.privateInput.id),
+        prover_count: playerCount,
+        encrypted_data: encryptedWinningJudgement,
+      },
+    };
+
+    const response = await fetch(`${this.baseUrl}/api/game/${roomId}/proof`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`WinningJudgement submission failed (${response.status}): ${errorText}`);
     }
 
     return await response.json();

@@ -27,10 +27,23 @@ docker compose down
 
 - `integration.test.ts` - メインの統合テスト（ゲーム全フロー）
 - `setup.ts` - 共通セットアップ（ルーム作成、プレイヤー参加、ゲーム開始）
+  - **localStorage/sessionStorageモック**: Node.js環境でブラウザAPIを模擬
+  - **WebSocket接続管理**: 各プレイヤーのリアルタイム通信
 - `helpers/` - ヘルパー関数
   - `api.ts` - APIクライアント
   - `crypto.ts` - 暗号化処理
   - `game-setup.ts` - ゲームセットアップ
+
+## 重要な実装詳細
+
+### ストレージモック
+
+E2EテストはNode.js環境で実行されるため、ブラウザの`localStorage`と`sessionStorage`が利用できません。`setup.ts`ではこれらのモックを提供し、以下の機能をサポートします：
+
+- **役職情報の保存**: WebSocketで受信した役職配布結果を`sessionStorage`に保存
+- **暗号鍵の管理**: `localStorage`で暗号化パラメータや鍵を管理
+
+これにより、本番環境と同じコード（`privateGameInfoUtils.ts`など）がテスト環境でも正常に動作します。
 
 ## テスト内容
 
