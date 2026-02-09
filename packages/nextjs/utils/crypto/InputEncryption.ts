@@ -121,8 +121,7 @@ export class MPCEncryption {
   public static async decryptElGamal(input: ElGamalDecryptInput): Promise<any> {
     await this.initializeWasm();
     try {
-      const inputStr = JSONbigNative.stringify(input);
-      const result = elgamal_decrypt(inputStr);
+      const result = elgamal_decrypt(input);
       return JSONbigNative.parse(result);
     } catch (error) {
       console.error("ElGamal decryption failed:", error);

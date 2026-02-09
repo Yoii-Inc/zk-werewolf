@@ -37,7 +37,7 @@ type ElGamalParam = <ElGamalScheme as AsymmetricEncryptionScheme>::Parameters;
 type ElGamalPubKey = <ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey;
 type ElGamalRandomness = <ElGamalScheme as AsymmetricEncryptionScheme>::Randomness;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeKey {
     pub node_id: String,

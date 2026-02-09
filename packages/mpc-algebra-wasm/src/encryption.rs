@@ -239,7 +239,6 @@ impl SplitAndEncrypt for RoleAssignmentEncryption {
             .map(|i| RoleAssignmentPrivateInput {
                 id: private_input.id,
                 shuffle_matrices: shuffle_matrix_share[i].clone(),
-                // is_target_id: is_target_share.iter().map(|row| row[i]).collect(),
                 player_randomness: player_randomness_share[i],
                 randomness: randomness_share[i].clone(),
             })
