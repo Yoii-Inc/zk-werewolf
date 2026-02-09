@@ -43,7 +43,7 @@ jobs:
           wasm-pack build \
             --release \
             --target web \
-            --out-dir pkg-node
+            --out-dir pkg-web
             
       - name: Install foundry-toolchain
         uses: foundry-rs/foundry-toolchain@v1
