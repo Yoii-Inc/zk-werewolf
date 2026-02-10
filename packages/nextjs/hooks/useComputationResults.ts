@@ -161,10 +161,24 @@ export const useComputationResults = (
                   console.log("Target player ID:", result.targetPlayerId);
                 }
 
+                // 占い対象のプレイヤー名を取得
+                const targetPlayerId = localStorage.getItem(`divination_target_${roomId}`);
+                const targetPlayerName = localStorage.getItem(`divination_target_name_${roomId}`);
+                let targetName = targetPlayerName || "Unknown";
+                // gameInfoから最新の名前も確認
+                if (targetPlayerId && gameInfo?.players) {
+                  const targetPlayer = gameInfo.players.find((p: any) => p.id === targetPlayerId);
+                  if (targetPlayer) {
+                    targetName = targetPlayer.name;
+                  }
+                }
+
                 addMessage({
                   id: Date.now().toString(),
                   sender: "System",
-                  message: `Divination result: ${isWerewolf ? "Werewolf" : "Not werewolf"}`,
+                  message: isWerewolf
+                    ? `🐺 Divination result: ${targetName} is a Werewolf`
+                    : `✅ Divination result: ${targetName} is not a Werewolf`,
                   timestamp: new Date().toISOString(),
                   type: "system",
                 });

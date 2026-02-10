@@ -47,7 +47,9 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
 
         // 占い対象をlocalStorageに保存（結果受信時に使用）
         localStorage.setItem(`divination_target_${roomId}`, selectedPlayer);
-        console.log("Divination target saved to localStorage:", selectedPlayer);
+        const targetPlayerName = players.find(p => p.id === selectedPlayer)?.name || "Unknown";
+        localStorage.setItem(`divination_target_name_${roomId}`, targetPlayerName);
+        console.log("Divination target saved to localStorage:", selectedPlayer, targetPlayerName);
 
         // 占いデータを生成
         const divinationData = await generateDivinationInput(selectedPlayer, false);
