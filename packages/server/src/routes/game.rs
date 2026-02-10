@@ -360,7 +360,7 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
         for i in 0..4 {
             crate::services::room_service::join_room(
@@ -387,7 +387,7 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
         for i in 0..4 {
             crate::services::room_service::join_room(
@@ -418,7 +418,7 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
         // プレイヤーを追加
         for i in 0..4 {
@@ -466,7 +466,7 @@ mod tests {
         setup_test_env();
         let state = AppState::new();
         let app = routes(state.clone());
-        let room_id = crate::services::room_service::create_room(state.clone(), None).await;
+        let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
         // プレイヤーを追加
         for i in 0..4 {

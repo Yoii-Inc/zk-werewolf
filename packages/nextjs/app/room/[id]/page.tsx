@@ -13,13 +13,12 @@ import { useGameInfo } from "~~/hooks/useGameInfo";
 import { useGamePhase } from "~~/hooks/useGamePhase";
 import { useGameWebSocket } from "~~/hooks/useGameWebSocket";
 import * as GameInputGenerator from "~~/services/gameInputGenerator";
-import type { ChatMessage } from "~~/types/game";
 import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
 
 const isDebugMode = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
 
 export default function RoomPage({ params }: { params: { id: string } }) {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { user } = useAuth();
 
   // State for UI components
   const [newMessage, setNewMessage] = useState("");
@@ -27,6 +26,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [showNightAction, setShowNightAction] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showGameResult, setShowGameResult] = useState(false);
+  const [isTogglingReady, setIsTogglingReady] = useState(false);
+  const [timerBaseline, setTimerBaseline] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Custom hooks
@@ -53,6 +54,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   // Computation results monitoring
   useComputationResults(params.id, user?.id || "", addMessage, gameInfo);
+
+  const getPlayerReady = (player: { isReady?: boolean; is_ready?: boolean }) => {
+    if (typeof player.isReady === "boolean") return player.isReady;
+    if (typeof player.is_ready === "boolean") return player.is_ready;
+    return false;
+  };
 
   // ゲームリセット通知を監視
   useEffect(() => {
@@ -117,6 +124,39 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     }
   };
 
+  const handleToggleReady = async () => {
+    if (!roomInfo || !user?.id) return;
+    setIsTogglingReady(true);
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/room/${roomInfo.room_id}/ready/${user.id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to toggle ready state");
+      }
+    } catch (error) {
+      console.error("Ready toggle error:", error);
+      addMessage({
+        id: Date.now().toString(),
+        sender: "System",
+        message: "Failed to update ready status.",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+    } finally {
+      setIsTogglingReady(false);
+    }
+  };
+
   const handleKeyGeneration = async () => {
     try {
       if (!gameInfo || !user) {
@@ -157,6 +197,25 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       });
     }
   };
+
+  useEffect(() => {
+    if (roomInfo?.remainingTime && roomInfo.remainingTime > timerBaseline) {
+      setTimerBaseline(roomInfo.remainingTime);
+    }
+  }, [roomInfo?.remainingTime, timerBaseline]);
+
+  const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
+  const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
+  const isCurrentPlayerReady = currentPlayer
+    ? getPlayerReady(currentPlayer as { isReady?: boolean; is_ready?: boolean })
+    : false;
+  const allPlayersReady =
+    playersForView.length > 0 &&
+    playersForView.every(player => getPlayerReady(player as { isReady?: boolean; is_ready?: boolean }));
+  const timerProgressPercent = roomInfo?.remainingTime
+    ? Math.max(0, Math.min(100, (roomInfo.remainingTime / Math.max(timerBaseline, 1)) * 100))
+    : 0;
+  const isTimeWarning = (roomInfo?.remainingTime ?? 0) <= 30;
 
   return (
     <div className="h-screen flex bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -233,6 +292,27 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {String(roomInfo.remainingTime % 60).padStart(2, "0")}
                   </span>
                 </div>
+                <div className="w-40">
+                  <div className="h-2 rounded-full bg-indigo-100 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${isTimeWarning ? "bg-red-500" : "bg-indigo-500"}`}
+                      style={{ width: `${timerProgressPercent}%` }}
+                    />
+                  </div>
+                </div>
+                {roomInfo.status === "Open" && currentPlayer && (
+                  <button
+                    onClick={handleToggleReady}
+                    disabled={isTogglingReady}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors border ${
+                      isCurrentPlayerReady
+                        ? "bg-green-100 text-green-800 border-green-300 hover:bg-green-200"
+                        : "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
+                    } ${isTogglingReady ? "opacity-70 cursor-not-allowed" : ""}`}
+                  >
+                    {isTogglingReady ? "Updating..." : isCurrentPlayerReady ? "Ready: ON" : "Ready: OFF"}
+                  </button>
+                )}
                 {roomInfo.status === "Open" && (
                   <button
                     onClick={handleStartGame}
@@ -240,7 +320,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
                       isStarting || roomInfo.players.length < 2
                         ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-green-600 hover:bg-green-700"
+                        : allPlayersReady
+                          ? "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-300"
+                          : "bg-green-600 hover:bg-green-700"
                     }`}
                   >
                     {isStarting ? "Starting..." : "Start Game"}
@@ -301,7 +383,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                             {isMe && <span className="text-xs text-indigo-500 ml-1">(You)</span>}
                           </span>
                         </div>
-                        {!player.isReady && (
+                        {!getPlayerReady(player as { isReady?: boolean; is_ready?: boolean }) && (
                           <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
                             In preparation
                           </span>
@@ -427,7 +509,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
             {/* Chat Area */}
             <div className="flex-1 flex flex-col">
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="h-[600px] overflow-y-auto p-4">
                 {messages.map((msg, index) => (
                   <div
                     key={`${msg.id}-${index}`}
