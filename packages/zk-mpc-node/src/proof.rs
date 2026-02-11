@@ -23,7 +23,8 @@ impl Default for ProofManager {
 impl ProofManager {
     pub fn new() -> Self {
         let rng = &mut test_rng();
-        let srs = LocalMarlin::universal_setup(30000, 500, 1000, rng).unwrap();
+        let srs = LocalMarlin::universal_setup(30000, 500, 1000, rng)
+            .expect("Failed to setup SRS - this is a critical error");
         ProofManager {
             srs,
             proofs: Arc::new(RwLock::new(HashMap::new())),
