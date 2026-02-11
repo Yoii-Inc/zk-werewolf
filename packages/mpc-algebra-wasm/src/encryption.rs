@@ -442,8 +442,9 @@ mod tests {
 
     // use mpc_algebra::crh::pedersen;
 
-    use crate::{PedersenComScheme, PedersenCommitment, PedersenParam};
+    use crate::{PedersenComScheme, PedersenCommitment, PedersenParam, PedersenRandomness};
     use ark_crypto_primitives::CommitmentScheme;
+    use rand::CryptoRng;
 
     use super::*;
 
@@ -543,5 +544,280 @@ mod tests {
         );
 
         assert_eq!(combined.is_target_id, input.private_input.is_target_id);
+    }
+
+    /// Helper function to generate node keys for testing
+    fn generate_test_node_keys(rng: &mut (impl rand::Rng + CryptoRng), count: usize) -> (Vec<NodeKey>, Vec<String>) {
+        let mut node_keys = Vec::new();
+        let mut secret_keys = Vec::new();
+
+        for i in 0..count {
+            let secret_key = SecretKey::generate(rng);
+            let public_key = secret_key.public_key();
+
+            node_keys.push(NodeKey {
+                node_id: format!("node{}", i),
+                public_key: encode(public_key.to_bytes()),
+            });
+            secret_keys.push(encode(secret_key.to_bytes()));
+        }
+
+        (node_keys, secret_keys)
+    }
+
+    #[test]
+    fn test_create_encrypted_shares_anonymous_voting() {
+        let rng = &mut rand::thread_rng();
+        let scheme = SecretSharingScheme {
+            total_shares: 3,
+            modulus: 97,
+        };
+
+        let (node_keys, secret_keys) = generate_test_node_keys(rng, 3);
+
+        let private_input = AnonymousVotingPrivateInput {
+            id: 1,
+            is_target_id: vec![Fr::pub_rand(rng), Fr::pub_rand(rng), Fr::pub_rand(rng)],
+            player_randomness: Fr::pub_rand(rng),
+        };
+
+        let pedersen_param = PedersenComScheme::setup(rng).unwrap();
+        let public_input = AnonymousVotingPublicInput {
+            pedersen_param,
+            player_commitment: vec![PedersenCommitment::default(); 3],
+            player_num: 3,
+        };
+
+        let input = AnonymousVotingInput {
+            private_input: private_input.clone(),
+            public_input,
+            node_keys,
+            scheme,
+        };
+
+        // Test create_encrypted_shares
+        let result = AnonymousVotingEncryption::create_encrypted_shares(&input);
+        assert!(result.is_ok(), "create_encrypted_shares should succeed");
+
+        let output = result.unwrap();
+        assert_eq!(output.shares.len(), 3, "Should have 3 encrypted shares");
+
+        // Verify each share can be decrypted
+        for (i, share) in output.shares.iter().enumerate() {
+            let decrypted = AnonymousVotingEncryption::decrypt(share, &secret_keys[i]);
+            assert!(decrypted.is_ok(), "Share {} should decrypt successfully", i);
+            assert_eq!(decrypted.unwrap().id, private_input.id);
+        }
+    }
+
+    #[test]
+    fn test_create_encrypted_shares_key_publicize() {
+        let rng = &mut rand::thread_rng();
+        let scheme = SecretSharingScheme {
+            total_shares: 3,
+            modulus: 97,
+        };
+
+        let (node_keys, secret_keys) = generate_test_node_keys(rng, 3);
+
+        let private_input = KeyPublicizePrivateInput {
+            id: 1,
+            pub_key_or_dummy_x: Fr::pub_rand(rng),
+            pub_key_or_dummy_y: Fr::pub_rand(rng),
+            is_fortune_teller: Fr::pub_rand(rng),
+        };
+
+        let pedersen_param = PedersenComScheme::setup(rng).unwrap();
+        let public_input = KeyPublicizePublicInput { pedersen_param };
+
+        let input = KeyPublicizeInput {
+            private_input: private_input.clone(),
+            public_input,
+            node_keys,
+            scheme,
+        };
+
+        let result = KeyPublicizeEncryption::create_encrypted_shares(&input);
+        assert!(result.is_ok(), "create_encrypted_shares should succeed");
+
+        let output = result.unwrap();
+        assert_eq!(output.shares.len(), 3, "Should have 3 encrypted shares");
+
+        // Verify each share can be decrypted
+        for (i, share) in output.shares.iter().enumerate() {
+            let decrypted = KeyPublicizeEncryption::decrypt(share, &secret_keys[i]);
+            assert!(decrypted.is_ok(), "Share {} should decrypt successfully", i);
+            assert_eq!(decrypted.unwrap().id, private_input.id);
+        }
+    }
+
+    #[test]
+    fn test_create_encrypted_shares_winning_judgement() {
+        let rng = &mut rand::thread_rng();
+        let scheme = SecretSharingScheme {
+            total_shares: 3,
+            modulus: 97,
+        };
+
+        let (node_keys, secret_keys) = generate_test_node_keys(rng, 3);
+
+        let private_input = WinningJudgementPrivateInput {
+            id: 1,
+            am_werewolf: Fr::pub_rand(rng),
+            player_randomness: Fr::pub_rand(rng),
+        };
+
+        let pedersen_param = PedersenComScheme::setup(rng).unwrap();
+        let public_input = WinningJudgementPublicInput {
+            pedersen_param,
+            player_commitment: vec![PedersenCommitment::default(); 3],
+        };
+
+        let input = WinningJudgementInput {
+            private_input: private_input.clone(),
+            public_input,
+            node_keys,
+            scheme,
+        };
+
+        let result = WinningJudgementEncryption::create_encrypted_shares(&input);
+        assert!(result.is_ok(), "create_encrypted_shares should succeed");
+
+        let output = result.unwrap();
+        assert_eq!(output.shares.len(), 3, "Should have 3 encrypted shares");
+
+        // Verify each share can be decrypted
+        for (i, share) in output.shares.iter().enumerate() {
+            let decrypted = WinningJudgementEncryption::decrypt(share, &secret_keys[i]);
+            assert!(decrypted.is_ok(), "Share {} should decrypt successfully", i);
+            assert_eq!(decrypted.unwrap().id, private_input.id);
+        }
+    }
+
+    #[test]
+    fn test_create_encrypted_shares_divination() {
+        use ark_crypto_primitives::encryption::AsymmetricEncryptionScheme;
+        use crate::ElGamalScheme;
+
+        let rng = &mut rand::thread_rng();
+        let scheme = SecretSharingScheme {
+            total_shares: 3,
+            modulus: 97,
+        };
+
+        let (node_keys, secret_keys) = generate_test_node_keys(rng, 3);
+
+        // Setup ElGamal parameters
+        let elgamal_param = ElGamalScheme::setup(rng).unwrap();
+        let (elgamal_pub_key, _elgamal_secret_key) = ElGamalScheme::keygen(&elgamal_param, rng).unwrap();
+        let elgamal_randomness = <ElGamalScheme as AsymmetricEncryptionScheme>::Randomness::rand(rng);
+
+        let private_input = DivinationPrivateInput {
+            id: 1,
+            is_werewolf: Fr::pub_rand(rng),
+            is_target: vec![Fr::pub_rand(rng), Fr::pub_rand(rng), Fr::pub_rand(rng)],
+            randomness: elgamal_randomness,
+        };
+
+        let pedersen_param = PedersenComScheme::setup(rng).unwrap();
+        let public_input = DivinationPublicInput {
+            pedersen_param,
+            elgamal_param,
+            pub_key: elgamal_pub_key,
+            player_num: 3,
+        };
+
+        let input = DivinationInput {
+            private_input: private_input.clone(),
+            public_input,
+            node_keys,
+            scheme,
+        };
+
+        let result = DivinationEncryption::create_encrypted_shares(&input);
+        assert!(result.is_ok(), "create_encrypted_shares should succeed");
+
+        let output = result.unwrap();
+        assert_eq!(output.shares.len(), 3, "Should have 3 encrypted shares");
+
+        // Verify each share can be decrypted
+        for (i, share) in output.shares.iter().enumerate() {
+            let decrypted = DivinationEncryption::decrypt(share, &secret_keys[i]);
+            assert!(decrypted.is_ok(), "Share {} should decrypt successfully", i);
+            assert_eq!(decrypted.unwrap().id, private_input.id);
+        }
+    }
+
+    #[test]
+    fn test_create_encrypted_shares_role_assignment() {
+        use nalgebra::DMatrix;
+        use crate::GroupingParameter;
+        use std::collections::BTreeMap;
+        use crate::werewolf::types::Role;
+
+        let rng = &mut rand::thread_rng();
+        let scheme = SecretSharingScheme {
+            total_shares: 3,
+            modulus: 97,
+        };
+
+        let (node_keys, secret_keys) = generate_test_node_keys(rng, 3);
+
+        // Need at least 5 players for valid grouping
+        // is_not_alone=true requires count >= 2
+        let num_players = 5;
+        let pedersen_param = PedersenComScheme::setup(rng).unwrap();
+        let pedersen_randomness = PedersenRandomness::rand(rng);
+
+        // Create a simple identity-like shuffle matrix
+        let shuffle_matrix = DMatrix::from_fn(num_players, num_players, |i, j| {
+            if i == j { Fr::from(1u64) } else { Fr::from(0u64) }
+        });
+
+        let private_input = RoleAssignmentPrivateInput {
+            id: 1,
+            shuffle_matrices: shuffle_matrix,
+            randomness: pedersen_randomness,
+            player_randomness: Fr::pub_rand(rng),
+        };
+
+        // Setup grouping parameter
+        // (count, is_not_alone): is_not_alone=true requires count >= 2
+        let mut roles = BTreeMap::new();
+        roles.insert(Role::Villager, (3, true));   // 3 villagers, grouped together (is_not_alone=true)
+        roles.insert(Role::Werewolf, (2, true));   // 2 werewolves, grouped together (is_not_alone=true)
+        let grouping_parameter = GroupingParameter::new(roles);
+
+        let tau_matrix = grouping_parameter.generate_tau_matrix::<Fr>();
+
+        let public_input = RoleAssignmentPublicInput {
+            num_players,
+            max_group_size: 2,
+            pedersen_param: pedersen_param.clone(),
+            grouping_parameter,
+            tau_matrix,
+            role_commitment: vec![PedersenCommitment::default(); num_players],
+            player_commitment: vec![PedersenCommitment::default(); num_players],
+        };
+
+        let input = RoleAssignmentInput {
+            private_input: private_input.clone(),
+            public_input,
+            node_keys,
+            scheme,
+        };
+
+        let result = RoleAssignmentEncryption::create_encrypted_shares(&input);
+        assert!(result.is_ok(), "create_encrypted_shares should succeed");
+
+        let output = result.unwrap();
+        assert_eq!(output.shares.len(), 3, "Should have 3 encrypted shares");
+
+        // Verify each share can be decrypted
+        for (i, share) in output.shares.iter().enumerate() {
+            let decrypted = RoleAssignmentEncryption::decrypt(share, &secret_keys[i]);
+            assert!(decrypted.is_ok(), "Share {} should decrypt successfully", i);
+            assert_eq!(decrypted.unwrap().id, private_input.id);
+        }
     }
 }
