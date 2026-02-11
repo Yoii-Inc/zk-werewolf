@@ -1,4 +1,5 @@
 use crate::{
+    blockchain::state_hash::compute_proof_id,
     models::{
         chat::{ChatMessage, ChatMessageType},
         role::Role,
@@ -699,6 +700,36 @@ impl Game {
                     "Proof ID {:?} is ready with output: {:?}",
                     self.batch_request.batch_id, output
                 );
+
+                if app_state.blockchain_client.is_enabled() {
+                    let proof_id = compute_proof_id(&self.batch_request.batch_id);
+                    let proof_data = output.value.clone().unwrap_or_default();
+                    let public_inputs = self.room_id.as_bytes().to_vec();
+
+                    match app_state
+                        .blockchain_client
+                        .verify_proof(proof_id, &proof_data, &public_inputs)
+                        .await
+                    {
+                        Ok(Some(true)) | Ok(None) => {}
+                        Ok(Some(false)) => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(
+                                "On-chain proof verification failed.".to_string(),
+                            );
+                            return;
+                        }
+                        Err(e) => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification error: {}",
+                                e
+                            ));
+                            return;
+                        }
+                    }
+                }
+
                 // プルーフ生成成功時の処理
                 // 例: WebSocketで結果をクライアントに通知
                 match identifier {

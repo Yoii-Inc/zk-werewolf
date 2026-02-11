@@ -1,3 +1,4 @@
+use crate::blockchain::state_hash::{compute_commitment_hash, compute_game_id, is_evm_address};
 use crate::models::game::{
     BatchRequest, ChangeRoleRequest, ClientRequestType, ComputationResults, GamePhase, GameResult,
     NightActionRequest,
@@ -563,21 +564,34 @@ async fn submit_commitment(
     Path(room_id): Path<String>,
     Json(commitment_req): Json<CommitmentRequest>,
 ) -> impl IntoResponse {
-    let mut games = state.games.lock().await;
+    let onchain_payload =
+        if state.blockchain_client.is_enabled() && is_evm_address(&commitment_req.player_id) {
+            Some((
+                compute_game_id(&room_id),
+                commitment_req.player_id.clone(),
+                compute_commitment_hash(
+                    &room_id,
+                    &commitment_req.player_id,
+                    &commitment_req.commitment,
+                ),
+            ))
+        } else {
+            None
+        };
 
-    if let Some(game) = games.get_mut(&room_id) {
-        // // ゲーム開始前のみコミットメント登録を許可(今は制限しない)
-        // if game.phase != GamePhase::Waiting {
-        //     return (
-        //         StatusCode::BAD_REQUEST,
-        //         Json(json!({
-        //             "success": false,
-        //             "message": "Commitments can only be submitted before game start"
-        //         })),
-        //     );
-        // }
+    let (status, body, all_ready, current_count, total_players) = {
+        let mut games = state.games.lock().await;
 
-        // プレイヤーが存在するか確認
+        let Some(game) = games.get_mut(&room_id) else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "success": false,
+                    "message": "Game not found"
+                })),
+            );
+        };
+
         let player_index = game
             .players
             .iter()
@@ -592,7 +606,6 @@ async fn submit_commitment(
             );
         }
 
-        // CryptoParametersが初期化されているか確認
         if game.crypto_parameters.is_none() {
             return (
                 StatusCode::BAD_REQUEST,
@@ -603,7 +616,6 @@ async fn submit_commitment(
             );
         }
 
-        // コミットメントをデシリアライズしてCryptoParameters.player_commitmentに追加
         tracing::info!(
             "Received commitment from player {} (index: {}) in room {}: {:?}",
             commitment_req.player_id,
@@ -612,9 +624,7 @@ async fn submit_commitment(
             commitment_req.commitment
         );
 
-        // Try to deserialize incoming JSON into the Pedersen commitment type
         let crypto_params_mut = game.crypto_parameters.as_mut().unwrap();
-        // Target type alias for readability
         type PedersenOutput =
             <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output;
 
@@ -623,12 +633,9 @@ async fn submit_commitment(
         match deserialized {
             Ok(commitment_obj) => {
                 let idx = player_index.unwrap();
-                // If slot exists, overwrite. Otherwise extend the vector until the index and push.
                 if crypto_params_mut.player_commitment.len() > idx {
                     crypto_params_mut.player_commitment[idx] = commitment_obj;
                 } else {
-                    // Extend by cloning the incoming commitment until we reach the desired index,
-                    // then push the real one. This relies on the commitment type implementing Clone.
                     while crypto_params_mut.player_commitment.len() < idx {
                         crypto_params_mut
                             .player_commitment
@@ -653,45 +660,52 @@ async fn submit_commitment(
         let total_players = game.players.len();
         let all_ready = current_count >= total_players;
 
-        // 全プレイヤーのコミットメントが揃った場合、WebSocketで通知
-        if all_ready {
-            tracing::info!(
-                "All commitments ready for room {}: {}/{}",
-                room_id,
-                current_count,
-                total_players
-            );
-
-            // WebSocket通知を送信（非同期でエラーはログのみ）
-            let state_clone = state.clone();
-            let room_id_clone = room_id.clone();
-            tokio::spawn(async move {
-                if let Err(e) = state_clone
-                    .broadcast_commitments_ready(&room_id_clone, current_count, total_players)
-                    .await
-                {
-                    tracing::error!("Failed to broadcast commitments ready: {}", e);
-                }
-            });
-        }
+        let body = json!({
+            "success": true,
+            "message": "Commitment received",
+            "commitments_count": current_count,
+            "total_players": total_players,
+            "all_ready": all_ready
+        });
 
         (
             StatusCode::OK,
-            Json(json!({
-                "success": true,
-                "message": "Commitment received (pending full implementation)",
-                "commitments_count": current_count,
-                "total_players": total_players,
-                "all_ready": all_ready
-            })),
+            body,
+            all_ready,
+            current_count,
+            total_players,
         )
-    } else {
-        (
-            StatusCode::NOT_FOUND,
-            Json(json!({
-                "success": false,
-                "message": "Game not found"
-            })),
-        )
+    };
+
+    if let Some((game_id, player, commitment_hash)) = onchain_payload {
+        if let Err(e) = state
+            .blockchain_client
+            .submit_commitment(game_id, &player, commitment_hash)
+            .await
+        {
+            tracing::error!("Failed to submit commitment on-chain: {}", e);
+        }
     }
+
+    if all_ready {
+        tracing::info!(
+            "All commitments ready for room {}: {}/{}",
+            room_id,
+            current_count,
+            total_players
+        );
+
+        let state_clone = state.clone();
+        let room_id_clone = room_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = state_clone
+                .broadcast_commitments_ready(&room_id_clone, current_count, total_players)
+                .await
+            {
+                tracing::error!("Failed to broadcast commitments ready: {}", e);
+            }
+        });
+    }
+
+    (status, Json(body))
 }

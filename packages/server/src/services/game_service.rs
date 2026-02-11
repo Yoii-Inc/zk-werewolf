@@ -1,4 +1,5 @@
 use crate::{
+    blockchain::state_hash::{compute_game_id, compute_game_state_hash, is_evm_address},
     models::{
         chat::{ChatMessage, ChatMessageType},
         game::{Game, GamePhase, GameResult, NightAction, NightActionRequest},
@@ -36,9 +37,10 @@ fn grouping_parameter_from_role_config(role_config: &RoleConfig) -> GroupingPara
 
 // ゲームのライフサイクル管理
 pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String> {
-    let mut rooms = state.rooms.lock().await;
+    let game_snapshot = {
+        let mut rooms = state.rooms.lock().await;
+        let room = rooms.get_mut(room_id).ok_or("Room not found".to_string())?;
 
-    if let Some(room) = rooms.get_mut(room_id) {
         // プレイヤー数に応じて役職を振り分け（デバッグ用に生成のみ）
         let _roles = assign_roles(room.players.len())?;
         let joined_players = room.players.len();
@@ -70,51 +72,43 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
         let mut games = state.games.lock().await;
         let game = games.entry(room_id.to_string()).or_insert(new_game);
 
-        // preprocessing_werewolf(state.clone(), &mut game).await;
-
-        // NOTE: Role情報はサーバー側では保持せず、MPC計算で暗号化された形で配布される
-        // デバッグモードでもroleを割り当てない
-        // if state.debug_config.random_role {
-        //     // 各プレイヤーに役職を割り当て
-        //     for (player, role) in game.players.iter_mut().zip(roles.iter()) {
-        //         player.role = Some(role.clone());
-        //     }
-        // }
-
         room.status = RoomStatus::InProgress;
 
-        // ゲーム開始のシステムメッセージを追加
         let player_count = game.players.len();
-
-        // NOTE: 役職情報は非公開なので、メッセージには入れない
         let start_message = format!(
             "Starting the game with {} players. Roles will be assigned via MPC.",
             player_count
         );
-
         game.chat_log.add_system_message(start_message);
+        game.clone()
+    };
 
-        drop(games);
+    persist_game_on_chain(&state, &game_snapshot).await;
 
-        // ゲーム開始後、最初のフェーズに進める
-        advance_game_phase(state.clone(), room_id).await?;
-
-        Ok("Game started successfully".to_string())
-    } else {
-        Err("Room not found".to_string())
-    }
+    // ゲーム開始後、最初のフェーズに進める
+    advance_game_phase(state.clone(), room_id).await?;
+    Ok("Game started successfully".to_string())
 }
 
 pub async fn end_game(state: AppState, room_id: String) -> Result<String, String> {
-    let mut rooms = state.rooms.lock().await;
-    let mut games = state.games.lock().await;
-    if let (Some(room), Some(game)) = (rooms.get_mut(&room_id), games.get_mut(&room_id)) {
+    let game_snapshot = {
+        let mut rooms = state.rooms.lock().await;
+        let mut games = state.games.lock().await;
+
+        let room = rooms
+            .get_mut(&room_id)
+            .ok_or("Game not found".to_string())?;
+        let game = games
+            .get_mut(&room_id)
+            .ok_or("Game not found".to_string())?;
+
         room.status = RoomStatus::Closed;
         game.phase = GamePhase::Finished;
-        Ok("Game ended successfully".to_string())
-    } else {
-        Err("Game not found".to_string())
-    }
+        game.clone()
+    };
+
+    finalize_game_on_chain(&state, &game_snapshot).await;
+    Ok("Game ended successfully".to_string())
 }
 
 pub async fn get_game_state(state: AppState, room_id: String) -> Result<Game, String> {
@@ -151,10 +145,10 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
         GamePhase::Finished => return Err("ゲームは既に終了しています".to_string()),
     };
 
-    // フェーズ変更をゲームに適用
+    let (from_phase_str, to_phase_str, game_snapshot) = {
+        let mut games = state.games.lock().await;
+        let game = games.get_mut(room_id).ok_or("Game not found".to_string())?;
 
-    let mut games = state.games.lock().await;
-    if let Some(game) = games.get_mut(room_id) {
         if current_phase == GamePhase::Night {
             game.resolve_night_actions();
         } else if current_phase == GamePhase::Voting {
@@ -162,24 +156,123 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
         } else if current_phase == GamePhase::Result {
             game.advance_to_next_day();
         }
+
         game.add_phase_change_message(current_phase.clone(), next_phase.clone());
         game.phase = next_phase.clone();
 
-        // WebSocket通知を送信
-        let from_phase_str = format!("{:?}", current_phase);
-        let to_phase_str = format!("{:?}", next_phase);
+        (
+            format!("{:?}", current_phase),
+            format!("{:?}", next_phase),
+            game.clone(),
+        )
+    };
 
+    if let Err(e) = state
+        .broadcast_phase_change(room_id, &from_phase_str, &to_phase_str)
+        .await
+    {
+        eprintln!("Failed to broadcast phase change: {}", e);
+    }
+
+    update_game_state_on_chain(&state, &game_snapshot).await;
+    Ok(format!("フェーズを更新しました: {:?}", next_phase))
+}
+
+async fn persist_game_on_chain(state: &AppState, game: &Game) {
+    if !state.blockchain_client.is_enabled() {
+        return;
+    }
+
+    let game_id = compute_game_id(&game.room_id);
+    let players = extract_evm_player_addresses(game);
+    if players.is_empty() {
+        tracing::warn!(
+            "Skipping on-chain create_game for room {}: no EVM-style player IDs found",
+            game.room_id
+        );
+        return;
+    }
+
+    if let Err(e) = state.blockchain_client.create_game(game_id, players).await {
+        tracing::error!("Failed to create game on-chain: {}", e);
+        return;
+    }
+
+    update_game_state_on_chain(state, game).await;
+}
+
+pub async fn update_game_state_on_chain(state: &AppState, game: &Game) {
+    if !state.blockchain_client.is_enabled() {
+        return;
+    }
+
+    let game_id = compute_game_id(&game.room_id);
+    let state_hash = compute_game_state_hash(game);
+    if let Err(e) = state
+        .blockchain_client
+        .update_game_state(game_id, state_hash)
+        .await
+    {
+        tracing::error!("Failed to update game state on-chain: {}", e);
+    }
+}
+
+async fn finalize_game_on_chain(state: &AppState, game: &Game) {
+    if !state.blockchain_client.is_enabled() {
+        return;
+    }
+
+    let game_id = compute_game_id(&game.room_id);
+    let state_hash = compute_game_state_hash(game);
+
+    if let Err(e) = state
+        .blockchain_client
+        .update_game_state(game_id, state_hash)
+        .await
+    {
+        tracing::error!("Failed to update final game state on-chain: {}", e);
+    }
+
+    if let Err(e) = state
+        .blockchain_client
+        .finalize_game(game_id, game.result.clone())
+        .await
+    {
+        tracing::error!("Failed to finalize game on-chain: {}", e);
+    }
+
+    let winners = extract_winner_addresses(game);
+    if !winners.is_empty() {
         if let Err(e) = state
-            .broadcast_phase_change(room_id, &from_phase_str, &to_phase_str)
+            .blockchain_client
+            .distribute_rewards(game_id, winners)
             .await
         {
-            eprintln!("Failed to broadcast phase change: {}", e);
+            tracing::error!("Failed to distribute rewards on-chain: {}", e);
         }
-
-        Ok(format!("フェーズを更新しました: {:?}", next_phase))
-    } else {
-        Err("Game not found".to_string())
     }
+}
+
+fn extract_evm_player_addresses(game: &Game) -> Vec<String> {
+    game.players
+        .iter()
+        .filter_map(|player| {
+            if is_evm_address(&player.id) {
+                Some(player.id.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn extract_winner_addresses(game: &Game) -> Vec<String> {
+    // サーバー側では役職を保持していないため、結果判定後に生存者全員を暫定 winners として扱う。
+    game.players
+        .iter()
+        .filter(|player| !player.is_dead && is_evm_address(&player.id))
+        .map(|player| player.id.clone())
+        .collect()
 }
 
 // 夜のアクション処理

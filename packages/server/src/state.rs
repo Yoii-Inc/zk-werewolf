@@ -2,10 +2,12 @@ use axum::extract::ws::Message;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{broadcast, Mutex};
 
+use crate::blockchain::BlockchainClient;
 use crate::models::config::DebugConfig;
 use crate::models::{game::Game, room::Room};
 use crate::services::node_key::NodeKeyService;
 use crate::services::user_service::UserService;
+use crate::utils::config::CONFIG;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -15,6 +17,7 @@ pub struct AppState {
     pub user_service: UserService,
     pub debug_config: Arc<DebugConfig>,
     pub node_key_service: Arc<NodeKeyService>,
+    pub blockchain_client: Arc<BlockchainClient>,
 }
 
 impl AppState {
@@ -26,6 +29,7 @@ impl AppState {
             user_service: UserService::new(),
             debug_config: Arc::new(DebugConfig::default()),
             node_key_service: Arc::new(NodeKeyService::new()),
+            blockchain_client: Arc::new(BlockchainClient::new(&CONFIG)),
         }
     }
 
