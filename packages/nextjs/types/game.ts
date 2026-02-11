@@ -89,3 +89,17 @@ export interface GroupingParameter {
   FortuneTeller: [number, boolean];
   Werewolf: [number, boolean];
 }
+
+export interface RoomConfig {
+  max_players: number;
+  role_config: {
+    Seer: number;
+    Werewolf: number;
+    Villager: number;
+  };
+  time_config: {
+    day_phase: number;
+    night_phase: number;
+    voting_phase: number;
+  };
+}

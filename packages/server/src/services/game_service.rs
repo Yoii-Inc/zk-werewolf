@@ -3,7 +3,7 @@ use crate::{
         chat::{ChatMessage, ChatMessageType},
         game::{Game, GamePhase, GameResult, NightAction, NightActionRequest},
         role::Role,
-        room::RoomStatus,
+        room::{RoleConfig, RoomStatus},
     },
     services::zk_proof::{check_proof_status, request_proof_with_output},
     state::AppState,
@@ -13,6 +13,7 @@ use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentSc
 use ark_ff::UniformRand;
 use rand::seq::SliceRandom;
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::time::Duration;
 use tokio::time::sleep;
 use zk_mpc::{
@@ -20,6 +21,18 @@ use zk_mpc::{
     input::{MpcInputTrait, WerewolfKeyInput, WerewolfMpcInput},
     marlin::MFr,
 };
+use mpc_algebra_wasm::{GroupingParameter, Role as GroupingRole};
+
+fn grouping_parameter_from_role_config(role_config: &RoleConfig) -> GroupingParameter {
+    let mut map = BTreeMap::new();
+    map.insert(GroupingRole::FortuneTeller, (role_config.seer, false));
+    map.insert(
+        GroupingRole::Werewolf,
+        (role_config.werewolf, role_config.werewolf > 1),
+    );
+    map.insert(GroupingRole::Villager, (role_config.villager, false));
+    GroupingParameter::new(map)
+}
 
 // ゲームのライフサイクル管理
 pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String> {
@@ -28,7 +41,28 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
     if let Some(room) = rooms.get_mut(room_id) {
         // プレイヤー数に応じて役職を振り分け（デバッグ用に生成のみ）
         let _roles = assign_roles(room.players.len())?;
-        let mut new_game = Game::new(room_id.to_string(), room.players.clone());
+        let joined_players = room.players.len();
+        let mut effective_role_config = room.room_config.role_config.clone();
+        if joined_players < effective_role_config.seer + effective_role_config.werewolf {
+            return Err(format!(
+                "joined players ({}) are fewer than required special roles (seer + werewolf = {})",
+                joined_players,
+                effective_role_config.seer + effective_role_config.werewolf
+            ));
+        }
+
+        if effective_role_config.total_players() != joined_players {
+            effective_role_config.villager =
+                joined_players.saturating_sub(effective_role_config.seer + effective_role_config.werewolf);
+        }
+
+        let grouping_parameter = grouping_parameter_from_role_config(&effective_role_config);
+        let mut new_game = Game::new(
+            room_id.to_string(),
+            room.players.clone(),
+            room.room_config.max_players,
+            grouping_parameter,
+        );
 
         // 暗号パラメータの初期化
         initialize_crypto_parameters(&mut new_game);

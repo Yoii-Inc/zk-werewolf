@@ -34,7 +34,7 @@ RUN yarn install
 
 # Copy source code to current directory
 COPY packages/nextjs ./packages/nextjs
-COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-node
+COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-web
 
 # Build arguments
 ARG NEXT_PUBLIC_API_URL

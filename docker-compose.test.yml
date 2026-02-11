@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile.dev
+    ports:
+      - "8080:8080"
+    environment:
+      - ZK_MPC_NODE_0_HTTP=http://zk-mpc-node-0:9000
+      - ZK_MPC_NODE_1_HTTP=http://zk-mpc-node-1:9001
+      - ZK_MPC_NODE_2_HTTP=http://zk-mpc-node-2:9002
+      - RUST_LOG=debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - zk-mpc-node-0
+      - zk-mpc-node-1
+      - zk-mpc-node-2
+    volumes:
+      - .:/usr/src/workspace
+      - backend_target:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/server
+
+  zk-mpc-node-0:
+    build:
+      context: .
+      dockerfile: packages/zk-mpc-node/Dockerfile
+    environment:
+      - RUST_LOG=debug
+      - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
+      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8001
+      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
+      - MPC_HTTP_PORT=9000
+      - SERVER_URL=http://backend:8080
+    volumes:
+      - .:/usr/src/workspace
+      - mpc_target_0:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/zk-mpc-node
+    command: ["start", "--id", "0"]
+
+  zk-mpc-node-1:
+    build:
+      context: .
+      dockerfile: packages/zk-mpc-node/Dockerfile
+    environment:
+      - RUST_LOG=debug
+      - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
+      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8001
+      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
+      - MPC_HTTP_PORT=9000
+      - SERVER_URL=http://backend:8080
+    volumes:
+      - .:/usr/src/workspace
+      - mpc_target_1:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/zk-mpc-node
+    command: ["start", "--id", "1"]
+
+  zk-mpc-node-2:
+    build:
+      context: .
+      dockerfile: packages/zk-mpc-node/Dockerfile
+    environment:
+      - RUST_LOG=debug
+      - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
+      - ZK_MPC_NODE_1_TCP=zk-mpc-node-1:8001
+      - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
+      - MPC_HTTP_PORT=9000
+      - SERVER_URL=http://backend:8080
+    volumes:
+      - .:/usr/src/workspace
+      - mpc_target_2:/usr/src/workspace/target
+    working_dir: /usr/src/workspace/packages/zk-mpc-node
+    command: ["start", "--id", "2"]
+
+volumes:
+  backend_target:
+  mpc_target_0:
+  mpc_target_1:
+  mpc_target_2:

@@ -39,7 +39,7 @@ async fn setup_test_room_with_players(state: &AppState) -> String {
         },
     ];
 
-    let mut room = Room::new(room_id.clone(), Some("Test Room".to_string()), Some(4));
+    let mut room = Room::new(room_id.clone(), Some("Test Room".to_string()), None);
     room.players = players;
     state.rooms.lock().await.insert(room_id.clone(), room);
 

@@ -30,7 +30,7 @@ COPY packages/nextjs/package.json ./packages/nextjs/
 # Install all dependencies
 RUN corepack enable && yarn install
 
-COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-node
+COPY --from=wasm-builder /build/packages/mpc-algebra-wasm/pkg ./packages/mpc-algebra-wasm/pkg-web
 
 # Set working directory to nextjs package
 WORKDIR /workspace/packages/nextjs
