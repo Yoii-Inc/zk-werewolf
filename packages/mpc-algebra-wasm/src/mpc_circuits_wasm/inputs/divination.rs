@@ -1,5 +1,5 @@
 use crate::{ElGamalParam, ElGamalPubKey, ElGamalRandomness, PedersenParam};
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]

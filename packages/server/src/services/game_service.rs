@@ -9,7 +9,7 @@ use crate::{
     services::zk_proof::{check_proof_status, request_proof_with_output},
     state::AppState,
 };
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::UniformRand;
 use rand::seq::SliceRandom;

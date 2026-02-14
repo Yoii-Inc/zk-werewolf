@@ -10,7 +10,7 @@ use zk_mpc::marlin::{LocalMarlin, LocalMarlinKZG10};
 
 // TODO: Changeable to a more generic proof manager
 pub struct ProofManager {
-    pub srs: UniversalSRS<ark_bls12_377::Fr, LocalMarlinKZG10>,
+    pub srs: UniversalSRS<ark_bn254::Fr, LocalMarlinKZG10>,
     proofs: Arc<RwLock<HashMap<String, ProofStatus>>>,
 }
 

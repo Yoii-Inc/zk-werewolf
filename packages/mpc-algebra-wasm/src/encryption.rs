@@ -1,9 +1,9 @@
 use crate::mpc_circuits_wasm::*;
 use crate::PedersenRandomness;
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_crypto_primitives::encryption::elgamal::Randomness;
 use ark_ec::ProjectiveCurve;
-use ark_ed_on_bls12_377::EdwardsProjective;
+use ark_ed_on_bn254::EdwardsProjective;
 use ark_ff::PubUniformRand;
 use ark_ff::UniformRand;
 use ark_ff::Zero;
@@ -418,13 +418,13 @@ fn split_pedersen_randomness(
     scheme: &SecretSharingScheme,
 ) -> Vec<PedersenRandomness> {
     let mut shares = vec![PedersenRandomness::default(); scheme.total_shares];
-    let mut sum = <ark_ed_on_bls12_377::EdwardsProjective as ProjectiveCurve>::ScalarField::zero();
+    let mut sum = <ark_ed_on_bn254::EdwardsProjective as ProjectiveCurve>::ScalarField::zero();
 
     let rng = &mut rand::thread_rng();
 
     for i in 0..(scheme.total_shares - 1) {
         let share =
-            <ark_ed_on_bls12_377::EdwardsProjective as ProjectiveCurve>::ScalarField::pub_rand(rng);
+            <ark_ed_on_bn254::EdwardsProjective as ProjectiveCurve>::ScalarField::pub_rand(rng);
         shares[i].0 = share;
         sum += share;
     }

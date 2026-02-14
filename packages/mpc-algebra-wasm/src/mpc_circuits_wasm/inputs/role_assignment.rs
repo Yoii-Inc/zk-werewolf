@@ -2,7 +2,7 @@ use nalgebra as na;
 use serde::{Deserialize, Serialize};
 
 use crate::{GroupingParameter, PedersenCommitment, PedersenParam, PedersenRandomness};
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

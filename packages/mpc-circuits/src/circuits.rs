@@ -1,4 +1,4 @@
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_ff::PrimeField;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use serde::{Deserialize, Serialize};

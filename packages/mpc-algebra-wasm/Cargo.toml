@@ -21,8 +21,8 @@ ark-ec = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ec", v
 ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std"] }
 ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0" }
 
-ark-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bls12-377", version = "0.3.0", features = ["r1cs", "curve"] }
-ark-ed-on-bls12-377 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ed-on-bls12-377", version = "0.3.0", features = ["r1cs"] }
+ark-bn254 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bn254", version = "0.3.0", features = ["r1cs", "curve"] }
+ark-ed-on-bn254 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-ed-on-bn254", version = "0.3.0", features = ["r1cs"] }
 
 [lib]
 crate-type = ["rlib", "cdylib"]

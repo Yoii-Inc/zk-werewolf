@@ -1,6 +1,6 @@
 use crate::*;
 
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_crypto_primitives::encryption::AsymmetricEncryptionScheme;
 use ark_ec::{group, AffineCurve};
 use ark_ff::{BigInteger, PrimeField, SquareRootField};

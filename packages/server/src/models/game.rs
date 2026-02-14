@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::player::Player;
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::CanonicalDeserialize;

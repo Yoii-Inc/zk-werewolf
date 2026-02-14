@@ -12,7 +12,7 @@ use crate::{
     services::game_service,
     state::AppState,
 };
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_crypto_primitives::CommitmentScheme;
 use axum::response::IntoResponse;
 use axum::{
