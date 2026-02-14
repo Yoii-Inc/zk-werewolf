@@ -5,13 +5,15 @@ use crate::{EncryptedShare, ProofOutput, ProofOutputType, UserPublicKey};
 // 追加
 use crate::models::ProofRequest;
 use ark_marlin::IndexProverKey;
+use ark_serialize::CanonicalSerialize;
+use ark_std::test_rng;
 use mpc_algebra::Reveal;
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
 use std::iter::zip;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
-use zk_mpc::marlin::{prove_and_verify, LocalMarlin};
+use zk_mpc::marlin::{pf_publicize, LocalMarlin, MpcMarlin};
 
 pub struct Node<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
     pub id: u32,
@@ -118,45 +120,69 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             })?;
         let mpc_index_pk = IndexProverKey::from_public(index_pk);
 
-        let (outputs, is_valid) =
-            match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit.clone(), inputs).await {
-                true => {
-                    let proof_outputs = CircuitFactory::get_circuit_outputs(&mpc_circuit);
-                    match &request.output_type {
-                        ProofOutputType::Public => {
-                            let proof_output = ProofOutput {
-                                output_type: request.output_type.clone(),
-                                value: Some(proof_outputs),
-                                shares: None,
-                            };
-                            (Some(proof_output), true)
-                        }
-                        ProofOutputType::PrivateToPublic(pubkeys) => {
-                            // TODO: 出力をシェアに分割して暗号化
-                            let shares = self
-                                .split_and_encrypt_output(&proof_outputs, pubkeys)
-                                .await?;
-                            let proof_output = ProofOutput {
-                                output_type: request.output_type.clone(),
-                                value: None,
-                                shares: Some(shares),
-                            };
-                            (Some(proof_output), true)
-                        }
-                        ProofOutputType::PrivateToPrivate(pubkey) => {
-                            // TODO: 出力を直接暗号化
-                            let encrypted = self.encrypt_output(&proof_outputs, pubkey).await?;
-                            let proof_output = ProofOutput {
-                                output_type: request.output_type.clone(),
-                                value: Some(encrypted),
-                                shares: None,
-                            };
-                            (Some(proof_output), true)
-                        }
+        let rng = &mut test_rng();
+        let mpc_proof = MpcMarlin::prove(&mpc_index_pk, mpc_circuit.clone(), rng).map_err(
+            |e| -> Box<dyn std::error::Error + Send> {
+                Box::new(std::io::Error::other(format!(
+                    "Failed to generate collaborative proof: {:?}",
+                    e
+                )))
+            },
+        )?;
+        let publicized_proof = pf_publicize(mpc_proof).await;
+        let is_valid = LocalMarlin::verify(&index_vk, &inputs, &publicized_proof, rng).map_err(
+            |e| -> Box<dyn std::error::Error + Send> {
+                Box::new(std::io::Error::other(format!(
+                    "Failed to verify publicized proof: {:?}",
+                    e
+                )))
+            },
+        )?;
+
+        let outputs = if is_valid {
+            let mut proof_bytes = Vec::new();
+            publicized_proof
+                .serialize_uncompressed(&mut proof_bytes)
+                .map_err(|e| -> Box<dyn std::error::Error + Send> {
+                    Box::new(std::io::Error::other(format!(
+                        "Failed to serialize publicized proof: {:?}",
+                        e
+                    )))
+                })?;
+
+            let proof_outputs = CircuitFactory::get_circuit_outputs(&mpc_circuit);
+            let proof_output = match &request.output_type {
+                ProofOutputType::Public => ProofOutput {
+                    output_type: request.output_type.clone(),
+                    value: Some(proof_outputs),
+                    proof: Some(proof_bytes),
+                    shares: None,
+                },
+                ProofOutputType::PrivateToPublic(pubkeys) => {
+                    // TODO: 出力をシェアに分割して暗号化
+                    let shares = self.split_and_encrypt_output(&proof_outputs, pubkeys).await?;
+                    ProofOutput {
+                        output_type: request.output_type.clone(),
+                        value: None,
+                        proof: Some(proof_bytes),
+                        shares: Some(shares),
                     }
                 }
-                false => (None, false),
+                ProofOutputType::PrivateToPrivate(pubkey) => {
+                    // TODO: 出力を直接暗号化
+                    let encrypted = self.encrypt_output(&proof_outputs, pubkey).await?;
+                    ProofOutput {
+                        output_type: request.output_type.clone(),
+                        value: Some(encrypted),
+                        proof: Some(proof_bytes),
+                        shares: None,
+                    }
+                }
             };
+            Some(proof_output)
+        } else {
+            None
+        };
 
         println!(
             "output is {:?}",

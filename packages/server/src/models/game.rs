@@ -703,7 +703,11 @@ impl Game {
 
                 if app_state.blockchain_client.is_enabled() {
                     let proof_id = compute_proof_id(&self.batch_request.batch_id);
-                    let proof_data = output.value.clone().unwrap_or_default();
+                    let proof_data = output
+                        .proof
+                        .clone()
+                        .or_else(|| output.value.clone())
+                        .unwrap_or_default();
                     let public_inputs = self.room_id.as_bytes().to_vec();
 
                     match app_state

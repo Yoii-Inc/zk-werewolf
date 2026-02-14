@@ -36,6 +36,8 @@ pub enum ProofOutputType {
 pub struct ProofOutput {
     pub output_type: ProofOutputType,
     pub value: Option<Vec<u8>>, // 公開値または暗号化された値
+    #[serde(default)]
+    pub proof: Option<Vec<u8>>, // publicize済みの証明バイト列
     // pub shares: Option<Vec<Vec<u8>>>, // 暗号化されたシェア
     pub shares: Option<Vec<EncryptedShare>>, // 暗号化されたシェア
 }
