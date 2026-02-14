@@ -4184,6 +4184,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "httparse",
+ "libc",
  "mpc-algebra",
  "mpc-algebra-wasm",
  "mpc-circuits",
