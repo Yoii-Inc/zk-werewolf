@@ -1,16 +1,12 @@
 use crate::models::ProofRequest;
 use crate::models::ProofStatus;
 use crate::ProofOutput;
-use ark_marlin::UniversalSRS;
-use ark_std::test_rng;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use zk_mpc::marlin::{LocalMarlin, LocalMarlinKZG10};
 
 // TODO: Changeable to a more generic proof manager
 pub struct ProofManager {
-    pub srs: UniversalSRS<ark_bn254::Fr, LocalMarlinKZG10>,
     proofs: Arc<RwLock<HashMap<String, ProofStatus>>>,
 }
 
@@ -22,11 +18,7 @@ impl Default for ProofManager {
 
 impl ProofManager {
     pub fn new() -> Self {
-        let rng = &mut test_rng();
-        let srs = LocalMarlin::universal_setup(30000, 500, 1000, rng)
-            .expect("Failed to setup SRS - this is a critical error");
         ProofManager {
-            srs,
             proofs: Arc::new(RwLock::new(HashMap::new())),
         }
     }

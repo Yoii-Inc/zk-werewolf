@@ -4,16 +4,16 @@ use crate::server::ApiClient;
 use crate::{EncryptedShare, ProofOutput, ProofOutputType, UserPublicKey};
 // 追加
 use crate::models::ProofRequest;
-use ark_marlin::IndexProverKey;
+use ark_groth16::{generate_random_parameters, prepare_verifying_key, verify_proof, ProvingKey};
 use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
-use mpc_algebra::Reveal;
+use mpc_algebra::{AdditivePairingShare, MpcPairingEngine, Reveal};
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
 use std::iter::zip;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
-use zk_mpc::marlin::{pf_publicize, LocalMarlin, MpcMarlin};
+use zk_mpc::groth16::create_random_proof;
 
 pub struct Node<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
     pub id: u32,
@@ -111,29 +111,35 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
 
         let inputs = CircuitFactory::create_verify_inputs(&mpc_circuit);
 
-        let (index_pk, index_vk) = LocalMarlin::index(&self.proof_manager.srs, local_circuit)
+        let rng = &mut test_rng();
+        let params = generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
             .map_err(|e| -> Box<dyn std::error::Error + Send> {
                 Box::new(std::io::Error::other(format!(
-                    "Failed to index circuit: {:?}",
+                    "Failed to generate Groth16 parameters: {:?}",
                     e
                 )))
             })?;
-        let mpc_index_pk = IndexProverKey::from_public(index_pk);
+        let pvk = prepare_verifying_key(&params.vk);
+        let mpc_params: ProvingKey<
+            MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>,
+        > = ProvingKey::from_public(params);
 
-        let rng = &mut test_rng();
-        let mpc_proof = MpcMarlin::prove(&mpc_index_pk, mpc_circuit.clone(), rng).map_err(
+        let mpc_proof = create_random_proof::<
+            MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>,
+            _,
+            _,
+        >(mpc_circuit.clone(), &mpc_params, rng)
+        .map_err(|e| -> Box<dyn std::error::Error + Send> {
+            Box::new(std::io::Error::other(format!(
+                "Failed to generate collaborative Groth16 proof: {:?}",
+                e
+            )))
+        })?;
+        let publicized_proof = mpc_proof.reveal().await;
+        let is_valid = verify_proof(&pvk, &publicized_proof, &inputs).map_err(
             |e| -> Box<dyn std::error::Error + Send> {
                 Box::new(std::io::Error::other(format!(
-                    "Failed to generate collaborative proof: {:?}",
-                    e
-                )))
-            },
-        )?;
-        let publicized_proof = pf_publicize(mpc_proof).await;
-        let is_valid = LocalMarlin::verify(&index_vk, &inputs, &publicized_proof, rng).map_err(
-            |e| -> Box<dyn std::error::Error + Send> {
-                Box::new(std::io::Error::other(format!(
-                    "Failed to verify publicized proof: {:?}",
+                    "Failed to verify Groth16 proof: {:?}",
                     e
                 )))
             },
@@ -160,7 +166,9 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                 },
                 ProofOutputType::PrivateToPublic(pubkeys) => {
                     // TODO: 出力をシェアに分割して暗号化
-                    let shares = self.split_and_encrypt_output(&proof_outputs, pubkeys).await?;
+                    let shares = self
+                        .split_and_encrypt_output(&proof_outputs, pubkeys)
+                        .await?;
                     ProofOutput {
                         output_type: request.output_type.clone(),
                         value: None,

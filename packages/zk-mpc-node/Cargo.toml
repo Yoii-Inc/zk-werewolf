@@ -16,6 +16,7 @@ zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git" }
 ark-bn254 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-bn254", version = "0.3.0", features = ["r1cs", "curve"] }
 ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", features = ["std", "print-trace"] }
 ark-marlin = { git = "https://github.com/Yoii-Inc/zk-mpc.git",  package = "ark-marlin", version = "0.3.0", default-features = false, features = [ "std" ] }
+ark-groth16 = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-groth16", version = "0.3.0", default-features = false }
 ark-serialize = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-serialize", version = "0.3.0", default-features = false }
 ark-poly-commit = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-poly-commit", version = "0.3.0" }
 ark-relations = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-relations", version = "0.3.0" }

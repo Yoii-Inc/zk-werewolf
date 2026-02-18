@@ -36,9 +36,9 @@ const JSONbigNative = JSONbig({ useNativeBigInt: true });
 // 有限体のゼロ要素: [0, 0, 0, 0]
 const FINITE_FIELD_ZERO: Field[] = [JSONbigNative.parse('["0","0","0","0"]'), null] as const;
 
-// 有限体のone要素
+// 有限体(BN254 ScalarField)のone要素(Montgomery representaion)
 const FINITE_FIELD_ONE: Field[] = [
-  JSONbigNative.parse('["9015221291577245683","8239323489949974514","1646089257421115374","958099254763297437"]'),
+  JSONbigNative.parse('["12436184717236109307","3962172157175319849","7381016538464732718","1011752739694698287"]'),
   null,
 ] as const;
 
