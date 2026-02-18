@@ -111,9 +111,12 @@ fn merge_proof_outputs(statuses: Vec<ProofStatus>) -> Option<ProofOutput> {
 
     let mut all_shares = Vec::new();
     let first_output = statuses[0].output.as_ref()?;
-    let proof_bytes = statuses
-        .iter()
-        .find_map(|status| status.output.as_ref().and_then(|output| output.proof.clone()));
+    let proof_bytes = statuses.iter().find_map(|status| {
+        status
+            .output
+            .as_ref()
+            .and_then(|output| output.proof.clone())
+    });
     let public_input_bytes = statuses.iter().find_map(|status| {
         status
             .output

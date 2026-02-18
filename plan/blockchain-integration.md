@@ -86,8 +86,8 @@ event GameFinalized(bytes32 indexed gameId, GameResult result, uint256 timestamp
 **ファイル**: `packages/foundry/contracts/WerewolfProofVerifier.sol`
 
 **機能**:
-- ZK証明の検証（Marlin/Groth16）
-- 証明タイプ別の検証ロジック
+- ZK証明の検証（当面は Groth16 を優先）
+- 証明タイプ別の検証ロジック（RoleAssignment は Adapter 経由）
 - 検証結果の記録
 
 **データ構造**:
@@ -112,7 +112,7 @@ mapping(bytes32 => ProofRecord) public proofs;  // proofId => ProofRecord
 ```
 
 **主要関数**:
-- `verifyProof(bytes32 proofId, bytes calldata proof, bytes calldata publicInputs)`: 証明検証
+- `verifyProof(bytes32 proofId, bytes32 gameId, ProofType proofType, bytes calldata proof, bytes calldata publicInputs)`: 証明検証
 - `getProofRecord(bytes32 proofId)`: 証明記録取得
 - `isProofVerified(bytes32 gameId, ProofType proofType)`: 証明済み確認
 
@@ -121,6 +121,34 @@ mapping(bytes32 => ProofRecord) public proofs;  // proofId => ProofRecord
 event ProofVerified(bytes32 indexed proofId, bytes32 indexed gameId, ProofType proofType, uint256 timestamp);
 event ProofFailed(bytes32 indexed proofId, bytes32 indexed gameId, ProofType proofType, string reason);
 ```
+
+**RoleAssignment の検証構成（現状）**:
+- `WerewolfProofVerifier` -> `RoleAssignmentGroth16VerifierAdapter` -> `RoleAssignmentGroth16Verifier`
+- `Adapter` は `bytes` で受け取った proof/publicInputs を Solidity 構造体に `abi.decode` して検証器に渡す
+- サーバー側は「proof bytes」「publicInputs bytes」を統一インターフェースで送信できる
+
+#### 1.2.1 回路・VK固定の設計（Groth16）
+
+**前提**:
+- Groth16 は「回路ごと」に `pk/vk` が変わる
+- デプロイ済み verifier の `vk` と、ノードが証明に使う `pk` は同じ setup 成果物由来である必要がある
+
+**設計方針**:
+- 実行時に毎回 setup はしない（`generate_random_parameters` を本番フローで使わない）
+- 事前 setup で `pk` と verifier（`vk` 埋め込み）を生成し、成果物をバージョン管理する
+- 回路サイズ別に分離して管理する（例: `role_assignment_max5_v1`, `role_assignment_max9_v1`, `role_assignment_max13_v1`）
+
+**成果物管理の最小セット**:
+- `circuit_id`
+- `pk` ファイル（ノードが読み込む）
+- verifier コントラクト（`vk` 固定）
+- adapter アドレス
+- public input 長（例: max5 なら 100）
+
+**ルーティング方針**:
+- サーバーで `circuit_id` を決定（例: プレイヤー人数から `max5/max9/max13` を選択）
+- `circuit_id -> adapter_address` の対応で on-chain 検証先を選ぶ
+- proof 記録時は `circuit_id` を必ず紐付け、クロス回路再利用を防止する
 
 #### 1.3 報酬・インセンティブコントラクトの実装
 
@@ -177,6 +205,41 @@ contract DeployWerewolf is Script {
 }
 ```
 
+#### 1.5 Groth16 セットアップ・デプロイ運用（予定）
+
+以下は **追加予定の運用コマンド**。  
+実装時に `Makefile` または `scripts/` に寄せて固定化する。
+
+1. 回路 setup（回路IDごと）
+```bash
+# 例: max5 回路の setup 成果物を生成（予定）
+make groth16-setup CIRCUIT_ID=role_assignment_max5_v1 MAX_PLAYERS=5
+```
+
+2. verifier ソース生成（setupの vk から）
+```bash
+# 例: RoleAssignmentGroth16Verifier.sol を再生成（予定）
+make groth16-export-verifier CIRCUIT_ID=role_assignment_max5_v1
+```
+
+3. コントラクトデプロイ（game / proof verifier / rewards / adapter）
+```bash
+cd packages/foundry
+yarn deploy --file DeployWerewolf.s.sol --network localhost
+```
+
+4. アドレス・回路設定を server/node に反映（予定）
+```bash
+# 例: circuit registry の更新（予定）
+make register-circuit CIRCUIT_ID=role_assignment_max5_v1
+```
+
+5. ノード起動時は `circuit_id` に対応する `pk` をロードして証明生成（予定）
+```bash
+# 例: node 起動（予定）
+CIRCUIT_ID=role_assignment_max5_v1 cargo run -p zk-mpc-node --release --bin zk-mpc-node start --id 0
+```
+
 ---
 
 ### Phase 2: バックエンド統合
@@ -186,7 +249,7 @@ contract DeployWerewolf is Script {
 **ファイル**: `packages/server/src/blockchain/mod.rs`
 
 **機能**:
-- Ethereumノードへの接続（alloy使用）
+- Ethereumノードへの接続（RPC）
 - コントラクト呼び出しラッパー
 - トランザクション送信・確認
 - ローカルAnvil/L2テストネットの切り替え
@@ -197,9 +260,9 @@ pub struct BlockchainClient {
     rpc_url: String,
     chain_id: u64,
     signer: PrivateKeySigner,
-    game_contract: WerewolfGameClient,                 // alloy-sol-types で生成した型付きクライアント
-    verifier_contract: WerewolfProofVerifierClient,    // 同上
-    rewards_contract: WerewolfRewardsClient,           // 同上
+    game_contract: WerewolfGameClient,
+    verifier_contract: WerewolfProofVerifierClient,
+    rewards_contract: WerewolfRewardsClient,
 }
 
 impl BlockchainClient {
@@ -212,7 +275,14 @@ impl BlockchainClient {
     pub async fn finalize_game(&self, game_id: &str, result: GameResult) -> Result<B256>;
     
     // 証明検証
-    pub async fn verify_proof(&self, proof_id: &str, proof_data: &[u8], public_inputs: &[u8]) -> Result<bool>;
+    pub async fn verify_proof(
+        &self,
+        proof_id: [u8; 32],
+        game_id: [u8; 32],
+        proof_type: ProofType,
+        proof_data: &[u8],
+        public_inputs: &[u8],
+    ) -> Result<bool>;
     
     // 報酬管理
     pub async fn distribute_rewards(&self, game_id: &str, winners: Vec<Address>) -> Result<B256>;
@@ -393,13 +463,13 @@ pub async fn batch_proof_handling(
         if let Some(proof_data) = output.value {
             let game_id = compute_game_id(room_id);
             let proof_id_hash = compute_proof_id(&batch_id);
-            
-            // 公開入力の構築
-            let public_inputs = extract_public_inputs(&request, &game)?;
-            
-            // オンチェーン検証
-            let verified = state.blockchain_client
-                .verify_proof(&proof_id_hash, &proof_data, &public_inputs)
+            let proof_type = map_request_to_proof_type(request);
+            let public_inputs = output.public_inputs.unwrap_or_default();
+
+            // オンチェーン検証（proof/public inputs は node 出力をそのまま利用）
+            let verified = state
+                .blockchain_client
+                .verify_proof(proof_id_hash, game_id, proof_type, &proof_data, &public_inputs)
                 .await
                 .map_err(|e| format!("On-chain verification failed: {}", e))?;
             
@@ -789,24 +859,30 @@ async fn test_full_game_lifecycle_with_blockchain() {
 yarn chain
 ```
 
-2. コントラクトをデプロイ
+2. Groth16 setup / verifier 生成（予定）
+```bash
+make groth16-setup CIRCUIT_ID=role_assignment_max5_v1 MAX_PLAYERS=5
+make groth16-export-verifier CIRCUIT_ID=role_assignment_max5_v1
+```
+
+3. コントラクトをデプロイ
 ```bash
 yarn deploy --file DeployWerewolf.s.sol --network localhost
 ```
 
-3. バックエンドを起動（環境変数設定済み）
+4. バックエンドを起動（環境変数設定済み）
 ```bash
 cd packages/server
 BLOCKCHAIN_ENABLED=true cargo run
 ```
 
-4. フロントエンドを起動
+5. フロントエンドを起動
 ```bash
 # 別ターミナル（リポジトリルート）
 yarn start
 ```
 
-5. 統合テストを実行
+6. 統合テストを実行
 ```bash
 ./integration_test.zsh --with-blockchain
 ```
@@ -932,6 +1008,8 @@ export const useRewards = (gameId: string) => {
 - [ ] WerewolfGame.sol 実装
 - [ ] WerewolfProofVerifier.sol 実装
 - [ ] WerewolfRewards.sol 実装
+- [ ] RoleAssignmentGroth16Verifier / Adapter の接続（Deployスクリプト反映）
+- [ ] `circuit_id -> adapter` ルーティング設計（必要ならコントラクト側レジストリ化）
 - [ ] デプロイスクリプト作成
 - [ ] ユニットテスト作成
 
@@ -942,6 +1020,8 @@ export const useRewards = (gameId: string) => {
 - [ ] コミットメント連携実装
 - [ ] 証明検証連携実装
 - [ ] 環境変数・設定追加
+- [ ] `circuit_id -> {pk_path, verifier/adapter address}` 設定管理
+- [ ] node の proving key 読み込み（実行時 setup 廃止）
 
 #### フロントエンド
 - [ ] useGameContract フック実装
@@ -955,6 +1035,7 @@ export const useRewards = (gameId: string) => {
 - [ ] ローカル環境での統合テスト
 - [ ] Anvil上での動作確認
 - [ ] Block Explorerでの確認機能
+- [ ] max5/max9/max13 回路ごとの setup・deploy・verify 動作確認
 
 ### オプショナルタスク
 

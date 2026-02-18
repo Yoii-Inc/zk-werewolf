@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 
 use ark_bn254::{Bn254, Fr};
 use ark_ec::PairingEngine;
-use ark_gm17::GM17;
 use ark_groth16::Groth16;
 use ark_marlin::Marlin;
 use ark_poly::univariate::DensePolynomial;
@@ -79,9 +78,6 @@ fn export_works() -> Result<(), Box<dyn Error>> {
     let (_, vk) =
         Groth16::<Bn254>::setup(ExpCircuits::<Bn254>(None, None, None, PhantomData), rng)?;
     let _sol_verifier = Groth16::export(&vk);
-
-    let (_, vk) = GM17::<Bn254>::setup(ExpCircuits::<Bn254>(None, None, None, PhantomData), rng)?;
-    let _sol_verifier = GM17::export(&vk);
 
     let srs = MarlinInst::universal_setup(5, 3, 3, rng).unwrap();
     let (_, vk) =

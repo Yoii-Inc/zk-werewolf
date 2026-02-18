@@ -140,7 +140,7 @@ contract WerewolfGameTest is Test {
 
         game.finalizeGame(gameId, WerewolfGame.GameResult.VillagerWin);
 
-        (, , uint256 endTime, WerewolfGame.GameStatus status, WerewolfGame.GameResult result) = game.games(gameId);
+        (,, uint256 endTime, WerewolfGame.GameStatus status, WerewolfGame.GameResult result) = game.games(gameId);
         assertGt(endTime, 0);
         assertEq(uint8(status), uint8(WerewolfGame.GameStatus.Finished));
         assertEq(uint8(result), uint8(WerewolfGame.GameResult.VillagerWin));

@@ -4,26 +4,32 @@ pragma solidity ^0.8.19;
 import "forge-std/Test.sol";
 import "../contracts/WerewolfGame.sol";
 import "../contracts/WerewolfProofVerifier.sol";
+import "../contracts/verifiers/RoleAssignmentGroth16Verifier.sol";
+import "../contracts/verifiers/RoleAssignmentGroth16VerifierAdapter.sol";
 
 contract RoleAssignmentProofVerificationTest is Test {
+    uint256 internal constant FIXED_PUBLIC_INPUTS = 100; // (5 players + 5 groups)^2
+
     WerewolfGame internal game;
     WerewolfProofVerifier internal verifier;
+    RoleAssignmentGroth16Verifier internal roleAssignmentGroth16Verifier;
+    RoleAssignmentGroth16VerifierAdapter internal roleAssignmentGroth16Adapter;
 
     function setUp() public {
         game = new WerewolfGame();
         verifier = new WerewolfProofVerifier();
+        roleAssignmentGroth16Verifier = new RoleAssignmentGroth16Verifier();
+        roleAssignmentGroth16Adapter = new RoleAssignmentGroth16VerifierAdapter(address(roleAssignmentGroth16Verifier));
 
         game.setVerifier(address(verifier));
         verifier.setGameContract(address(game));
+        verifier.setRoleAssignmentVerifierAdapter(address(roleAssignmentGroth16Adapter));
     }
 
     function testRoleAssignmentSingleProverProofCanBeVerifiedOnContract() public {
-        // Heavy integration path:
-        // 1) Generate RoleAssignment proof by single prover (Rust + Marlin)
-        // 2) Submit to contract
-        // 3) Ensure contract verification path is executed and recorded
-        if (!vm.envOr("RUN_ROLE_ASSIGNMENT_FFI_TEST", false)) {
-            emit log("skip: set RUN_ROLE_ASSIGNMENT_FFI_TEST=true and run forge test --ffi");
+        bool runFfi = vm.envOr("RUN_ROLE_ASSIGNMENT_GROTH16_FFI_TEST", vm.envOr("RUN_ROLE_ASSIGNMENT_FFI_TEST", false));
+        if (!runFfi) {
+            emit log("skip: set RUN_ROLE_ASSIGNMENT_GROTH16_FFI_TEST=true and run forge test --ffi");
             return;
         }
 
@@ -31,23 +37,21 @@ contract RoleAssignmentProofVerificationTest is Test {
         bytes32 proofId = keccak256("role-assignment-proof");
         bytes32 rulesHash = keccak256("rules-v1");
 
-        address[] memory players = new address[](4);
+        address[] memory players = new address[](5);
         players[0] = address(0x1);
         players[1] = address(0x2);
         players[2] = address(0x3);
         players[3] = address(0x4);
+        players[4] = address(0x5);
         game.createGame(gameId, players, rulesHash);
 
-        (bytes memory proof, bytes memory publicInputs) = _generateRoleAssignmentFixture();
+        (bytes memory proof, bytes memory publicInputs, bool offchainVerified) = _generateRoleAssignmentFixture();
         assertGt(proof.length, 0, "proof should not be empty");
         assertGt(publicInputs.length, 0, "public inputs should not be empty");
+        assertTrue(offchainVerified, "offchain Groth16 verification should be true");
 
         bool ok = game.verifyProofAndRecord(
-            proofId,
-            gameId,
-            IWerewolfProofVerifier.ProofType.RoleAssignment,
-            proof,
-            publicInputs
+            proofId, gameId, IWerewolfProofVerifier.ProofType.RoleAssignment, proof, publicInputs
         );
 
         assertTrue(ok, "verification call should return true");
@@ -71,24 +75,49 @@ contract RoleAssignmentProofVerificationTest is Test {
         assertGt(recordedTimestamp, 0);
     }
 
-    function _generateRoleAssignmentFixture() internal returns (bytes memory proof, bytes memory publicInputs) {
-        string memory manifestPath = string.concat(vm.projectRoot(), "/../zk-mpc-node/Cargo.toml");
-
-        string[] memory ffiCmd = new string[](9);
+    function _generateRoleAssignmentFixture()
+        internal
+        returns (bytes memory proof, bytes memory publicInputs, bool offchainVerified)
+    {
+        string memory manifestPath = string.concat(vm.projectRoot(), "/../arkworks-solidity-verifier/Cargo.toml");
+        string[] memory ffiCmd = new string[](11);
         ffiCmd[0] = "env";
         ffiCmd[1] = "RUSTFLAGS=-Awarnings";
         ffiCmd[2] = "cargo";
         ffiCmd[3] = "run";
-        ffiCmd[4] = "--quiet";
-        ffiCmd[5] = "--manifest-path";
-        ffiCmd[6] = manifestPath;
-        ffiCmd[7] = "--bin";
-        ffiCmd[8] = "role_assignment_single_prover_fixture";
+        ffiCmd[4] = "--offline";
+        ffiCmd[5] = "--locked";
+        ffiCmd[6] = "--quiet";
+        ffiCmd[7] = "--manifest-path";
+        ffiCmd[8] = manifestPath;
+        ffiCmd[9] = "--bin";
+        ffiCmd[10] = "role_assignment_groth16_fixture";
 
-        bytes memory out = vm.ffi(ffiCmd);
-        string memory json = string(out);
+        string memory json = string(vm.ffi(ffiCmd));
 
-        proof = abi.decode(vm.parseJson(json, ".proof"), (bytes));
-        publicInputs = abi.decode(vm.parseJson(json, ".publicInputs"), (bytes));
+        RoleAssignmentGroth16Verifier.Proof memory solidityProof;
+        solidityProof.a = Pairing.G1Point(
+            uint256(abi.decode(vm.parseJson(json, ".ax"), (bytes32))),
+            uint256(abi.decode(vm.parseJson(json, ".ay"), (bytes32)))
+        );
+        bytes32[] memory bx = abi.decode(vm.parseJson(json, ".bx"), (bytes32[]));
+        bytes32[] memory by = abi.decode(vm.parseJson(json, ".by"), (bytes32[]));
+        require(bx.length == 2 && by.length == 2, "invalid Groth16 G2 proof shape");
+        solidityProof.b = Pairing.G2Point([uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]);
+        solidityProof.c = Pairing.G1Point(
+            uint256(abi.decode(vm.parseJson(json, ".cx"), (bytes32))),
+            uint256(abi.decode(vm.parseJson(json, ".cy"), (bytes32)))
+        );
+
+        proof = abi.encode(solidityProof);
+
+        uint256[FIXED_PUBLIC_INPUTS] memory parsedInputs;
+        bytes32[] memory parsedRawInputs = abi.decode(vm.parseJson(json, ".publicInputs"), (bytes32[]));
+        require(parsedRawInputs.length == FIXED_PUBLIC_INPUTS, "invalid public input length");
+        for (uint256 i = 0; i < FIXED_PUBLIC_INPUTS; i++) {
+            parsedInputs[i] = uint256(parsedRawInputs[i]);
+        }
+        publicInputs = abi.encode(parsedInputs);
+        offchainVerified = abi.decode(vm.parseJson(json, ".offchainVerified"), (bool));
     }
 }

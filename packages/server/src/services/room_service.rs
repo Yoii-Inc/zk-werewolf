@@ -8,7 +8,11 @@ use crate::{
 };
 use std::collections::HashMap;
 
-pub async fn create_room(state: AppState, name: Option<String>, room_config: Option<RoomConfig>) -> u32 {
+pub async fn create_room(
+    state: AppState,
+    name: Option<String>,
+    room_config: Option<RoomConfig>,
+) -> u32 {
     let mut rooms = state.rooms.lock().await;
     let new_id = rooms
         .keys()

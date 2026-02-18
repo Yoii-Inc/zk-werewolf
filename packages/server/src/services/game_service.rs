@@ -12,6 +12,7 @@ use crate::{
 use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::UniformRand;
+use mpc_algebra_wasm::{GroupingParameter, Role as GroupingRole};
 use rand::seq::SliceRandom;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -22,7 +23,6 @@ use zk_mpc::{
     input::{MpcInputTrait, WerewolfKeyInput, WerewolfMpcInput},
     marlin::MFr,
 };
-use mpc_algebra_wasm::{GroupingParameter, Role as GroupingRole};
 
 fn grouping_parameter_from_role_config(role_config: &RoleConfig) -> GroupingParameter {
     let mut map = BTreeMap::new();
@@ -54,8 +54,8 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
         }
 
         if effective_role_config.total_players() != joined_players {
-            effective_role_config.villager =
-                joined_players.saturating_sub(effective_role_config.seer + effective_role_config.werewolf);
+            effective_role_config.villager = joined_players
+                .saturating_sub(effective_role_config.seer + effective_role_config.werewolf);
         }
 
         let grouping_parameter = grouping_parameter_from_role_config(&effective_role_config);

@@ -1,5 +1,20 @@
 # ZK-MPC-Node
 
+Groth16（RoleAssignment）の共通 setup 生成
+```bash
+# リポジトリルートで実行
+make groth16-setup
+
+# 生成される主な成果物
+# - packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
+# - packages/foundry/contracts/verifiers/RoleAssignmentGroth16Verifier.sol
+```
+
+ノード起動時に proving key を使う
+```bash
+export ROLE_ASSIGNMENT_GROTH16_PK_PATH=packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
+```
+
 鍵ペアの生成
 ```bash
 # ノード0の鍵を生成(例)

@@ -1,27 +1,68 @@
 use crate::crypto::KeyManager;
+use crate::models::ProofRequest;
 use crate::proof::ProofManager;
 use crate::server::ApiClient;
 use crate::{EncryptedShare, ProofOutput, ProofOutputType, UserPublicKey};
-// 追加
-use crate::models::ProofRequest;
 use ark_ff::{BigInteger, PrimeField};
 use ark_groth16::{generate_random_parameters, prepare_verifying_key, verify_proof, ProvingKey};
+use ark_serialize::CanonicalDeserialize;
 use ark_std::test_rng;
 use mpc_algebra::{AdditivePairingShare, MpcPairingEngine, Reveal};
 use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
 use std::iter::zip;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use zk_mpc::groth16::create_random_proof;
+
+type LocalProvingKey = ProvingKey<ark_bn254::Bn254>;
+type MPCProvingKey =
+    ProvingKey<MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>>;
+
+#[derive(Clone)]
+struct RoleAssignmentGroth16Setup {
+    local_proving_key: Arc<LocalProvingKey>,
+}
+
+impl RoleAssignmentGroth16Setup {
+    fn maybe_from_env() -> Result<Option<Self>, std::io::Error> {
+        let Some(path) = role_assignment_pk_path_from_env() else {
+            return Ok(None);
+        };
+
+        let bytes = std::fs::read(&path)?;
+        let local_proving_key = LocalProvingKey::deserialize_uncompressed(bytes.as_slice())
+            .map_err(|e| {
+                std::io::Error::other(format!(
+                    "failed to deserialize role assignment proving key {}: {:?}",
+                    path.display(),
+                    e
+                ))
+            })?;
+
+        Ok(Some(Self {
+            local_proving_key: Arc::new(local_proving_key),
+        }))
+    }
+
+    fn prepared_verifying_key(&self) -> ark_groth16::PreparedVerifyingKey<ark_bn254::Bn254> {
+        prepare_verifying_key(&self.local_proving_key.vk)
+    }
+
+    fn mpc_proving_key(&self) -> MPCProvingKey {
+        ProvingKey::from_public((*self.local_proving_key).clone())
+    }
+}
 
 pub struct Node<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
     pub id: u32,
     pub net: Arc<MPCNetConnection<IO>>,
     pub proof_manager: Arc<ProofManager>,
     pub key_manager: Arc<KeyManager>,
-    pub api_client: Arc<ApiClient>, // 追加
+    pub api_client: Arc<ApiClient>,
+    role_assignment_setup: Option<RoleAssignmentGroth16Setup>,
 }
 
 impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
@@ -30,7 +71,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         net: Arc<MPCNetConnection<IO>>,
         proof_manager: Arc<ProofManager>,
         key_manager: Arc<KeyManager>,
-        server_url: String, // 追加
+        server_url: String,
     ) -> Self {
         // 環境変数から秘密鍵と公開鍵を取得（優先）、なければファイルから読込
         if let Ok(private_key_base64) = std::env::var("MPC_PRIVATE_KEY") {
@@ -63,6 +104,24 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         }
 
         let api_client = Arc::new(ApiClient::new(server_url.clone()));
+        let role_assignment_setup = match RoleAssignmentGroth16Setup::maybe_from_env() {
+            Ok(Some(setup)) => {
+                println!("Loaded role assignment Groth16 proving key from file.");
+                Some(setup)
+            }
+            Ok(None) => {
+                println!(
+                    "ROLE_ASSIGNMENT_GROTH16_PK_PATH is not set. Falling back to runtime Groth16 setup for RoleAssignment."
+                );
+                None
+            }
+            Err(e) => {
+                panic!(
+                    "Failed to load proving key from ROLE_ASSIGNMENT_GROTH16_PK_PATH: {}",
+                    e
+                );
+            }
+        };
 
         let node = Self {
             id,
@@ -70,6 +129,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             proof_manager,
             key_manager,
             api_client: api_client.clone(),
+            role_assignment_setup,
         };
 
         // 生成した公開鍵をサーバーに登録
@@ -113,17 +173,35 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         let inputs = CircuitFactory::create_verify_inputs(&mpc_circuit);
 
         let rng = &mut test_rng();
-        let params = generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
-            .map_err(|e| -> Box<dyn std::error::Error + Send> {
+        let (pvk, mpc_params): (_, MPCProvingKey) = if matches!(
+            request.circuit_type,
+            CircuitEncryptedInputIdentifier::RoleAssignment(_)
+        ) {
+            if let Some(setup) = self.role_assignment_setup.as_ref() {
+                (setup.prepared_verifying_key(), setup.mpc_proving_key())
+            } else {
+                let params =
+                    generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
+                        .map_err(|e| -> Box<dyn std::error::Error + Send> {
+                            Box::new(std::io::Error::other(format!(
+                                "Failed to generate Groth16 parameters: {:?}",
+                                e
+                            )))
+                        })?;
+                let pvk = prepare_verifying_key(&params.vk);
+                (pvk, ProvingKey::from_public(params))
+            }
+        } else {
+            let params = generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
+                .map_err(|e| -> Box<dyn std::error::Error + Send> {
                 Box::new(std::io::Error::other(format!(
                     "Failed to generate Groth16 parameters: {:?}",
                     e
                 )))
             })?;
-        let pvk = prepare_verifying_key(&params.vk);
-        let mpc_params: ProvingKey<
-            MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>,
-        > = ProvingKey::from_public(params);
+            let pvk = prepare_verifying_key(&params.vk);
+            (pvk, ProvingKey::from_public(params))
+        };
 
         let mpc_proof = create_random_proof::<
             MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>,
@@ -300,6 +378,21 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         encrypted_share: &[u8],
     ) -> Result<Vec<u8>, crate::crypto::CryptoError> {
         self.key_manager.decrypt_share(encrypted_share).await
+    }
+}
+
+fn role_assignment_pk_path_from_env() -> Option<PathBuf> {
+    match std::env::var("ROLE_ASSIGNMENT_GROTH16_PK_PATH") {
+        Ok(value) if !value.trim().is_empty() => Some(PathBuf::from(value)),
+        _ => {
+            let default_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("data/groth16/role_assignment_max5_v1.pk");
+            if default_path.exists() {
+                Some(default_path)
+            } else {
+                None
+            }
+        }
     }
 }
 

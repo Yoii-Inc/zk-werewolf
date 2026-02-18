@@ -14,6 +14,8 @@ pub enum ProofType {
     KeyPublicize,
 }
 
+const ROLE_ASSIGNMENT_VERIFY_PROOF_GAS_LIMIT: u64 = 1_500_000;
+
 impl ProofType {
     fn as_u8(self) -> u8 {
         match self {
@@ -53,6 +55,7 @@ struct RealBackend {
     pub rpc_url: String,
     pub chain_id: u64,
     pub private_key: String,
+    pub from_address: String,
     pub addresses: ContractAddresses,
 }
 
@@ -73,10 +76,14 @@ impl RealBackend {
             return Err("one or more contract addresses are invalid".to_string());
         }
 
+        let normalized_private_key = normalize_private_key(&private_key);
+        let from_address = derive_address_from_private_key(&normalized_private_key)?;
+
         Ok(Self {
             rpc_url: config.ethereum_rpc_url.clone(),
             chain_id: config.ethereum_chain_id,
-            private_key,
+            private_key: normalized_private_key,
+            from_address,
             addresses: addresses.clone(),
         })
     }
@@ -340,6 +347,11 @@ impl BlockchainClient {
                 let proof_hex = bytes_to_hex(proof_data);
                 let public_inputs_hex = bytes_to_hex(public_inputs);
                 let proof_type_u8 = proof_type.as_u8();
+                let verify_gas_limit = if matches!(proof_type, ProofType::RoleAssignment) {
+                    Some(ROLE_ASSIGNMENT_VERIFY_PROOF_GAS_LIMIT)
+                } else {
+                    None
+                };
 
                 let call_args = vec![
                     "call".to_string(),
@@ -350,9 +362,16 @@ impl BlockchainClient {
                     proof_type_u8.to_string(),
                     proof_hex.clone(),
                     public_inputs_hex.clone(),
+                    "--from".to_string(),
+                    backend.from_address.clone(),
                     "--rpc-url".to_string(),
                     backend.rpc_url.clone(),
                 ];
+                let mut call_args = call_args;
+                if let Some(gas_limit) = verify_gas_limit {
+                    call_args.push("--gas-limit".to_string());
+                    call_args.push(gas_limit.to_string());
+                }
                 let call_output = run_cast(&call_args).await?;
                 let preview_verified = parse_cast_bool(&call_output)?;
                 if !preview_verified {
@@ -375,6 +394,10 @@ impl BlockchainClient {
                 send_args.push(proof_type_u8.to_string());
                 send_args.push(proof_hex);
                 send_args.push(public_inputs_hex);
+                if let Some(gas_limit) = verify_gas_limit {
+                    send_args.push("--gas-limit".to_string());
+                    send_args.push(gas_limit.to_string());
+                }
                 let tx = send_and_extract_tx_hash(&send_args).await?;
 
                 tracing::info!(
@@ -439,7 +462,7 @@ fn base_send_args(backend: &RealBackend, to: &str, sig: &str) -> Vec<String> {
         "--rpc-url".to_string(),
         backend.rpc_url.clone(),
         "--private-key".to_string(),
-        normalize_private_key(&backend.private_key),
+        backend.private_key.clone(),
         "--json".to_string(),
     ]
 }
@@ -451,6 +474,31 @@ fn normalize_private_key(value: &str) -> String {
     } else {
         format!("0x{}", key)
     }
+}
+
+fn derive_address_from_private_key(private_key: &str) -> Result<String, String> {
+    let output = std::process::Command::new("cast")
+        .args(["wallet", "address", "--private-key", private_key])
+        .output()
+        .map_err(|e| format!("failed to execute cast wallet address: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "cast wallet address failed (status={}): {}",
+            output.status,
+            stderr.trim()
+        ));
+    }
+
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !state_hash::is_evm_address(&value) {
+        return Err(format!(
+            "cast wallet address returned invalid address: {}",
+            value
+        ));
+    }
+    Ok(value)
 }
 
 fn normalize_addresses(label: &str, values: Vec<String>) -> Result<Vec<String>, String> {
@@ -541,7 +589,10 @@ fn parse_tx_hash(output: &str) -> Result<String, String> {
         return Ok(token.to_string());
     }
 
-    Err(format!("failed to extract tx hash from cast output: {}", output))
+    Err(format!(
+        "failed to extract tx hash from cast output: {}",
+        output
+    ))
 }
 
 fn bytes_to_hex(bytes: &[u8]) -> String {

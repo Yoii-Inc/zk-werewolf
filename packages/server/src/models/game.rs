@@ -1,5 +1,8 @@
 use crate::{
-    blockchain::{state_hash::{compute_game_id, compute_proof_id}, ProofType as ChainProofType},
+    blockchain::{
+        state_hash::{compute_game_id, compute_proof_id},
+        ProofType as ChainProofType,
+    },
     models::{
         chat::{ChatMessage, ChatMessageType},
         role::Role,
@@ -704,19 +707,21 @@ impl Game {
                 if app_state.blockchain_client.is_enabled() {
                     let proof_id = compute_proof_id(&self.batch_request.batch_id);
                     let game_id = compute_game_id(&self.room_id);
-                    let proof_type = match &identifier {
+                    let (proof_type, proof_type_label) = match &identifier {
                         CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
-                            ChainProofType::RoleAssignment
+                            (ChainProofType::RoleAssignment, "RoleAssignment")
                         }
-                        CircuitEncryptedInputIdentifier::Divination(_) => ChainProofType::Divination,
+                        CircuitEncryptedInputIdentifier::Divination(_) => {
+                            (ChainProofType::Divination, "Divination")
+                        }
                         CircuitEncryptedInputIdentifier::AnonymousVoting(_) => {
-                            ChainProofType::AnonymousVoting
+                            (ChainProofType::AnonymousVoting, "AnonymousVoting")
                         }
                         CircuitEncryptedInputIdentifier::WinningJudge(_) => {
-                            ChainProofType::WinningJudgement
+                            (ChainProofType::WinningJudgement, "WinningJudgement")
                         }
                         CircuitEncryptedInputIdentifier::KeyPublicize(_) => {
-                            ChainProofType::KeyPublicize
+                            (ChainProofType::KeyPublicize, "KeyPublicize")
                         }
                     };
                     let proof_data = output
@@ -734,7 +739,13 @@ impl Game {
                         .verify_proof(proof_id, game_id, proof_type, &proof_data, &public_inputs)
                         .await
                     {
-                        Ok(Some(true)) | Ok(None) => {}
+                        Ok(Some(true)) => {
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification succeeded: {}.",
+                                proof_type_label
+                            ));
+                        }
+                        Ok(None) => {}
                         Ok(Some(false)) => {
                             self.batch_request.status = BatchStatus::Failed;
                             self.chat_log.add_system_message(

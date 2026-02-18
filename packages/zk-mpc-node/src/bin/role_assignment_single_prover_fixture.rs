@@ -11,10 +11,7 @@ use serde::Serialize;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::fd::AsRawFd;
-use zk_mpc::{
-    circuits::LocalOrMPC,
-    marlin::LocalMarlin,
-};
+use zk_mpc::{circuits::LocalOrMPC, marlin::LocalMarlin};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,10 +68,7 @@ fn generate_fixture() -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
         grouping_parameter,
         tau_matrix: tau_matrix.clone(),
         role_commitment: vec![<Fr as LocalOrMPC<Fr>>::PedersenCommitment::default(); num_players],
-        player_commitment: vec![
-            <Fr as LocalOrMPC<Fr>>::PedersenCommitment::default();
-            num_players
-        ],
+        player_commitment: vec![<Fr as LocalOrMPC<Fr>>::PedersenCommitment::default(); num_players],
     };
 
     let circuit = BuiltinCircuit::RoleAssignment(RoleAssignmentCircuit {

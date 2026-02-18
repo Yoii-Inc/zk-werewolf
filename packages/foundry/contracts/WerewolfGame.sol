@@ -95,11 +95,7 @@ contract WerewolfGame is Ownable {
         _createGame(gameId, players, bytes32(0));
     }
 
-    function createGame(
-        bytes32 gameId,
-        address[] calldata players,
-        bytes32 rulesHash
-    ) external onlyGameMasterOrOwner {
+    function createGame(bytes32 gameId, address[] calldata players, bytes32 rulesHash) external onlyGameMasterOrOwner {
         _createGame(gameId, players, rulesHash);
     }
 

@@ -148,7 +148,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1770797560276.json",
+      deploymentFile: "run-1771406636950.json",
       deploymentScript: "Deploy.s.sol",
     },
     WerewolfGame: {
@@ -158,6 +158,25 @@ const deployedContracts = {
           type: "constructor",
           inputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "commitmentCounts",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -187,6 +206,29 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "createGame",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "players",
+              type: "address[]",
+              internalType: "address[]",
+            },
+            {
+              name: "rulesHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -257,6 +299,25 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "gameRulesHashes",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "games",
           inputs: [
             {
@@ -309,6 +370,30 @@ const deployedContracts = {
               name: "",
               type: "address[]",
               internalType: "address[]",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "hasSubmittedCommitment",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -677,7 +762,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1770797560276.json",
+      deploymentFile: "run-1771406636950.json",
       deploymentScript: "Deploy.s.sol",
     },
     WerewolfProofVerifier: {
@@ -832,10 +917,36 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "roleAssignmentVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "setGameContract",
           inputs: [
             {
               name: "_gameContract",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setRoleAssignmentVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
               type: "address",
               internalType: "address",
             },
@@ -1000,7 +1111,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1770797560276.json",
+      deploymentFile: "run-1771406636950.json",
       deploymentScript: "Deploy.s.sol",
     },
     WerewolfRewards: {
@@ -1361,7 +1472,148 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1770797560276.json",
+      deploymentFile: "run-1771406636950.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    RoleAssignmentGroth16Verifier: {
+      address: "0xe1aa25618fa0c7a1cfdab5d6b456af611873b629",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct Pairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct Pairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct Pairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[100]",
+              internalType: "uint256[100]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771406636950.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    RoleAssignmentGroth16VerifierAdapter: {
+      address: "0xe1da8919f262ee86f9be05059c9280142cf23f48",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract RoleAssignmentGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771406636950.json",
       deploymentScript: "Deploy.s.sol",
     },
   },
