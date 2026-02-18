@@ -1,5 +1,5 @@
 use crate::{
-    blockchain::state_hash::compute_proof_id,
+    blockchain::{state_hash::{compute_game_id, compute_proof_id}, ProofType as ChainProofType},
     models::{
         chat::{ChatMessage, ChatMessageType},
         role::Role,
@@ -703,16 +703,35 @@ impl Game {
 
                 if app_state.blockchain_client.is_enabled() {
                     let proof_id = compute_proof_id(&self.batch_request.batch_id);
+                    let game_id = compute_game_id(&self.room_id);
+                    let proof_type = match &identifier {
+                        CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
+                            ChainProofType::RoleAssignment
+                        }
+                        CircuitEncryptedInputIdentifier::Divination(_) => ChainProofType::Divination,
+                        CircuitEncryptedInputIdentifier::AnonymousVoting(_) => {
+                            ChainProofType::AnonymousVoting
+                        }
+                        CircuitEncryptedInputIdentifier::WinningJudge(_) => {
+                            ChainProofType::WinningJudgement
+                        }
+                        CircuitEncryptedInputIdentifier::KeyPublicize(_) => {
+                            ChainProofType::KeyPublicize
+                        }
+                    };
                     let proof_data = output
                         .proof
                         .clone()
                         .or_else(|| output.value.clone())
                         .unwrap_or_default();
-                    let public_inputs = self.room_id.as_bytes().to_vec();
+                    let public_inputs = output
+                        .public_inputs
+                        .clone()
+                        .unwrap_or_else(|| self.room_id.as_bytes().to_vec());
 
                     match app_state
                         .blockchain_client
-                        .verify_proof(proof_id, &proof_data, &public_inputs)
+                        .verify_proof(proof_id, game_id, proof_type, &proof_data, &public_inputs)
                         .await
                     {
                         Ok(Some(true)) | Ok(None) => {}

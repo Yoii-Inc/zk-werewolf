@@ -38,6 +38,8 @@ pub struct ProofOutput {
     pub value: Option<Vec<u8>>, // 公開値または暗号化された値
     #[serde(default)]
     pub proof: Option<Vec<u8>>, // publicize済みの証明バイト列
+    #[serde(default)]
+    pub public_inputs: Option<Vec<u8>>, // オンチェーン検証向けの公開入力バイト列
     // pub shares: Option<Vec<Vec<u8>>>, // 暗号化されたシェア
     pub shares: Option<Vec<EncryptedShare>>, // 暗号化されたシェア
 }

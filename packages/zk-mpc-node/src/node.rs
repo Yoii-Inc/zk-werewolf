@@ -4,10 +4,11 @@ use crate::server::ApiClient;
 use crate::{EncryptedShare, ProofOutput, ProofOutputType, UserPublicKey};
 // 追加
 use crate::models::ProofRequest;
+use ark_ff::{BigInteger, PrimeField};
 use ark_groth16::{generate_random_parameters, prepare_verifying_key, verify_proof, ProvingKey};
-use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
 use mpc_algebra::{AdditivePairingShare, MpcPairingEngine, Reveal};
+use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
 use std::iter::zip;
@@ -146,22 +147,28 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         )?;
 
         let outputs = if is_valid {
-            let mut proof_bytes = Vec::new();
-            publicized_proof
-                .serialize_uncompressed(&mut proof_bytes)
-                .map_err(|e| -> Box<dyn std::error::Error + Send> {
-                    Box::new(std::io::Error::other(format!(
-                        "Failed to serialize publicized proof: {:?}",
-                        e
-                    )))
-                })?;
+            let (proof_bytes, public_input_bytes) = match &request.circuit_type {
+                CircuitEncryptedInputIdentifier::RoleAssignment(_) => (
+                    abi_encode_groth16_proof(&publicized_proof),
+                    Some(abi_encode_fixed_uint256_inputs(&inputs, 100).map_err(
+                        |e| -> Box<dyn std::error::Error + Send> {
+                            Box::new(std::io::Error::other(format!(
+                                "Failed to encode role assignment public inputs: {}",
+                                e
+                            )))
+                        },
+                    )?),
+                ),
+                _ => (abi_encode_groth16_proof(&publicized_proof), None),
+            };
 
             let proof_outputs = CircuitFactory::get_circuit_outputs(&mpc_circuit);
             let proof_output = match &request.output_type {
                 ProofOutputType::Public => ProofOutput {
                     output_type: request.output_type.clone(),
                     value: Some(proof_outputs),
-                    proof: Some(proof_bytes),
+                    proof: Some(proof_bytes.clone()),
+                    public_inputs: public_input_bytes.clone(),
                     shares: None,
                 },
                 ProofOutputType::PrivateToPublic(pubkeys) => {
@@ -172,7 +179,8 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                     ProofOutput {
                         output_type: request.output_type.clone(),
                         value: None,
-                        proof: Some(proof_bytes),
+                        proof: Some(proof_bytes.clone()),
+                        public_inputs: public_input_bytes.clone(),
                         shares: Some(shares),
                     }
                 }
@@ -183,6 +191,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                         output_type: request.output_type.clone(),
                         value: Some(encrypted),
                         proof: Some(proof_bytes),
+                        public_inputs: public_input_bytes,
                         shares: None,
                     }
                 }
@@ -292,4 +301,46 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
     ) -> Result<Vec<u8>, crate::crypto::CryptoError> {
         self.key_manager.decrypt_share(encrypted_share).await
     }
+}
+
+fn abi_encode_groth16_proof(proof: &ark_groth16::Proof<ark_bn254::Bn254>) -> Vec<u8> {
+    let mut out = Vec::with_capacity(8 * 32);
+    out.extend_from_slice(&field_to_word(proof.a.x));
+    out.extend_from_slice(&field_to_word(proof.a.y));
+    out.extend_from_slice(&field_to_word(proof.b.x.c0));
+    out.extend_from_slice(&field_to_word(proof.b.x.c1));
+    out.extend_from_slice(&field_to_word(proof.b.y.c0));
+    out.extend_from_slice(&field_to_word(proof.b.y.c1));
+    out.extend_from_slice(&field_to_word(proof.c.x));
+    out.extend_from_slice(&field_to_word(proof.c.y));
+    out
+}
+
+fn abi_encode_fixed_uint256_inputs<F: PrimeField>(
+    inputs: &[F],
+    expected_len: usize,
+) -> Result<Vec<u8>, String> {
+    if inputs.len() != expected_len {
+        return Err(format!(
+            "expected {} public inputs, got {}",
+            expected_len,
+            inputs.len()
+        ));
+    }
+
+    let mut out = Vec::with_capacity(expected_len * 32);
+    for input in inputs {
+        out.extend_from_slice(&field_to_word(*input));
+    }
+    Ok(out)
+}
+
+fn field_to_word<F: PrimeField>(value: F) -> [u8; 32] {
+    let mut le = value.into_repr().to_bytes_le();
+    le.resize(32, 0);
+    let mut out = [0u8; 32];
+    for i in 0..32 {
+        out[i] = le[31 - i];
+    }
+    out
 }
