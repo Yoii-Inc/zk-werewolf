@@ -28,6 +28,7 @@ ark-poly-commit = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "a
 ark-relations = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-relations", version = "0.3.0", default-features = false }
 ark-r1cs-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-r1cs-std", version = "0.3.0", default-features = false }
 ark-std = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-std", version = "0.3.0", default-features = false }
+ark-crypto-primitives = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "ark-crypto-primitives", version = "0.3.0", default-features = false }
 zk-mpc = { git = "https://github.com/Yoii-Inc/zk-mpc.git" }
 mpc-algebra = { git = "https://github.com/Yoii-Inc/zk-mpc.git", package = "mpc-algebra", version = "0.1.0" }
 

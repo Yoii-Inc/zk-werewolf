@@ -392,6 +392,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ark-bn254",
+ "ark-crypto-primitives",
  "ark-ec",
  "ark-ff",
  "ark-groth16",

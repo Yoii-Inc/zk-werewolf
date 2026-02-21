@@ -2,20 +2,21 @@ use std::{fs, path::PathBuf};
 
 use anyhow::{Context, Result};
 use ark_bn254::{Bn254, Fr};
+use ark_crypto_primitives::encryption::AsymmetricEncryptionScheme;
 use ark_groth16::{Groth16, ProvingKey};
 use ark_serialize::CanonicalSerialize;
 use ark_snark::CircuitSpecificSetupSNARK;
-use ark_std::test_rng;
+use ark_std::{test_rng, UniformRand};
 use mpc_algebra::CommitmentScheme;
-use mpc_algebra_wasm::GroupingParameter;
-use mpc_circuits::{RoleAssignmentCircuit, RoleAssignmentPrivateInput, RoleAssignmentPublicInput};
+use mpc_circuits::{DivinationCircuit, DivinationPrivateInput, DivinationPublicInput};
 use serde::Serialize;
-use zk_mpc::circuits::LocalOrMPC;
+use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 
 use arkworks_solidity_verifier::SolidityVerifier;
 
-const CIRCUIT_ID: &str = "role_assignment_max5_v1";
+const CIRCUIT_ID: &str = "divination_max5_v1";
 const FIXED_PLAYERS: usize = 5;
+const PUBLIC_INPUT_LEN: usize = 8;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,15 +29,15 @@ struct SetupMetadata {
 }
 
 fn main() -> Result<()> {
-    let pk_out =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../zk-mpc-node/data/groth16/{CIRCUIT_ID}.pk"));
+    let pk_out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("../zk-mpc-node/data/groth16/{CIRCUIT_ID}.pk"));
     let verifier_out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../foundry/contracts/verifiers/RoleAssignmentGroth16Verifier.sol");
-    let metadata_out =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../zk-mpc-node/data/groth16/{CIRCUIT_ID}.json"));
+        .join("../foundry/contracts/verifiers/DivinationGroth16Verifier.sol");
+    let metadata_out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("../zk-mpc-node/data/groth16/{CIRCUIT_ID}.json"));
 
     let mut rng = test_rng();
-    let circuit = build_fixed_role_assignment_circuit(&mut rng)?;
+    let circuit = build_fixed_divination_circuit(&mut rng)?;
     let (pk, vk) = Groth16::<Bn254>::setup(circuit, &mut rng)
         .map_err(|e| anyhow::anyhow!("Groth16 setup failed: {e:?}"))?;
 
@@ -45,12 +46,10 @@ fn main() -> Result<()> {
     let contract = rename_contract(&Groth16::<Bn254>::export(&vk));
     write_file(&verifier_out, &contract)?;
 
-    let grouping = GroupingParameter::from_player_count(FIXED_PLAYERS);
-    let matrix_size = grouping.get_num_players() + grouping.get_num_groups();
     let metadata = SetupMetadata {
         circuit_id: CIRCUIT_ID.to_string(),
         max_players: FIXED_PLAYERS,
-        public_input_len: matrix_size * matrix_size,
+        public_input_len: PUBLIC_INPUT_LEN,
         pk_path: pk_out.display().to_string(),
         verifier_path: verifier_out.display().to_string(),
     };
@@ -59,45 +58,54 @@ fn main() -> Result<()> {
     println!("wrote {}", pk_out.display());
     println!("wrote {}", verifier_out.display());
     println!("wrote {}", metadata_out.display());
-
     Ok(())
 }
 
-fn build_fixed_role_assignment_circuit(
-    rng: &mut impl ark_std::rand::RngCore,
-) -> Result<RoleAssignmentCircuit<Fr>> {
-    let grouping_parameter = GroupingParameter::from_player_count(FIXED_PLAYERS);
-    let tau_matrix = grouping_parameter.generate_tau_matrix::<Fr>();
-    let matrix_size = tau_matrix.nrows();
-    let identity = nalgebra::DMatrix::<Fr>::identity(matrix_size, matrix_size);
-
-    let private_input = (0..FIXED_PLAYERS)
-        .map(|id| RoleAssignmentPrivateInput::<Fr> {
-            id,
-            shuffle_matrices: identity.clone(),
-            randomness: <Fr as LocalOrMPC<Fr>>::PedersenRandomness::default(),
-            player_randomness: Fr::from((id + 1) as u64),
-        })
-        .collect::<Vec<_>>();
-
+fn build_fixed_divination_circuit(
+    rng: &mut (impl ark_std::rand::RngCore + ark_std::rand::CryptoRng),
+) -> Result<DivinationCircuit<Fr>> {
     let pedersen_param = <Fr as LocalOrMPC<Fr>>::PedersenComScheme::setup(rng)
         .map_err(|e| anyhow::anyhow!("pedersen setup failed: {e:?}"))?;
 
-    let role_commitment =
-        vec![<Fr as LocalOrMPC<Fr>>::PedersenCommitment::default(); FIXED_PLAYERS];
-    let player_commitment =
-        vec![<Fr as LocalOrMPC<Fr>>::PedersenCommitment::default(); FIXED_PLAYERS];
+    let elgamal_param =
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::setup(rng)
+            .map_err(|e| anyhow::anyhow!("elgamal setup failed: {e:?}"))?;
+    let (pub_key, _secret_key) =
+        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::keygen(
+            &elgamal_param,
+            rng,
+        )
+        .map_err(|e| anyhow::anyhow!("elgamal keygen failed: {e:?}"))?;
 
-    Ok(RoleAssignmentCircuit {
+    let randomness = <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalRandomness::rand(rng);
+
+    let private_input = (0..FIXED_PLAYERS)
+        .map(|id| {
+            let mut is_target = vec![Fr::from(0u32); FIXED_PLAYERS];
+            if id == 0 {
+                is_target[0] = Fr::from(1u32);
+            }
+
+            DivinationPrivateInput::<Fr> {
+                id,
+                is_werewolf: if id == 0 {
+                    Fr::from(1u32)
+                } else {
+                    Fr::from(0u32)
+                },
+                is_target,
+                randomness: randomness.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok(DivinationCircuit {
         private_input,
-        public_input: RoleAssignmentPublicInput::<Fr> {
-            num_players: FIXED_PLAYERS,
-            max_group_size: grouping_parameter.get_max_group_size(),
+        public_input: DivinationPublicInput::<Fr> {
             pedersen_param,
-            grouping_parameter,
-            tau_matrix,
-            role_commitment,
-            player_commitment,
+            elgamal_param,
+            pub_key,
+            player_num: FIXED_PLAYERS,
         },
     })
 }
@@ -127,9 +135,10 @@ fn write_file(path: &PathBuf, body: &str) -> Result<()> {
 fn rename_contract(contract_src: &str) -> String {
     let renamed = contract_src.replacen(
         "contract Verifier {",
-        "contract RoleAssignmentGroth16Verifier {",
+        "contract DivinationGroth16Verifier {",
         1,
     );
+    let renamed = renamed.replace("Pairing", "DivinationPairing");
 
     if renamed.starts_with("// SPDX-License-Identifier:") {
         renamed

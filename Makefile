@@ -1,10 +1,10 @@
 .PHONY: help install frontend server node stop clean groth16-setup groth16-export-verifier
 
-GROTH16_CIRCUIT_ID ?= role_assignment_max5_v1
-GROTH16_MAX_PLAYERS ?= 5
-GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/$(GROTH16_CIRCUIT_ID).pk
-GROTH16_METADATA_PATH ?= packages/zk-mpc-node/data/groth16/$(GROTH16_CIRCUIT_ID).json
-GROTH16_VERIFIER_PATH ?= packages/foundry/contracts/verifiers/RoleAssignmentGroth16Verifier.sol
+ROLE_ASSIGNMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
+ANONYMOUS_VOTING_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/anonymous_voting_max3_v1.pk
+DIVINATION_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/divination_max5_v1.pk
+WINNING_JUDGEMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/winning_judgement_max5_v1.pk
+KEY_PUBLICIZE_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/key_publicize_max5_v1.pk
 
 help:
 	@echo "Available targets:"
@@ -14,8 +14,8 @@ help:
 	@echo "  make node     - Start all zk-mpc-nodes (id=0,1,2) in background"
 	@echo "  make stop     - Stop all running services (requires pkill)"
 	@echo "  make clean    - Remove build artifacts and node_modules"
-	@echo "  make groth16-setup - Generate RoleAssignment Groth16 setup artifacts"
-	@echo "  make groth16-export-verifier - Export verifier from an existing proving key"
+	@echo "  make groth16-setup - Generate Groth16 setup artifacts for all circuits"
+	@echo "  make groth16-export-verifier - Export verifier contracts for all circuits from proving keys"
 
 # Install dependencies
 install:
@@ -68,13 +68,20 @@ clean:
 	@echo "Cleanup complete!"
 
 groth16-setup:
-	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --bin role_assignment_groth16_setup -- \
-		--circuit-id $(GROTH16_CIRCUIT_ID) \
-		--max-players $(GROTH16_MAX_PLAYERS) \
-		--pk-out $(GROTH16_PK_PATH) \
-		--verifier-out $(GROTH16_VERIFIER_PATH) \
-		--metadata-out $(GROTH16_METADATA_PATH)
+	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin role_assignment_groth16_setup
+	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin anonymous_voting_groth16_setup
+	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin divination_groth16_setup
+	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin winning_judgement_groth16_setup
+	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin key_publicize_groth16_setup
 
 groth16-export-verifier:
-	ROLE_ASSIGNMENT_GROTH16_PK_PATH=$(GROTH16_PK_PATH) \
-		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --bin role_assignment_groth16_verifier_export
+	ROLE_ASSIGNMENT_GROTH16_PK_PATH=$(ROLE_ASSIGNMENT_GROTH16_PK_PATH) \
+		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin role_assignment_groth16_verifier_export
+	ANONYMOUS_VOTING_GROTH16_PK_PATH=$(ANONYMOUS_VOTING_GROTH16_PK_PATH) \
+		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin anonymous_voting_groth16_verifier_export
+	DIVINATION_GROTH16_PK_PATH=$(DIVINATION_GROTH16_PK_PATH) \
+		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin divination_groth16_verifier_export
+	WINNING_JUDGEMENT_GROTH16_PK_PATH=$(WINNING_JUDGEMENT_GROTH16_PK_PATH) \
+		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin winning_judgement_groth16_verifier_export
+	KEY_PUBLICIZE_GROTH16_PK_PATH=$(KEY_PUBLICIZE_GROTH16_PK_PATH) \
+		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin key_publicize_groth16_verifier_export

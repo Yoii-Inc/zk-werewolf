@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
-interface IRoleAssignmentVerifierAdapter {
+interface IVerifierAdapter {
     function verify(bytes calldata proof, bytes calldata publicInputs) external view returns (bool);
 }
 
@@ -29,6 +29,10 @@ contract WerewolfProofVerifier is Ownable {
 
     address public gameContract;
     address public roleAssignmentVerifierAdapter;
+    address public divinationVerifierAdapter;
+    address public anonymousVotingVerifierAdapter;
+    address public winningJudgementVerifierAdapter;
+    address public keyPublicizeVerifierAdapter;
 
     event ProofVerified(bytes32 indexed proofId, bytes32 indexed gameId, ProofType proofType, uint256 timestamp);
     event ProofFailed(bytes32 indexed proofId, bytes32 indexed gameId, ProofType proofType, string reason);
@@ -50,6 +54,26 @@ contract WerewolfProofVerifier is Ownable {
         roleAssignmentVerifierAdapter = _adapter;
     }
 
+    function setDivinationVerifierAdapter(address _adapter) external onlyOwner {
+        require(_adapter != address(0), "Invalid adapter");
+        divinationVerifierAdapter = _adapter;
+    }
+
+    function setAnonymousVotingVerifierAdapter(address _adapter) external onlyOwner {
+        require(_adapter != address(0), "Invalid adapter");
+        anonymousVotingVerifierAdapter = _adapter;
+    }
+
+    function setWinningJudgementVerifierAdapter(address _adapter) external onlyOwner {
+        require(_adapter != address(0), "Invalid adapter");
+        winningJudgementVerifierAdapter = _adapter;
+    }
+
+    function setKeyPublicizeVerifierAdapter(address _adapter) external onlyOwner {
+        require(_adapter != address(0), "Invalid adapter");
+        keyPublicizeVerifierAdapter = _adapter;
+    }
+
     function verifyProof(
         bytes32 proofId,
         bytes32 gameId,
@@ -57,34 +81,53 @@ contract WerewolfProofVerifier is Ownable {
         bytes calldata proof,
         bytes calldata publicInputs
     ) external onlyGameOrOwner returns (bool) {
-        if (proof.length == 0 || publicInputs.length == 0) {
-            emit ProofFailed(proofId, gameId, proofType, "Empty proof/public inputs");
+        if (proof.length == 0) {
+            emit ProofFailed(proofId, gameId, proofType, "Empty proof");
             return false;
         }
 
+        address adapter;
+        string memory proofTypeLabel;
+
         if (proofType == ProofType.RoleAssignment) {
-            if (roleAssignmentVerifierAdapter == address(0)) {
-                emit ProofFailed(proofId, gameId, proofType, "RoleAssignment adapter not set");
-                return false;
-            }
+            adapter = roleAssignmentVerifierAdapter;
+            proofTypeLabel = "RoleAssignment";
+        } else if (proofType == ProofType.Divination) {
+            adapter = divinationVerifierAdapter;
+            proofTypeLabel = "Divination";
+        } else if (proofType == ProofType.AnonymousVoting) {
+            adapter = anonymousVotingVerifierAdapter;
+            proofTypeLabel = "AnonymousVoting";
+        } else if (proofType == ProofType.WinningJudgement) {
+            adapter = winningJudgementVerifierAdapter;
+            proofTypeLabel = "WinningJudgement";
+        } else if (proofType == ProofType.KeyPublicize) {
+            adapter = keyPublicizeVerifierAdapter;
+            proofTypeLabel = "KeyPublicize";
+        } else {
+            emit ProofFailed(proofId, gameId, proofType, "Unsupported proof type");
+            return false;
+        }
 
-            bool verified;
-            try IRoleAssignmentVerifierAdapter(roleAssignmentVerifierAdapter).verify(proof, publicInputs) returns (
-                bool ok
-            ) {
-                verified = ok;
-            } catch Error(string memory reason) {
-                emit ProofFailed(proofId, gameId, proofType, reason);
-                return false;
-            } catch {
-                emit ProofFailed(proofId, gameId, proofType, "RoleAssignment verification reverted");
-                return false;
-            }
+        if (adapter == address(0)) {
+            emit ProofFailed(proofId, gameId, proofType, string.concat(proofTypeLabel, " adapter not set"));
+            return false;
+        }
 
-            if (!verified) {
-                emit ProofFailed(proofId, gameId, proofType, "RoleAssignment proof invalid");
-                return false;
-            }
+        bool verified;
+        try IVerifierAdapter(adapter).verify(proof, publicInputs) returns (bool ok) {
+            verified = ok;
+        } catch Error(string memory reason) {
+            emit ProofFailed(proofId, gameId, proofType, reason);
+            return false;
+        } catch {
+            emit ProofFailed(proofId, gameId, proofType, string.concat(proofTypeLabel, " verification reverted"));
+            return false;
+        }
+
+        if (!verified) {
+            emit ProofFailed(proofId, gameId, proofType, string.concat(proofTypeLabel, " proof invalid"));
+            return false;
         }
 
         bytes32 proofHash = keccak256(abi.encodePacked(proof, publicInputs));
