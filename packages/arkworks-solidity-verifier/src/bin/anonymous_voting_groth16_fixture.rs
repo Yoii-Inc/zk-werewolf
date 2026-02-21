@@ -13,7 +13,7 @@ use mpc_circuits::{
 use serde::Serialize;
 use zk_mpc::circuits::LocalOrMPC;
 
-const FIXED_PLAYERS: usize = 3;
+const FIXED_PLAYERS: usize = 5;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -109,7 +109,7 @@ fn resolve_pk_path() -> Option<PathBuf> {
     }
 
     let default_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../zk-mpc-node/data/groth16/anonymous_voting_max3_v1.pk");
+        .join("../zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk");
     if default_path.exists() {
         return Some(default_path);
     }

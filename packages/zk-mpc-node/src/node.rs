@@ -22,29 +22,25 @@ type MPCProvingKey =
     ProvingKey<MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>>;
 
 #[derive(Clone)]
-struct RoleAssignmentGroth16Setup {
+struct Groth16Setup {
     local_proving_key: Arc<LocalProvingKey>,
 }
 
-impl RoleAssignmentGroth16Setup {
-    fn maybe_from_env() -> Result<Option<Self>, std::io::Error> {
-        let Some(path) = role_assignment_pk_path_from_env() else {
-            return Ok(None);
-        };
-
-        let bytes = std::fs::read(&path)?;
-        let local_proving_key = LocalProvingKey::deserialize_uncompressed(bytes.as_slice())
-            .map_err(|e| {
+impl Groth16Setup {
+    fn from_pk_path(path: &PathBuf, label: &str) -> Result<Self, std::io::Error> {
+        let bytes = std::fs::read(path)?;
+        let local_proving_key =
+            LocalProvingKey::deserialize_uncompressed(bytes.as_slice()).map_err(|e| {
                 std::io::Error::other(format!(
-                    "failed to deserialize role assignment proving key {}: {:?}",
+                    "failed to deserialize {label} proving key {}: {:?}",
                     path.display(),
                     e
                 ))
             })?;
 
-        Ok(Some(Self {
+        Ok(Self {
             local_proving_key: Arc::new(local_proving_key),
-        }))
+        })
     }
 
     fn prepared_verifying_key(&self) -> ark_groth16::PreparedVerifyingKey<ark_bn254::Bn254> {
@@ -56,13 +52,64 @@ impl RoleAssignmentGroth16Setup {
     }
 }
 
+#[derive(Clone, Default)]
+struct CircuitGroth16Setups {
+    role_assignment: Option<Groth16Setup>,
+    divination: Option<Groth16Setup>,
+    anonymous_voting: Option<Groth16Setup>,
+    winning_judgement: Option<Groth16Setup>,
+    key_publicize: Option<Groth16Setup>,
+}
+
+impl CircuitGroth16Setups {
+    fn load() -> Result<Self, std::io::Error> {
+        Ok(Self {
+            role_assignment: load_setup_with_fallback(
+                "ROLE_ASSIGNMENT_GROTH16_PK_PATH",
+                "role_assignment_max5_v1.pk",
+                "RoleAssignment",
+            )?,
+            divination: load_setup_with_fallback(
+                "DIVINATION_GROTH16_PK_PATH",
+                "divination_max5_v1.pk",
+                "Divination",
+            )?,
+            anonymous_voting: load_setup_with_fallback(
+                "ANONYMOUS_VOTING_GROTH16_PK_PATH",
+                "anonymous_voting_max5_v1.pk",
+                "AnonymousVoting",
+            )?,
+            winning_judgement: load_setup_with_fallback(
+                "WINNING_JUDGEMENT_GROTH16_PK_PATH",
+                "winning_judgement_max5_v1.pk",
+                "WinningJudgement",
+            )?,
+            key_publicize: load_setup_with_fallback(
+                "KEY_PUBLICIZE_GROTH16_PK_PATH",
+                "key_publicize_max5_v1.pk",
+                "KeyPublicize",
+            )?,
+        })
+    }
+
+    fn for_circuit(&self, circuit_type: &CircuitEncryptedInputIdentifier) -> Option<&Groth16Setup> {
+        match circuit_type {
+            CircuitEncryptedInputIdentifier::RoleAssignment(_) => self.role_assignment.as_ref(),
+            CircuitEncryptedInputIdentifier::Divination(_) => self.divination.as_ref(),
+            CircuitEncryptedInputIdentifier::AnonymousVoting(_) => self.anonymous_voting.as_ref(),
+            CircuitEncryptedInputIdentifier::WinningJudge(_) => self.winning_judgement.as_ref(),
+            CircuitEncryptedInputIdentifier::KeyPublicize(_) => self.key_publicize.as_ref(),
+        }
+    }
+}
+
 pub struct Node<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
     pub id: u32,
     pub net: Arc<MPCNetConnection<IO>>,
     pub proof_manager: Arc<ProofManager>,
     pub key_manager: Arc<KeyManager>,
     pub api_client: Arc<ApiClient>,
-    role_assignment_setup: Option<RoleAssignmentGroth16Setup>,
+    groth16_setups: CircuitGroth16Setups,
 }
 
 impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
@@ -104,24 +151,9 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         }
 
         let api_client = Arc::new(ApiClient::new(server_url.clone()));
-        let role_assignment_setup = match RoleAssignmentGroth16Setup::maybe_from_env() {
-            Ok(Some(setup)) => {
-                println!("Loaded role assignment Groth16 proving key from file.");
-                Some(setup)
-            }
-            Ok(None) => {
-                println!(
-                    "ROLE_ASSIGNMENT_GROTH16_PK_PATH is not set. Falling back to runtime Groth16 setup for RoleAssignment."
-                );
-                None
-            }
-            Err(e) => {
-                panic!(
-                    "Failed to load proving key from ROLE_ASSIGNMENT_GROTH16_PK_PATH: {}",
-                    e
-                );
-            }
-        };
+        let groth16_setups = CircuitGroth16Setups::load().unwrap_or_else(|e| {
+            panic!("Failed to load Groth16 proving key(s): {}", e);
+        });
 
         let node = Self {
             id,
@@ -129,7 +161,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             proof_manager,
             key_manager,
             api_client: api_client.clone(),
-            role_assignment_setup,
+            groth16_setups,
         };
 
         // 生成した公開鍵をサーバーに登録
@@ -173,11 +205,8 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         let inputs = CircuitFactory::create_verify_inputs(&mpc_circuit);
 
         let rng = &mut test_rng();
-        let (pvk, mpc_params): (_, MPCProvingKey) = if matches!(
-            request.circuit_type,
-            CircuitEncryptedInputIdentifier::RoleAssignment(_)
-        ) {
-            if let Some(setup) = self.role_assignment_setup.as_ref() {
+        let (pvk, mpc_params): (_, MPCProvingKey) =
+            if let Some(setup) = self.groth16_setups.for_circuit(&request.circuit_type) {
                 (setup.prepared_verifying_key(), setup.mpc_proving_key())
             } else {
                 let params =
@@ -190,18 +219,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                         })?;
                 let pvk = prepare_verifying_key(&params.vk);
                 (pvk, ProvingKey::from_public(params))
-            }
-        } else {
-            let params = generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
-                .map_err(|e| -> Box<dyn std::error::Error + Send> {
-                Box::new(std::io::Error::other(format!(
-                    "Failed to generate Groth16 parameters: {:?}",
-                    e
-                )))
-            })?;
-            let pvk = prepare_verifying_key(&params.vk);
-            (pvk, ProvingKey::from_public(params))
-        };
+            };
 
         let mpc_proof = create_random_proof::<
             MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>,
@@ -225,20 +243,18 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         )?;
 
         let outputs = if is_valid {
-            let (proof_bytes, public_input_bytes) = match &request.circuit_type {
-                CircuitEncryptedInputIdentifier::RoleAssignment(_) => (
-                    abi_encode_groth16_proof(&publicized_proof),
-                    Some(abi_encode_fixed_uint256_inputs(&inputs, 100).map_err(
-                        |e| -> Box<dyn std::error::Error + Send> {
-                            Box::new(std::io::Error::other(format!(
-                                "Failed to encode role assignment public inputs: {}",
-                                e
-                            )))
-                        },
-                    )?),
-                ),
-                _ => (abi_encode_groth16_proof(&publicized_proof), None),
-            };
+            let proof_bytes = abi_encode_groth16_proof(&publicized_proof);
+            let public_input_len = expected_public_input_len(&request.circuit_type);
+            let public_input_bytes = Some(
+                abi_encode_fixed_uint256_inputs(&inputs, public_input_len).map_err(
+                    |e| -> Box<dyn std::error::Error + Send> {
+                        Box::new(std::io::Error::other(format!(
+                            "Failed to encode public inputs: {}",
+                            e
+                        )))
+                    },
+                )?,
+            );
 
             let proof_outputs = CircuitFactory::get_circuit_outputs(&mpc_circuit);
             let proof_output = match &request.output_type {
@@ -381,12 +397,13 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
     }
 }
 
-fn role_assignment_pk_path_from_env() -> Option<PathBuf> {
-    match std::env::var("ROLE_ASSIGNMENT_GROTH16_PK_PATH") {
+fn pk_path_from_env_or_default(env_var: &str, default_pk_file: &str) -> Option<PathBuf> {
+    match std::env::var(env_var) {
         Ok(value) if !value.trim().is_empty() => Some(PathBuf::from(value)),
         _ => {
             let default_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("data/groth16/role_assignment_max5_v1.pk");
+                .join("data/groth16")
+                .join(default_pk_file);
             if default_path.exists() {
                 Some(default_path)
             } else {
@@ -394,6 +411,23 @@ fn role_assignment_pk_path_from_env() -> Option<PathBuf> {
             }
         }
     }
+}
+
+fn load_setup_with_fallback(
+    env_var: &str,
+    default_pk_file: &str,
+    label: &str,
+) -> Result<Option<Groth16Setup>, std::io::Error> {
+    let Some(path) = pk_path_from_env_or_default(env_var, default_pk_file) else {
+        println!(
+            "{env_var} is not set and default key is missing. Falling back to runtime Groth16 setup for {label}."
+        );
+        return Ok(None);
+    };
+
+    let setup = Groth16Setup::from_pk_path(&path, label)?;
+    println!("Loaded {label} Groth16 proving key from {}.", path.display());
+    Ok(Some(setup))
 }
 
 fn abi_encode_groth16_proof(proof: &ark_groth16::Proof<ark_bn254::Bn254>) -> Vec<u8> {
@@ -407,6 +441,16 @@ fn abi_encode_groth16_proof(proof: &ark_groth16::Proof<ark_bn254::Bn254>) -> Vec
     out.extend_from_slice(&field_to_word(proof.c.x));
     out.extend_from_slice(&field_to_word(proof.c.y));
     out
+}
+
+fn expected_public_input_len(circuit_type: &CircuitEncryptedInputIdentifier) -> usize {
+    match circuit_type {
+        CircuitEncryptedInputIdentifier::RoleAssignment(_) => 100,
+        CircuitEncryptedInputIdentifier::Divination(_) => 8,
+        CircuitEncryptedInputIdentifier::AnonymousVoting(_) => 1,
+        CircuitEncryptedInputIdentifier::WinningJudge(_) => 2,
+        CircuitEncryptedInputIdentifier::KeyPublicize(_) => 0,
+    }
 }
 
 fn abi_encode_fixed_uint256_inputs<F: PrimeField>(

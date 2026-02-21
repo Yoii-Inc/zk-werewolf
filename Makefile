@@ -1,7 +1,7 @@
 .PHONY: help install frontend server node stop clean groth16-setup groth16-export-verifier
 
 ROLE_ASSIGNMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
-ANONYMOUS_VOTING_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/anonymous_voting_max3_v1.pk
+ANONYMOUS_VOTING_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk
 DIVINATION_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/divination_max5_v1.pk
 WINNING_JUDGEMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/winning_judgement_max5_v1.pk
 KEY_PUBLICIZE_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/key_publicize_max5_v1.pk

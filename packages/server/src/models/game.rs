@@ -724,15 +724,29 @@ impl Game {
                             (ChainProofType::KeyPublicize, "KeyPublicize")
                         }
                     };
-                    let proof_data = output
-                        .proof
-                        .clone()
-                        .or_else(|| output.value.clone())
-                        .unwrap_or_default();
-                    let public_inputs = output
-                        .public_inputs
-                        .clone()
-                        .unwrap_or_else(|| self.room_id.as_bytes().to_vec());
+                    let proof_data = match output.proof.clone() {
+                        Some(bytes) if !bytes.is_empty() => bytes,
+                        _ => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification skipped: missing proof bytes for {}.",
+                                proof_type_label
+                            ));
+                            return;
+                        }
+                    };
+                    let public_inputs = match output.public_inputs.clone() {
+                        Some(bytes) => bytes,
+                        None if matches!(proof_type, ChainProofType::KeyPublicize) => Vec::new(),
+                        None => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification skipped: missing public inputs for {}.",
+                                proof_type_label
+                            ));
+                            return;
+                        }
+                    };
 
                     match app_state
                         .blockchain_client

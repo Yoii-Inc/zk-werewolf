@@ -15,8 +15,8 @@ use zk_mpc::circuits::LocalOrMPC;
 
 use arkworks_solidity_verifier::SolidityVerifier;
 
-const CIRCUIT_ID: &str = "anonymous_voting_max3_v1";
-const FIXED_PLAYERS: usize = 3;
+const CIRCUIT_ID: &str = "anonymous_voting_max5_v1";
+const FIXED_PLAYERS: usize = 5;
 const PUBLIC_INPUT_LEN: usize = 1;
 
 #[derive(Debug, Serialize)]

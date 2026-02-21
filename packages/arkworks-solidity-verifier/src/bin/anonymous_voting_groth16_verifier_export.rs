@@ -14,7 +14,7 @@ use zk_mpc::circuits::LocalOrMPC;
 
 use arkworks_solidity_verifier::SolidityVerifier;
 
-const FIXED_PLAYERS: usize = 3;
+const FIXED_PLAYERS: usize = 5;
 
 fn main() -> Result<()> {
     let contract = generate_groth16_verifier_contract()?;

@@ -148,7 +148,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771406636950.json",
+      deploymentFile: "run-1771660372866.json",
       deploymentScript: "Deploy.s.sol",
     },
     WerewolfGame: {
@@ -762,7 +762,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771406636950.json",
+      deploymentFile: "run-1771660372866.json",
       deploymentScript: "Deploy.s.sol",
     },
     WerewolfProofVerifier: {
@@ -772,6 +772,32 @@ const deployedContracts = {
           type: "constructor",
           inputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "anonymousVotingVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "divinationVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -858,6 +884,19 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "keyPublicizeVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "owner",
           inputs: [],
           outputs: [
@@ -930,6 +969,32 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "setAnonymousVotingVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setDivinationVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setGameContract",
           inputs: [
             {
@@ -943,7 +1008,33 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "setKeyPublicizeVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setRoleAssignmentVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setWinningJudgementVerifierAdapter",
           inputs: [
             {
               name: "_adapter",
@@ -1005,6 +1096,19 @@ const deployedContracts = {
             },
           ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "winningJudgementVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "event",
@@ -1111,7 +1215,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771406636950.json",
+      deploymentFile: "run-1771660372866.json",
       deploymentScript: "Deploy.s.sol",
     },
     WerewolfRewards: {
@@ -1472,7 +1576,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771406636950.json",
+      deploymentFile: "run-1771660372866.json",
       deploymentScript: "Deploy.s.sol",
     },
     RoleAssignmentGroth16Verifier: {
@@ -1557,7 +1661,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771406636950.json",
+      deploymentFile: "run-1771660372866.json",
       deploymentScript: "Deploy.s.sol",
     },
     RoleAssignmentGroth16VerifierAdapter: {
@@ -1613,7 +1717,566 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771406636950.json",
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    DivinationGroth16Verifier: {
+      address: "0x0c8e79f3534b00d9a3d4a856b665bf4ebc22f2ba",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    DivinationGroth16VerifierAdapter: {
+      address: "0xed1db453c3156ff3155a97ad217b3087d5dc5f6e",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract DivinationGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    AnonymousVotingGroth16Verifier: {
+      address: "0xf7cd8fa9b94db2aa972023b379c7f72c65e4de9d",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    AnonymousVotingGroth16VerifierAdapter: {
+      address: "0x12975173b87f7595ee45dffb2ab812ece596bf84",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract AnonymousVotingGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    WinningJudgementGroth16Verifier: {
+      address: "0x82dc47734901ee7d4f4232f398752cb9dd5daccc",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    WinningJudgementGroth16VerifierAdapter: {
+      address: "0x196dbcbb54b8ec4958c959d8949ebfe87ac2aaaf",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract WinningJudgementGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    KeyPublicizeGroth16Verifier: {
+      address: "0x82c6d3ed4cd33d8ec1e51d0b5cc1d822eaa0c3dc",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizePairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizePairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizePairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
+      deploymentScript: "Deploy.s.sol",
+    },
+    KeyPublicizeGroth16VerifierAdapter: {
+      address: "0x05b4cb126885fb10464fdd12666feb25e2563b76",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract KeyPublicizeGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1771660372866.json",
       deploymentScript: "Deploy.s.sol",
     },
   },
