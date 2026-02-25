@@ -1,12 +1,5 @@
 import { Role } from "~~/app/types";
-import {
-  ElGamalParam,
-  ElGamalPublicKey,
-  ElGamalSecretKey,
-  Field,
-  PedersenCommitment,
-  PedersenParam,
-} from "~~/utils/crypto/type";
+import { ElGamalParam, ElGamalPublicKey, PedersenCommitment, PedersenParam } from "~~/utils/crypto/type";
 
 export interface RoomInfo {
   room_id: string;
@@ -14,9 +7,16 @@ export interface RoomInfo {
   created_at?: string;
   status: "Open" | "InProgress" | "Closed";
   max_players: number;
-  currentPlayers: number;
-  remainingTime: number;
+  currentPlayers?: number;
+  remainingTime?: number;
   players: Player[];
+  room_config?: {
+    time_config?: {
+      day_phase: number;
+      night_phase: number;
+      voting_phase: number;
+    };
+  };
 }
 
 // 暗号パラメータの型定義（サーバー側のCryptoParametersに対応）
@@ -30,7 +30,8 @@ export interface CryptoParameters {
 
 export interface GameInfo {
   room_id: string;
-  phase: "Waiting" | "Night" | "Discussion" | "Voting" | "Result" | "Finished";
+  phase: "Waiting" | "Night" | "DivinationProcessing" | "Discussion" | "Voting" | "Result" | "Finished";
+  phase_started_at?: string;
   players: Player[];
   playerRole: Role;
   hasActed: boolean;

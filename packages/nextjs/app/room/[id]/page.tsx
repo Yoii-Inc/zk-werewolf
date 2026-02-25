@@ -31,7 +31,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [isTogglingReady, setIsTogglingReady] = useState(false);
   const [isLeavingRoom, setIsLeavingRoom] = useState(false);
   const [isDeletingRoom, setIsDeletingRoom] = useState(false);
-  const [timerBaseline, setTimerBaseline] = useState(1);
+  const [remainingTime, setRemainingTime] = useState(0);
+  const [phaseDuration, setPhaseDuration] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Custom hooks
@@ -213,10 +214,55 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   };
 
   useEffect(() => {
-    if (roomInfo?.remainingTime && roomInfo.remainingTime > timerBaseline) {
-      setTimerBaseline(roomInfo.remainingTime);
+    if (!gameInfo) {
+      setRemainingTime(0);
+      setPhaseDuration(1);
+      return;
     }
-  }, [roomInfo?.remainingTime, timerBaseline]);
+
+    const configured = roomInfo?.room_config?.time_config;
+    const dayPhase = configured?.day_phase ?? 300;
+    const nightPhase = configured?.night_phase ?? 120;
+    const votingPhase = configured?.voting_phase ?? 90;
+
+    const durationByPhase: Record<string, number> = {
+      Night: nightPhase,
+      DivinationProcessing: 3,
+      Discussion: dayPhase,
+      Voting: votingPhase,
+      Result: 30,
+    };
+
+    const targetDuration = durationByPhase[gameInfo.phase] ?? 0;
+    setPhaseDuration(Math.max(targetDuration, 1));
+
+    const updateRemainingTime = () => {
+      if (targetDuration <= 0) {
+        setRemainingTime(0);
+        return;
+      }
+
+      if (!gameInfo.phase_started_at) {
+        setRemainingTime(targetDuration);
+        return;
+      }
+
+      const phaseStartMs = new Date(gameInfo.phase_started_at).getTime();
+      if (Number.isNaN(phaseStartMs)) {
+        setRemainingTime(targetDuration);
+        return;
+      }
+
+      const elapsedSec = Math.floor((Date.now() - phaseStartMs) / 1000);
+      setRemainingTime(Math.max(0, targetDuration - elapsedSec));
+    };
+
+    updateRemainingTime();
+    const intervalId = window.setInterval(updateRemainingTime, 1000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [gameInfo, roomInfo?.room_config?.time_config]);
 
   const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
   const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
@@ -297,10 +343,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const allPlayersReady =
     playersForView.length > 0 &&
     playersForView.every(player => getPlayerReady(player as { isReady?: boolean; is_ready?: boolean }));
-  const timerProgressPercent = roomInfo?.remainingTime
-    ? Math.max(0, Math.min(100, (roomInfo.remainingTime / Math.max(timerBaseline, 1)) * 100))
-    : 0;
-  const isTimeWarning = (roomInfo?.remainingTime ?? 0) <= 30;
+  const timerProgressPercent = Math.max(0, Math.min(100, (remainingTime / Math.max(phaseDuration, 1)) * 100));
+  const isTimeWarning = roomInfo?.status === "InProgress" && remainingTime <= 30;
   const isWebSocketConnected = websocketStatus === "connected";
   const websocketStatusLabel =
     websocketStatus === "connected"
@@ -394,8 +438,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2 text-indigo-700">
                   <Clock size={18} />
                   <span>
-                    Time Remaining: {Math.floor(roomInfo.remainingTime / 60)}:
-                    {String(roomInfo.remainingTime % 60).padStart(2, "0")}
+                    Time Remaining: {Math.floor(remainingTime / 60)}:{String(remainingTime % 60).padStart(2, "0")}
                   </span>
                 </div>
                 <div className="w-40">

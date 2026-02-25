@@ -1,14 +1,15 @@
 use crate::{
     blockchain::state_hash::{compute_game_id, compute_game_state_hash, is_evm_address},
     models::{
-        game::{Game, GamePhase, NightAction, NightActionRequest},
+        game::{BatchStatus, Game, GamePhase, NightAction, NightActionRequest},
         role::Role,
-        room::{RoleConfig, RoomStatus},
+        room::{RoleConfig, RoomStatus, TimeConfig},
     },
     state::AppState,
 };
 use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
+use chrono::Utc;
 use mpc_algebra_wasm::{GroupingParameter, Role as GroupingRole};
 use rand::seq::SliceRandom;
 use std::collections::BTreeMap;
@@ -93,7 +94,7 @@ pub async fn end_game(state: AppState, room_id: String) -> Result<String, String
             .ok_or("Game not found".to_string())?;
 
         room.status = RoomStatus::Closed;
-        game.phase = GamePhase::Finished;
+        game.change_phase(GamePhase::Finished);
         game.clone()
     };
 
@@ -143,12 +144,9 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
             game.resolve_night_actions();
         } else if current_phase == GamePhase::Voting {
             game.resolve_voting();
-        } else if current_phase == GamePhase::Result {
-            game.advance_to_next_day();
         }
 
-        game.add_phase_change_message(current_phase.clone(), next_phase.clone());
-        game.phase = next_phase.clone();
+        game.change_phase(next_phase.clone());
 
         (
             format!("{:?}", current_phase),
@@ -166,6 +164,66 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
 
     update_game_state_on_chain(&state, &game_snapshot).await;
     Ok(format!("フェーズを更新しました: {:?}", next_phase))
+}
+
+fn phase_duration_seconds(time_config: &TimeConfig, phase: &GamePhase) -> Option<u64> {
+    match phase {
+        GamePhase::Night => Some(time_config.night_phase),
+        GamePhase::Discussion => Some(time_config.day_phase),
+        GamePhase::Voting => Some(time_config.voting_phase),
+        // DivinationProcessing は既存挙動に合わせて短めの固定値
+        GamePhase::DivinationProcessing => Some(3),
+        // Result は一旦固定値で運用
+        GamePhase::Result => Some(30),
+        GamePhase::Waiting | GamePhase::Finished => None,
+    }
+}
+
+pub async fn auto_advance_due_phases(state: AppState) {
+    let now = Utc::now();
+    let due_room_ids = {
+        let rooms = state.rooms.lock().await;
+        let games = state.games.lock().await;
+
+        games
+            .iter()
+            .filter_map(|(room_id, game)| {
+                let room = rooms.get(room_id)?;
+
+                if room.status != RoomStatus::InProgress {
+                    return None;
+                }
+
+                if game.phase == GamePhase::Waiting || game.phase == GamePhase::Finished {
+                    return None;
+                }
+
+                if game.batch_request.status == BatchStatus::Processing {
+                    return None;
+                }
+
+                let duration_secs =
+                    phase_duration_seconds(&room.room_config.time_config, &game.phase)?;
+                let elapsed_secs = now
+                    .signed_duration_since(game.phase_started_at)
+                    .num_seconds();
+
+                if elapsed_secs >= duration_secs as i64 {
+                    Some(room_id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+
+    for room_id in due_room_ids {
+        if let Err(error) = advance_game_phase(state.clone(), &room_id).await {
+            tracing::debug!("Auto phase advance skipped for room {}: {}", room_id, error);
+        } else {
+            tracing::info!("Auto advanced phase for room {}", room_id);
+        }
+    }
 }
 
 async fn persist_game_on_chain(state: &AppState, game: &Game) {

@@ -4,19 +4,44 @@ use axum::Router;
 use chrono::Duration;
 use tokio::time::{interval, Duration as TokioDuration};
 
+fn is_debug_mode_enabled() -> bool {
+    let debug_mode = std::env::var("DEBUG_MODE")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let debug_enabled = std::env::var("DEBUG_ENABLED")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    debug_mode || debug_enabled
+}
+
 pub fn create_app() -> Router {
     create_app_with_state(AppState::new())
 }
 
 pub fn create_app_with_state(state: AppState) -> Router {
+    let auto_phase_state = state.clone();
+    if !is_debug_mode_enabled() {
+        tokio::spawn(async move {
+            let mut ticker = interval(TokioDuration::from_secs(1));
+            loop {
+                ticker.tick().await;
+                crate::services::game_service::auto_advance_due_phases(auto_phase_state.clone())
+                    .await;
+            }
+        });
+    }
+
     let cleanup_state = state.clone();
     tokio::spawn(async move {
         let mut ticker = interval(TokioDuration::from_secs(60));
         loop {
             ticker.tick().await;
-            let removed =
-                crate::services::room_service::cleanup_empty_rooms(&cleanup_state, Duration::minutes(10))
-                    .await;
+            let removed = crate::services::room_service::cleanup_empty_rooms(
+                &cleanup_state,
+                Duration::minutes(10),
+            )
+            .await;
             if removed > 0 {
                 tracing::info!("Removed {} empty room(s) that exceeded TTL", removed);
             }

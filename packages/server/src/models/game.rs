@@ -44,6 +44,7 @@ pub struct Game {
     pub batch_request: BatchRequest,
     pub computation_results: ComputationResults,
     pub started_at: Option<DateTime<Utc>>,
+    pub phase_started_at: DateTime<Utc>,
     pub grouping_parameter: GroupingParameter,
 }
 
@@ -318,6 +319,7 @@ impl Game {
             batch_request: BatchRequest::new(),
             computation_results: ComputationResults::default(),
             started_at: Some(Utc::now()),
+            phase_started_at: Utc::now(),
             grouping_parameter,
         }
     }
@@ -400,6 +402,7 @@ impl Game {
         }
 
         self.phase = new_phase.clone();
+        self.phase_started_at = Utc::now();
         self.add_phase_change_message(old_phase, new_phase);
     }
     pub fn save_role_assignment_result(

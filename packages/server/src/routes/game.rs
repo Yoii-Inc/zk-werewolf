@@ -250,6 +250,7 @@ async fn reset_game_handler(
         // ゲームを初期状態に戻す
         let mut reset_game = game.clone();
         reset_game.phase = GamePhase::Waiting;
+        reset_game.phase_started_at = chrono::Utc::now();
         reset_game.chat_log.messages.clear();
         // reset_game.has_acted.clear();
 
