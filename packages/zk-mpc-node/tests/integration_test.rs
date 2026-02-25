@@ -8,34 +8,18 @@
 // use mpc_algebra_wasm::*;
 
 use ark_bn254::Fr;
-use ark_ff::BigInteger;
-use ark_ff::PrimeField;
-use ark_ff::UniformRand;
 use ark_std::test_rng;
 use ark_std::PubUniformRand;
 use base64::decode;
 use crypto_box::PublicKey;
 use crypto_box::SecretKey;
 use mpc_algebra::CommitmentScheme;
-use mpc_algebra::FromLocal;
-use mpc_algebra::Reveal;
-use mpc_algebra_wasm::AnonymousVotingCircuit;
-use mpc_circuits::CircuitFactory;
-use mpc_circuits::{BuiltinCircuit, CircuitIdentifier};
-use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serial_test::serial;
-use std::process::{Child, Command};
 use std::time::Duration;
-use tokio::time::sleep;
-use zk_mpc::circuits::circuit::MySimpleCircuit;
 use zk_mpc::circuits::LocalOrMPC;
-use zk_mpc::marlin::MFr;
-use zk_mpc_node::KeyFile;
 use zk_mpc_node::NodeKeys;
 use zk_mpc_node::ProofStatus;
-use zk_mpc_node::{ProofOutput, ProofOutputType, ProofRequest};
+use zk_mpc_node::{ProofOutputType, ProofRequest};
 
 use mpc_algebra_wasm::*;
 

@@ -1,28 +1,18 @@
 use crate::{
     blockchain::state_hash::{compute_game_id, compute_game_state_hash, is_evm_address},
     models::{
-        chat::{ChatMessage, ChatMessageType},
-        game::{Game, GamePhase, GameResult, NightAction, NightActionRequest},
+        game::{Game, GamePhase, NightAction, NightActionRequest},
         role::Role,
         room::{RoleConfig, RoomStatus},
     },
-    services::zk_proof::{check_proof_status, request_proof_with_output},
     state::AppState,
 };
 use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
-use ark_ff::UniformRand;
 use mpc_algebra_wasm::{GroupingParameter, Role as GroupingRole};
 use rand::seq::SliceRandom;
-use serde_json::json;
 use std::collections::BTreeMap;
-use std::time::Duration;
-use tokio::time::sleep;
-use zk_mpc::{
-    circuits::{ElGamalLocalOrMPC, KeyPublicizeCircuit, LocalOrMPC},
-    input::{MpcInputTrait, WerewolfKeyInput, WerewolfMpcInput},
-    marlin::MFr,
-};
+use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 
 fn grouping_parameter_from_role_config(role_config: &RoleConfig) -> GroupingParameter {
     let mut map = BTreeMap::new();
@@ -309,16 +299,6 @@ pub async fn process_night_action(
     }
 }
 
-async fn check_status_with_retry(proof_id: &str) -> Result<bool, String> {
-    for _ in 0..30 {
-        if check_proof_status(proof_id).await?.0 {
-            return Ok(true);
-        }
-        sleep(Duration::from_secs(1)).await;
-    }
-    Ok(false)
-}
-
 // // 勝利判定
 // pub async fn check_winner(state: AppState, room_id: &str) -> Result<GameResult, String> {
 //     let games = state.games.lock().await;
@@ -470,13 +450,6 @@ pub fn initialize_crypto_parameters(game: &mut Game) {
             &mut rng,
         )
         .unwrap();
-    let (pk, sk) =
-        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::keygen(
-            &elgamal_param,
-            &mut rng,
-        )
-        .unwrap();
-
     // プレイヤーごとのコミットメント（空で初期化、後でクライアントから受信）
     let player_commitment: Vec<
         <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output,

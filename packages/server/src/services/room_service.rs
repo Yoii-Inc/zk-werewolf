@@ -1,7 +1,6 @@
 use crate::{
     models::{
         player::Player,
-        role::Role,
         room::{Room, RoomConfig, RoomStatus},
     },
     state::AppState,
@@ -126,9 +125,7 @@ pub async fn toggle_ready(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+    // tests are currently commented out.
 
     // #[tokio::test]
     // async fn test_create_room() {

@@ -509,7 +509,7 @@ impl Game {
         }
         self.vote_results.clear();
     }
-    pub fn add_phase_change_message(&mut self, from_phase: GamePhase, to_phase: GamePhase) {
+    pub fn add_phase_change_message(&mut self, _from_phase: GamePhase, to_phase: GamePhase) {
         let message = match to_phase {
             GamePhase::Night => {
                 "Night has fallen. Werewolves, choose your prey. Seer, choose your target."
@@ -781,7 +781,7 @@ impl Game {
                 // プルーフ生成成功時の処理
                 // 例: WebSocketで結果をクライアントに通知
                 match identifier {
-                    CircuitEncryptedInputIdentifier::Divination(items) => {
+                    CircuitEncryptedInputIdentifier::Divination(_items) => {
                         // itemsを処理する
                         let divination_ciphertext = match output.value {
                             Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
@@ -865,7 +865,7 @@ impl Game {
                             println!("Failed to broadcast divination result: {}", e);
                         }
                     }
-                    CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
+                    CircuitEncryptedInputIdentifier::AnonymousVoting(_items) => {
                         println!("AnonymousVoting process is starting...");
                         // 1. outputのバイト列をFr型のtarget_idとして取得
                         let target_id: Fr = match output.value {
@@ -955,7 +955,7 @@ impl Game {
                             println!("Failed to broadcast voting result: {}", e);
                         }
                     }
-                    CircuitEncryptedInputIdentifier::WinningJudge(items) => {
+                    CircuitEncryptedInputIdentifier::WinningJudge(_items) => {
                         // itemsを処理する
 
                         let game_state: Fr = match output.value {
@@ -1031,7 +1031,7 @@ impl Game {
                             println!("Failed to broadcast winning judge result: {}", e);
                         }
                     }
-                    CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
+                    CircuitEncryptedInputIdentifier::RoleAssignment(_items) => {
                         println!("RoleAssignment process is starting...");
 
                         // ProofOutputからEncryptedSharesを取得
@@ -1220,7 +1220,7 @@ impl Game {
                             }
                         }
                     }
-                    CircuitEncryptedInputIdentifier::KeyPublicize(items) => {
+                    CircuitEncryptedInputIdentifier::KeyPublicize(_items) => {
                         println!("KeyPublicize process is starting...");
 
                         // ProofOutputから公開鍵を取得
@@ -1333,7 +1333,7 @@ impl Clone for CryptoParameters {
 }
 
 impl std::fmt::Debug for CryptoParameters {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unimplemented!("Debug not implemented for CryptoParameters");
     }
 }

@@ -206,7 +206,6 @@ pub fn pedersen_commitment(input: JsValue) -> Result<JsValue, JsValue> {
 mod tests {
     use super::*;
 
-    use crate::types::*;
     use ark_bn254::Fr;
     use ark_crypto_primitives::CommitmentScheme;
     use ark_ff::{BigInteger, PrimeField, Zero};
@@ -260,7 +259,6 @@ mod tests {
 
         let json = serde_json::to_string(&input).unwrap();
         std::fs::write("test_output2.json", &json).unwrap();
-        let expected = json.clone();
         let json = &std::fs::read_to_string("test_output2.json").unwrap();
         let read_input: AnonymousVotingInput = serde_json::from_str(json).unwrap();
 

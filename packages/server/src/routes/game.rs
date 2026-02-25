@@ -1,9 +1,7 @@
 use crate::blockchain::state_hash::{compute_commitment_hash, compute_game_id, is_evm_address};
 use crate::models::game::{
-    BatchRequest, ChangeRoleRequest, ClientRequestType, ComputationResults, GamePhase, GameResult,
-    NightActionRequest,
+    BatchRequest, ClientRequestType, ComputationResults, GamePhase, GameResult, NightActionRequest,
 };
-use crate::models::role::Role;
 use crate::models::room::RoomStatus;
 use crate::services::game_service::initialize_crypto_parameters;
 use crate::services::zk_proof;
@@ -249,8 +247,6 @@ async fn reset_game_handler(
 
     // ゲームが存在する場合、プレイヤー情報を保持したまま初期状態に戻す
     if let Some(game) = games.get_mut(&room_id) {
-        let players = game.players.clone();
-
         // ゲームを初期状態に戻す
         let mut reset_game = game.clone();
         reset_game.phase = GamePhase::Waiting;
@@ -258,7 +254,7 @@ async fn reset_game_handler(
         // reset_game.has_acted.clear();
 
         // プレイヤーの状態をリセット
-        for mut player in reset_game.players.iter_mut() {
+        for player in reset_game.players.iter_mut() {
             // player.role = None;
             player.is_dead = false;
             // player.has_voted = false;

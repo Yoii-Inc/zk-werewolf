@@ -1,10 +1,9 @@
 use ark_bn254::Fr;
-use ark_ff::{PrimeField, UniformRand};
 use ark_std::test_rng;
 use base64::decode;
 use crypto_box::{PublicKey, SecretKey};
 use dotenvy::dotenv;
-use mpc_algebra::{CommitmentScheme, FromLocal};
+use mpc_algebra::CommitmentScheme;
 use mpc_algebra_wasm::{
     types::AnonymousVotingInput, AnonymousVotingEncryption, AnonymousVotingOutput,
     CircuitEncryptedInputIdentifier, NodeKey, SecretSharingScheme, SplitAndEncrypt,
@@ -12,30 +11,19 @@ use mpc_algebra_wasm::{
 // use mpc_circuits::inputs::anonymous_voting::{
 //     AnonymousVotingPrivateInput, AnonymousVotingPublicInput,
 // };
-use serde_json::json;
 use server::{
-    models::{
-        game::{Game, ProverInfo},
-        player::Player,
-        role::Role,
-        room::Room,
-    },
+    models::{game::ProverInfo, player::Player, room::Room},
     services::game_service,
     state::AppState,
 };
-use tokio_tungstenite::tungstenite::client;
-use wiremock::{
-    matchers::{method, path},
-    Mock, MockServer, ResponseTemplate,
-};
-use zk_mpc::circuits::{AnonymousVotingCircuit, LocalOrMPC};
-use zk_mpc_node::{NodeKeys, ProofOutputType, ProofStatus};
+use zk_mpc::circuits::LocalOrMPC;
+use zk_mpc_node::{NodeKeys, ProofStatus};
 
 use ark_std::PubUniformRand;
 use mpc_algebra_wasm::mpc_circuits_wasm::inputs::anonymous_voting::{
     AnonymousVotingPrivateInput, AnonymousVotingPublicInput,
 };
-use server::models::game::{BatchRequest, BatchStatus, ClientRequestType};
+use server::models::game::ClientRequestType;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -263,7 +251,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
 
     // ゲーム開始
     println!("Starting game in room: {}", room_id);
-    let start_result = game_service::start_game(state.clone(), &room_id).await;
+    let _start_result = game_service::start_game(state.clone(), &room_id).await;
     let mut games = state.games.lock().await;
     let game = games.get_mut(&room_id).unwrap();
 

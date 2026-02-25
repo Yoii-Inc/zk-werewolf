@@ -1,6 +1,6 @@
 use base64;
 use crypto_box::{
-    aead::{Aead, AeadCore, OsRng},
+    aead::{Aead, OsRng},
     PublicKey, SalsaBox, SecretKey,
 };
 use serde::{Deserialize, Serialize};
