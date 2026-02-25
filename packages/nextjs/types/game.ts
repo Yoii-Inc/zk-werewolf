@@ -11,6 +11,7 @@ import {
 export interface RoomInfo {
   room_id: string;
   name: string;
+  created_at?: string;
   status: "Open" | "InProgress" | "Closed";
   max_players: number;
   currentPlayers: number;

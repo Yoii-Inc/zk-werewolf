@@ -8,6 +8,7 @@ import { toast } from "react-hot-toast";
 interface Village {
   room_id: string;
   name: string;
+  created_at?: string;
   lobby_id: string;
   players?: Player[] | null;
   max_players: number;
@@ -16,6 +17,25 @@ interface Village {
   voting_status: "not_started" | "in_progress" | "completed";
   votes: Record<number, Vote>;
 }
+
+const formatCreatedAt = (createdAt?: string) => {
+  if (!createdAt) {
+    return "Unknown";
+  }
+
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown";
+  }
+
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 interface Player {
   id: number;
@@ -222,7 +242,7 @@ const Home = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Clock size={18} />
-                <span>Created: Unknown</span>
+                <span>Created: {formatCreatedAt(room.created_at)}</span>
               </div>
             </div>
 
