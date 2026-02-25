@@ -1,42 +1,82 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, WebSocketMessage } from "~~/types/game";
 
-interface ComputationResult {
-  computationType: string;
-  resultData: any;
-  targetPlayerId?: string;
-  batchId: string;
-  timestamp: string;
+type WebSocketStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error";
+
+interface UseGameWebSocketOptions {
+  onReconnect?: () => void | Promise<void>;
 }
 
 export const useGameWebSocket = (
   roomId: string,
   addServerMessage: (message: ChatMessage) => void, // サーバー側メッセージを追加する関数
   username?: string,
+  options?: UseGameWebSocketOptions,
 ) => {
+  const { onReconnect } = options ?? {};
   const websocketRef = useRef<WebSocket | null>(null);
-  const [websocketStatus, setWebsocketStatus] = useState<string>("disconnected");
-  const hasConnectedRef = useRef(false);
+  const [websocketStatus, setWebsocketStatus] = useState<WebSocketStatus>("disconnected");
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
-  const connectWebSocket = () => {
-    setWebsocketStatus("connecting");
-    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/api"}/room/${roomId}/ws`);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const manualDisconnectRef = useRef(false);
+  const hasConnectedOnceRef = useRef(false);
+  const onReconnectRef = useRef<UseGameWebSocketOptions["onReconnect"]>(onReconnect);
+  const connectWebSocketRef = useRef<() => void>(() => undefined);
 
-    ws.onopen = () => {
-      console.log("WebSocket connection established");
-      setWebsocketStatus("connected");
-    };
+  useEffect(() => {
+    onReconnectRef.current = onReconnect;
+  }, [onReconnect]);
 
-    ws.onmessage = event => {
-      console.log("📩 WebSocket message received:", event.data);
-      const data = JSON.parse(event.data);
-      console.log("📊 Parsed message type:", data.message_type);
+  const wsUrl = useMemo(
+    () => `${process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/api"}/room/${roomId}/ws`,
+    [roomId],
+  );
+
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleReconnect = useCallback(() => {
+    if (manualDisconnectRef.current || reconnectTimerRef.current) {
+      return;
+    }
+
+    const nextAttempt = reconnectAttemptRef.current + 1;
+    reconnectAttemptRef.current = nextAttempt;
+    setReconnectAttempt(nextAttempt);
+    setWebsocketStatus("reconnecting");
+
+    const baseDelayMs = Math.min(30000, 1000 * 2 ** Math.min(nextAttempt - 1, 5));
+    const jitterMs = Math.floor(Math.random() * 300);
+    const delayMs = baseDelayMs + jitterMs;
+
+    reconnectTimerRef.current = setTimeout(() => {
+      reconnectTimerRef.current = null;
+      connectWebSocketRef.current();
+    }, delayMs);
+  }, []);
+
+  const handleSocketMessage = useCallback(
+    (rawData: string) => {
+      let data: any;
+      try {
+        data = JSON.parse(rawData);
+      } catch (error) {
+        console.error("Failed to parse WebSocket message:", error);
+        return;
+      }
+
+      if (!data || typeof data !== "object") {
+        return;
+      }
 
       // フェーズ変更通知の場合
       if (data.message_type === "phase_change") {
-        console.log(`Phase change notification received: ${data.from_phase} → ${data.to_phase}`);
-
-        // カスタムイベントを発行してuseGamePhaseフックに通知
         window.dispatchEvent(
           new CustomEvent("phaseChangeNotification", {
             detail: {
@@ -51,9 +91,6 @@ export const useGameWebSocket = (
 
       // コミットメント準備完了通知の場合
       if (data.message_type === "commitments_ready") {
-        console.log(`Commitments ready notification received: ${data.commitments_count}/${data.total_players} players`);
-
-        // カスタムイベントを発行
         window.dispatchEvent(
           new CustomEvent("commitmentsReadyNotification", {
             detail: {
@@ -67,11 +104,8 @@ export const useGameWebSocket = (
         return;
       }
 
-      // For computation result notification
+      // 計算結果通知の場合
       if (data.message_type === "computation_result") {
-        console.log(`Computation result notification received: ${data.computation_type}`);
-
-        // カスタムイベントを発行
         window.dispatchEvent(
           new CustomEvent("computationResultNotification", {
             detail: {
@@ -88,10 +122,6 @@ export const useGameWebSocket = (
 
       // ゲームリセット通知の場合
       if (data.message_type === "game_reset") {
-        console.log("🔄 Game reset notification received via WebSocket");
-        console.log("🔄 Room ID:", data.room_id, "Timestamp:", data.timestamp);
-
-        // カスタムイベントを発行
         window.dispatchEvent(
           new CustomEvent("gameResetNotification", {
             detail: {
@@ -100,73 +130,158 @@ export const useGameWebSocket = (
             },
           }),
         );
-        console.log("🔄 gameResetNotification event dispatched");
         return;
       }
 
-      // 通常のチャットメッセージの場合
-      const fullMessage: WebSocketMessage = data;
+      // 通常のチャットメッセージ
+      if (typeof data.player_name !== "string" || typeof data.content !== "string") {
+        return;
+      }
 
+      const fullMessage: WebSocketMessage = data;
       addServerMessage({
-        id: "Server",
+        id: typeof fullMessage.player_id === "string" ? fullMessage.player_id : "Server",
         sender: fullMessage.player_name,
         message: fullMessage.content,
-        timestamp: new Date().toISOString(),
+        timestamp: typeof fullMessage.timestamp === "string" ? fullMessage.timestamp : new Date().toISOString(),
         type: "normal",
-        source: "server", // WebSocketで受信したメッセージはサーバー側
+        source: "server",
       });
+    },
+    [addServerMessage],
+  );
+
+  const connectWebSocket = useCallback(() => {
+    if (!roomId) return;
+
+    const currentReadyState = websocketRef.current?.readyState;
+    if (currentReadyState === WebSocket.OPEN || currentReadyState === WebSocket.CONNECTING) {
+      return;
+    }
+
+    clearReconnectTimer();
+    manualDisconnectRef.current = false;
+    setWebsocketStatus(reconnectAttemptRef.current > 0 ? "reconnecting" : "connecting");
+
+    const ws = new WebSocket(wsUrl);
+    websocketRef.current = ws;
+
+    ws.onopen = () => {
+      if (websocketRef.current !== ws) return;
+
+      const wasReconnect = hasConnectedOnceRef.current;
+      hasConnectedOnceRef.current = true;
+      reconnectAttemptRef.current = 0;
+      setReconnectAttempt(0);
+      setWebsocketStatus("connected");
+
+      if (wasReconnect && onReconnectRef.current) {
+        void Promise.resolve(onReconnectRef.current()).catch(error => {
+          console.error("Failed to resync after reconnect:", error);
+        });
+      }
     };
 
-    ws.onclose = event => {
-      console.log("WebSocket connection closed", event);
-      setWebsocketStatus("disconnected");
+    ws.onmessage = event => {
+      if (typeof event.data !== "string") return;
+      handleSocketMessage(event.data);
+    };
+
+    ws.onclose = () => {
+      if (websocketRef.current !== ws) return;
       websocketRef.current = null;
+
+      if (manualDisconnectRef.current) {
+        setWebsocketStatus("disconnected");
+        return;
+      }
+
+      scheduleReconnect();
     };
 
     ws.onerror = error => {
+      if (websocketRef.current !== ws) return;
       console.error("WebSocket error occurred:", error);
       setWebsocketStatus("error");
-      websocketRef.current = null;
+      ws.close();
     };
+  }, [clearReconnectTimer, handleSocketMessage, roomId, scheduleReconnect, wsUrl]);
+  connectWebSocketRef.current = connectWebSocket;
 
-    websocketRef.current = ws;
-  };
+  const disconnectWebSocket = useCallback(() => {
+    manualDisconnectRef.current = true;
+    clearReconnectTimer();
+    reconnectAttemptRef.current = 0;
+    setReconnectAttempt(0);
+    setWebsocketStatus("disconnected");
 
-  const disconnectWebSocket = () => {
     if (websocketRef.current && websocketRef.current.readyState !== WebSocket.CLOSED) {
       websocketRef.current.close();
     }
-  };
+    websocketRef.current = null;
+  }, [clearReconnectTimer]);
 
-  const sendMessage = (message: string) => {
-    if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN && message.trim() !== "") {
-      const websocketMessage: WebSocketMessage = {
-        message_type: "normal",
-        player_id: Date.now().toString(),
-        player_name: username || "Player",
-        content: message,
-        timestamp: new Date().toISOString(),
-        room_id: roomId,
-      };
-      websocketRef.current.send(JSON.stringify(websocketMessage));
-      return true;
-    }
-    return false;
-  };
+  const sendMessage = useCallback(
+    (message: string) => {
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN && message.trim() !== "") {
+        const websocketMessage: WebSocketMessage = {
+          message_type: "normal",
+          player_id: Date.now().toString(),
+          player_name: username || "Player",
+          content: message,
+          timestamp: new Date().toISOString(),
+          room_id: roomId,
+        };
+        websocketRef.current.send(JSON.stringify(websocketMessage));
+        return true;
+      }
+      return false;
+    },
+    [roomId, username],
+  );
 
   useEffect(() => {
-    if (!hasConnectedRef.current) {
-      hasConnectedRef.current = true;
-      connectWebSocket();
-    }
+    reconnectAttemptRef.current = 0;
+    setReconnectAttempt(0);
+    hasConnectedOnceRef.current = false;
+    manualDisconnectRef.current = false;
+    connectWebSocket();
+
     return () => {
-      // disconnectWebSocket();
+      disconnectWebSocket();
     };
-  }, [roomId]);
+  }, [connectWebSocket, disconnectWebSocket]);
+
+  useEffect(() => {
+    const tryReconnectNow = () => {
+      if (manualDisconnectRef.current) return;
+      const state = websocketRef.current?.readyState;
+      if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return;
+      clearReconnectTimer();
+      connectWebSocketRef.current();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        tryReconnectNow();
+      }
+    };
+
+    window.addEventListener("online", tryReconnectNow);
+    window.addEventListener("focus", tryReconnectNow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("online", tryReconnectNow);
+      window.removeEventListener("focus", tryReconnectNow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [clearReconnectTimer]);
 
   return {
     websocketRef,
     websocketStatus,
+    reconnectAttempt,
     connectWebSocket,
     disconnectWebSocket,
     sendMessage,

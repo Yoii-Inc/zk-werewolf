@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GameResultModal } from "../../../components/game/GameResultModal";
 import NightActionModal from "../../../components/game/NightActionModal";
@@ -36,12 +36,18 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   // Custom hooks
   const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id, null);
-  const { roomInfo, gameInfo, isLoading, privateGameInfo } = useGameInfo(params.id, user?.id, setMessages);
-  const { websocketRef, websocketStatus, connectWebSocket, disconnectWebSocket, sendMessage } = useGameWebSocket(
+  const { roomInfo, gameInfo, isLoading, privateGameInfo, refetchRoomAndGame } = useGameInfo(
     params.id,
-    addServerMessage,
-    user?.username,
+    user?.id,
+    setMessages,
   );
+  const handleWebSocketReconnect = useCallback(() => {
+    void refetchRoomAndGame();
+  }, [refetchRoomAndGame]);
+  const { websocketRef, websocketStatus, reconnectAttempt, connectWebSocket, disconnectWebSocket, sendMessage } =
+    useGameWebSocket(params.id, addServerMessage, user?.username, {
+      onReconnect: handleWebSocketReconnect,
+    });
   const {
     isStarting,
     startGame,
@@ -107,6 +113,10 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   }, [gameInfo?.result]);
 
   const handleSendMessage = () => {
+    if (websocketStatus !== "connected") {
+      return;
+    }
+
     if (newMessage.trim() !== "") {
       const success = sendMessage(newMessage);
       if (success) {
@@ -291,6 +301,27 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     ? Math.max(0, Math.min(100, (roomInfo.remainingTime / Math.max(timerBaseline, 1)) * 100))
     : 0;
   const isTimeWarning = (roomInfo?.remainingTime ?? 0) <= 30;
+  const isWebSocketConnected = websocketStatus === "connected";
+  const websocketStatusLabel =
+    websocketStatus === "connected"
+      ? "Connected"
+      : websocketStatus === "reconnecting"
+        ? `Reconnecting (${reconnectAttempt})`
+        : websocketStatus === "connecting"
+          ? "Connecting"
+          : websocketStatus === "error"
+            ? "Connection issue"
+            : "Offline";
+  const websocketStatusClass =
+    websocketStatus === "connected"
+      ? "bg-green-50 text-green-700 border-green-200"
+      : websocketStatus === "reconnecting"
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : websocketStatus === "connecting"
+          ? "bg-blue-50 text-blue-700 border-blue-200"
+          : websocketStatus === "error"
+            ? "bg-rose-50 text-rose-700 border-rose-200"
+            : "bg-slate-100 text-slate-700 border-slate-200";
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -375,6 +406,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     />
                   </div>
                 </div>
+                <span className={`px-3 py-1 rounded-full text-sm border ${websocketStatusClass}`}>
+                  Connection: {websocketStatusLabel}
+                </span>
                 {roomInfo.status === "Open" && currentPlayer && (
                   <button
                     onClick={handleToggleReady}
@@ -538,10 +572,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
                   <button
                     onClick={connectWebSocket}
-                    disabled={websocketStatus === "connected" || websocketStatus === "connecting"}
+                    disabled={
+                      websocketStatus === "connected" ||
+                      websocketStatus === "connecting" ||
+                      websocketStatus === "reconnecting"
+                    }
                     className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
                   >
-                    {websocketStatus === "connecting" ? "Connecting..." : "Connect WebSocket"}
+                    {websocketStatus === "connecting" || websocketStatus === "reconnecting"
+                      ? "Connecting..."
+                      : "Connect WebSocket"}
                   </button>
                   <button
                     onClick={disconnectWebSocket}
@@ -645,18 +685,20 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     type="text"
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
+                    disabled={!isWebSocketConnected}
                     onKeyDown={e => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleSendMessage();
                       }
                     }}
-                    placeholder="Enter message..."
-                    className="flex-1 border border-indigo-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm"
+                    placeholder={isWebSocketConnected ? "Enter message..." : "Reconnecting chat..."}
+                    className="flex-1 border border-indigo-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                   />
                   <button
                     onClick={handleSendMessage}
-                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
+                    disabled={!isWebSocketConnected}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <Send size={20} />
                     Send
@@ -708,7 +750,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           role={privateGameInfo?.playerRole ?? "Villager"}
           gameInfo={gameInfo}
           username={user?.username ?? ""}
-          onSubmit={(targetPlayerId: string) => {
+          onSubmit={() => {
             // handleNightAction(targetPlayerId, privateGameInfo?.playerRole);
             setShowNightAction(false);
           }}
@@ -724,7 +766,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           players={gameInfo.players}
           gameInfo={gameInfo}
           username={user?.username ?? ""}
-          onSubmit={(targetId: string) => {
+          onSubmit={() => {
             // handleVote(targetId);
             setShowVoteModal(false);
           }}
