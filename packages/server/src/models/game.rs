@@ -1002,6 +1002,12 @@ impl Game {
                         }
 
                         self.result = result.clone();
+                        if result != GameResult::InProgress {
+                            let mut rooms = app_state.rooms.lock().await;
+                            if let Some(room) = rooms.get_mut(&self.room_id) {
+                                room.status = crate::models::room::RoomStatus::Closed;
+                            }
+                        }
 
                         // 全プレイヤーに勝利判定結果を通知
                         let alive_players: Vec<String> = self

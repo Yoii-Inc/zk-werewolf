@@ -8,7 +8,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -42,8 +42,8 @@ pub fn routes(state: AppState) -> Router {
         // curl -X POST http://localhost:8080/api/room/{roomid}/leave/{playerid}
         .route("/:id/leave/:playerid", post(leave_room))
         // ルーム削除
-        // curl -X DELETE http://localhost:8080/api/room/{roomid}/delete
-        .route("/:id/delete", delete(delete_room))
+        // curl -X POST http://localhost:8080/api/room/{roomid}/delete/{playerid}
+        .route("/:id/delete/:playerid", post(delete_room))
         // WebSocket接続
         // websocat ws://localhost:8080/api/room/ws
         .route("/:id/ws", get(websocket::handler))
@@ -121,29 +121,19 @@ pub async fn leave_room(
     State(state): State<AppState>,
     Path((room_id, player_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let success = room_service::leave_room(state, &room_id, &player_id).await;
-    if success {
-        (StatusCode::OK, Json("Successfully left room"))
-    } else {
-        (StatusCode::BAD_REQUEST, Json("Failed to leave room"))
+    match room_service::leave_room(state, &room_id, &player_id).await {
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
     }
 }
 
 async fn delete_room(
     State(state): State<AppState>,
-    Path(room_id): Path<String>,
+    Path((room_id, player_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let success = room_service::delete_room(state, &room_id).await;
-    if success {
-        (
-            StatusCode::OK,
-            Json(format!("Room {} deleted successfully", room_id)),
-        )
-    } else {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(format!("Failed to delete room {}", room_id)),
-        )
+    match room_service::delete_room(state, &room_id, &player_id).await {
+        Ok(message) => (StatusCode::OK, Json(message)),
+        Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
     }
 }
 

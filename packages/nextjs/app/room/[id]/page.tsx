@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { GameResultModal } from "../../../components/game/GameResultModal";
 import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
@@ -19,6 +20,7 @@ const isDebugMode = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
 
 export default function RoomPage({ params }: { params: { id: string } }) {
   const { user } = useAuth();
+  const router = useRouter();
 
   // State for UI components
   const [newMessage, setNewMessage] = useState("");
@@ -27,6 +29,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showGameResult, setShowGameResult] = useState(false);
   const [isTogglingReady, setIsTogglingReady] = useState(false);
+  const [isLeavingRoom, setIsLeavingRoom] = useState(false);
+  const [isDeletingRoom, setIsDeletingRoom] = useState(false);
   const [timerBaseline, setTimerBaseline] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -206,6 +210,77 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
   const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
+  const isInProgress = roomInfo?.status === "InProgress";
+  const isRoomActionDisabled = isInProgress || isLeavingRoom || isDeletingRoom;
+
+  const handleLeaveRoom = async () => {
+    if (!roomInfo || !user?.id) return;
+    setIsLeavingRoom(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/room/${roomInfo.room_id}/leave/${user.id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(errorMessage || "Failed to leave room");
+      }
+
+      router.push("/");
+    } catch (error) {
+      addMessage({
+        id: Date.now().toString(),
+        sender: "System",
+        message: error instanceof Error ? error.message : "Failed to leave room",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+    } finally {
+      setIsLeavingRoom(false);
+    }
+  };
+
+  const handleDeleteRoom = async () => {
+    if (!roomInfo || !user?.id) return;
+    setIsDeletingRoom(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/room/${roomInfo.room_id}/delete/${user.id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(errorMessage || "Failed to delete room");
+      }
+
+      router.push("/");
+    } catch (error) {
+      addMessage({
+        id: Date.now().toString(),
+        sender: "System",
+        message: error instanceof Error ? error.message : "Failed to delete room",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+    } finally {
+      setIsDeletingRoom(false);
+    }
+  };
+
   const isCurrentPlayerReady = currentPlayer
     ? getPlayerReady(currentPlayer as { isReady?: boolean; is_ready?: boolean })
     : false;
@@ -346,6 +421,28 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   >
                     Vote
                   </button>
+                )}
+                {currentPlayer && (
+                  <>
+                    <button
+                      onClick={handleLeaveRoom}
+                      disabled={isRoomActionDisabled}
+                      className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+                        isRoomActionDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-slate-600 hover:bg-slate-700"
+                      }`}
+                    >
+                      {isLeavingRoom ? "Leaving..." : "Leave Room"}
+                    </button>
+                    <button
+                      onClick={handleDeleteRoom}
+                      disabled={isRoomActionDisabled}
+                      className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+                        isRoomActionDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"
+                      }`}
+                    >
+                      {isDeletingRoom ? "Deleting..." : "Delete Room"}
+                    </button>
+                  </>
                 )}
               </div>
             </div>

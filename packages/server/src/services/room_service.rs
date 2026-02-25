@@ -5,6 +5,7 @@ use crate::{
     },
     state::AppState,
 };
+use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
 pub async fn create_room(
@@ -42,6 +43,7 @@ pub async fn join_room(state: AppState, room_id: &str, player_id: &str, player_n
         if let Some(existing_player) = room.players.iter_mut().find(|p| p.id == player_id) {
             // 名前を更新して再接続として扱う
             existing_player.name = player_name.to_string();
+            room.empty_since = None;
             return true; // 再接続成功
         }
 
@@ -54,28 +56,41 @@ pub async fn join_room(state: AppState, room_id: &str, player_id: &str, player_n
             is_ready: false,
         };
         room.players.push(player);
+        room.empty_since = None;
         true
     } else {
         false
     }
 }
 
-pub async fn leave_room(state: AppState, room_id: &str, player_id: &str) -> bool {
+pub async fn leave_room(state: AppState, room_id: &str, player_id: &str) -> Result<String, String> {
     let mut rooms = state.rooms.lock().await;
 
     if let Some(room) = rooms.get_mut(room_id) {
+        if room.status == RoomStatus::InProgress {
+            return Err("ゲーム進行中は退室できません。".to_string());
+        }
+
         // プレイヤーが存在するかチェック
         let player_index = room.players.iter().position(|p| p.id == player_id);
 
         if let Some(index) = player_index {
             // プレイヤーを削除
             room.players.remove(index);
-            true
+
+            if room.players.is_empty() {
+                room.empty_since = Some(Utc::now());
+                room.status = RoomStatus::Open;
+            } else if room.status == RoomStatus::Ready {
+                room.status = RoomStatus::Open;
+            }
+
+            Ok("Successfully left room".to_string())
         } else {
-            false
+            Err("プレイヤーが見つかりません。".to_string())
         }
     } else {
-        false
+        Err("ルームが見つかりません。".to_string())
     }
 }
 
@@ -88,9 +103,41 @@ pub async fn get_room_info(state: &AppState, room_id: &str) -> Option<Room> {
     rooms.get(room_id).cloned()
 }
 
-pub async fn delete_room(state: AppState, room_id: &str) -> bool {
+pub async fn delete_room(state: AppState, room_id: &str, requester_id: &str) -> Result<String, String> {
     let mut rooms = state.rooms.lock().await;
-    rooms.remove(room_id).is_some()
+
+    let Some(room) = rooms.get(room_id) else {
+        return Err("ルームが見つかりません。".to_string());
+    };
+
+    if room.status == RoomStatus::InProgress {
+        return Err("ゲーム進行中はルームを削除できません。".to_string());
+    }
+
+    let can_delete = room.players.iter().any(|player| player.id == requester_id);
+    if !can_delete {
+        return Err("ルーム参加者のみ削除できます。".to_string());
+    }
+
+    rooms.remove(room_id);
+    Ok(format!("Room {} deleted successfully", room_id))
+}
+
+pub async fn cleanup_empty_rooms(state: &AppState, empty_room_ttl: Duration) -> usize {
+    let mut rooms = state.rooms.lock().await;
+    let now = Utc::now();
+    let before_count = rooms.len();
+
+    rooms.retain(|_, room| {
+        if room.players.is_empty() {
+            let empty_since = room.empty_since.unwrap_or(room.created_at);
+            let elapsed = now.signed_duration_since(empty_since);
+            return elapsed < empty_room_ttl;
+        }
+        true
+    });
+
+    before_count.saturating_sub(rooms.len())
 }
 
 pub async fn toggle_ready(
