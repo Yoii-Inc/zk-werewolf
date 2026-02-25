@@ -293,13 +293,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const isTimeWarning = (roomInfo?.remainingTime ?? 0) <= 30;
 
   return (
-    <div className="h-screen flex bg-gradient-to-br from-indigo-50 to-purple-50">
+    <div className="flex flex-1 min-h-0 overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50">
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-xl text-indigo-600">Loading room information...</div>
         </div>
       ) : roomInfo ? (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex min-h-0 flex-col">
           {/* Game Info */}
           <div className="bg-white/80 backdrop-blur-sm border-b border-indigo-100 p-4 shadow-sm">
             <div className="flex items-center justify-between">
@@ -448,13 +448,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          <div className="flex-1 flex">
+          <div className="flex-1 flex min-h-0">
             {/* Players List */}
-            <div className="w-64 bg-white/80 backdrop-blur-sm border-l border-indigo-100">
+            <div className="w-64 bg-white/80 backdrop-blur-sm border-l border-indigo-100 flex min-h-0 flex-col">
               <div className="p-4 border-b border-indigo-100">
                 <h2 className="text-lg font-semibold text-indigo-900">Players List</h2>
               </div>
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-3 overflow-y-auto">
                 {(gameInfo ? gameInfo.players : roomInfo.players).map(player => {
                   const isMe = player.name === user?.username;
                   return (
@@ -605,8 +605,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col">
-              <div className="h-[600px] overflow-y-auto p-4">
+            <div className="flex-1 flex min-h-0 flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4">
                 {messages.map((msg, index) => (
                   <div
                     key={`${msg.id}-${index}`}
@@ -673,7 +673,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       )}
 
       {/* Notes Panel */}
-      <div className="w-80 bg-white/80 backdrop-blur-sm border-l border-indigo-100 flex flex-col">
+      <div className="w-80 bg-white/80 backdrop-blur-sm border-l border-indigo-100 flex min-h-0 flex-col">
         <div className="p-4 border-b border-indigo-100 flex items-center gap-2">
           <StickyNote size={20} className="text-indigo-600" />
           <h2 className="text-lg font-semibold text-indigo-900">Notes</h2>
