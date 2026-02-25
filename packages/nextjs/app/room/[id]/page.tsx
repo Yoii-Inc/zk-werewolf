@@ -35,7 +35,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Custom hooks
-  const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id, null);
+  const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id);
   const { roomInfo, gameInfo, isLoading, privateGameInfo, refetchRoomAndGame } = useGameInfo(
     params.id,
     user?.id,
