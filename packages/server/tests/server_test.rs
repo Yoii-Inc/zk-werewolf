@@ -17,6 +17,9 @@ async fn test_create_room() {
 
     let create_request = CreateRoomRequest {
         name: "テストルーム".to_string(),
+        max_players: None,
+        role_config: None,
+        time_config: None,
     };
 
     let request = Request::builder()
@@ -41,6 +44,9 @@ async fn test_join_room() {
 
     let create_request = CreateRoomRequest {
         name: "テストルーム".to_string(),
+        max_players: None,
+        role_config: None,
+        time_config: None,
     };
 
     // まずルームを作成

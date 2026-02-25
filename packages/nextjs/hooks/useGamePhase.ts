@@ -6,6 +6,7 @@ import { useKeyPublicize } from "./useKeyPublicize";
 import { useRoleAssignment } from "./useRoleAssignment";
 import { useWinningJudge } from "./useWinningJudge";
 import JSONbig from "json-bigint";
+import { toast } from "react-hot-toast";
 import * as GameInputGenerator from "~~/services/gameInputGenerator";
 import type { ChatMessage, GameInfo } from "~~/types/game";
 import {
@@ -51,6 +52,19 @@ export const useGamePhase = (
       const { fromPhase, toPhase, requiresDummyRequest } = customEvent.detail;
 
       console.log(`WebSocket phase change notification: ${fromPhase} → ${toPhase}`);
+
+      const phaseLabelMap: Record<string, string> = {
+        Night: "🌙 Night Phase",
+        Discussion: "☀️ Discussion Phase",
+        Voting: "🗳️ Voting Phase",
+        Result: "📢 Result Phase",
+        DivinationProcessing: "🔮 Divination Processing",
+        Finished: "🏁 Game Finished",
+      };
+      toast(`${phaseLabelMap[toPhase] ?? toPhase} started`, {
+        duration: 3000,
+        position: "top-center",
+      });
 
       // WebSocketイベント発生時に最新のgameInfoを取得
       // (props経由のgameInfoはポーリングタイミング次第でnullや古い可能性がある)

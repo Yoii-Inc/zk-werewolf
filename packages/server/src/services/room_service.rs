@@ -2,13 +2,13 @@ use crate::{
     models::{
         player::Player,
         role::Role,
-        room::{Room, RoomStatus},
+        room::{Room, RoomConfig, RoomStatus},
     },
     state::AppState,
 };
 use std::collections::HashMap;
 
-pub async fn create_room(state: AppState, name: Option<String>) -> u32 {
+pub async fn create_room(state: AppState, name: Option<String>, room_config: Option<RoomConfig>) -> u32 {
     let mut rooms = state.rooms.lock().await;
     let new_id = rooms
         .keys()
@@ -16,7 +16,7 @@ pub async fn create_room(state: AppState, name: Option<String>) -> u32 {
         .max()
         .unwrap_or(0)
         + 1;
-    let new_room = Room::new(new_id.to_string(), name, None);
+    let new_room = Room::new(new_id.to_string(), name, room_config);
     rooms.insert(new_id.to_string(), new_room);
     new_id
 }

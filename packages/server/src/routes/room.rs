@@ -1,4 +1,9 @@
-use crate::{services::room_service, state::AppState, utils::websocket};
+use crate::{
+    models::room::{RoleConfig, RoomConfig, TimeConfig},
+    services::room_service,
+    state::AppState,
+    utils::websocket,
+};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -11,6 +16,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize)]
 pub struct CreateRoomRequest {
     pub name: String,
+    #[serde(default)]
+    pub max_players: Option<usize>,
+    #[serde(default)]
+    pub role_config: Option<RoleConfig>,
+    #[serde(default)]
+    pub time_config: Option<TimeConfig>,
 }
 
 pub fn routes(state: AppState) -> Router {
@@ -46,7 +57,29 @@ pub async fn create_room(
     State(state): State<AppState>,
     Json(payload): Json<CreateRoomRequest>,
 ) -> impl IntoResponse {
-    let room_id = room_service::create_room(state, Some(payload.name)).await;
+    let room_config = if payload.max_players.is_some()
+        || payload.role_config.is_some()
+        || payload.time_config.is_some()
+    {
+        let max_players = payload.max_players.unwrap_or(9);
+        Some(RoomConfig {
+            max_players,
+            role_config: payload.role_config.unwrap_or(RoleConfig {
+                seer: 1,
+                werewolf: 2,
+                villager: max_players.saturating_sub(3),
+            }),
+            time_config: payload.time_config.unwrap_or(TimeConfig {
+                day_phase: 300,
+                night_phase: 120,
+                voting_phase: 90,
+            }),
+        })
+    } else {
+        None
+    };
+
+    let room_id = room_service::create_room(state, Some(payload.name), room_config).await;
     (
         StatusCode::OK,
         Json(format!("Room created with ID: {}", room_id)),
@@ -144,6 +177,9 @@ mod tests {
 
         let create_request = CreateRoomRequest {
             name: "テストルーム".to_string(),
+            max_players: None,
+            role_config: None,
+            time_config: None,
         };
 
         let request = Request::builder()
@@ -168,7 +204,7 @@ mod tests {
         let app = routes(state.clone());
 
         // テスト用のルームを作成
-        let room_id = room_service::create_room(state, None).await;
+        let room_id = room_service::create_room(state, None, None).await;
 
         let request = Request::builder()
             .method("GET")
