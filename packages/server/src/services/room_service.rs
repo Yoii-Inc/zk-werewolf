@@ -160,6 +160,7 @@ pub async fn toggle_ready(
                 room.status = RoomStatus::Ready;
                 Ok("全員の準備が完了しました。".to_string())
             } else {
+                room.status = RoomStatus::Open;
                 Ok("準備状態を切り替えました。".to_string())
             }
         } else {

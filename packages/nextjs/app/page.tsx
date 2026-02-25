@@ -12,7 +12,7 @@ interface Village {
   lobby_id: string;
   players?: Player[] | null;
   max_players: number;
-  status: "Open" | "InProgress" | "Closed";
+  status: "Open" | "Ready" | "InProgress" | "Closed";
   roles: string[];
   voting_status: "not_started" | "in_progress" | "completed";
   votes: Record<number, Vote>;
@@ -226,10 +226,14 @@ const Home = () => {
               </h2>
               <span
                 className={`px-4 py-1.5 rounded-full text-sm font-medium ${
-                  room.status === "Open" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                  room.status === "Open"
+                    ? "bg-green-50 text-green-700"
+                    : room.status === "Ready"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
                 }`}
               >
-                {room.status === "Open" ? "Waiting" : "In Game"}
+                {room.status === "Open" ? "Waiting" : room.status === "Ready" ? "Ready" : "In Game"}
               </span>
             </div>
 

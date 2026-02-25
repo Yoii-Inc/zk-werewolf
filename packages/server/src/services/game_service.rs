@@ -32,6 +32,19 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
         let mut rooms = state.rooms.lock().await;
         let room = rooms.get_mut(room_id).ok_or("Room not found".to_string())?;
 
+        if room.status == RoomStatus::InProgress {
+            return Err("Game is already in progress".to_string());
+        }
+        if room.status == RoomStatus::Closed {
+            return Err("Room is already closed".to_string());
+        }
+        if room.players.is_empty() {
+            return Err("No players in room".to_string());
+        }
+        if !room.players.iter().all(|player| player.is_ready) {
+            return Err("All participants must be ready before starting the game".to_string());
+        }
+
         // プレイヤー数に応じて役職を振り分け（デバッグ用に生成のみ）
         let _roles = assign_roles(room.players.len())?;
         let joined_players = room.players.len();

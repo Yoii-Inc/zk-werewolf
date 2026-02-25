@@ -5,7 +5,7 @@ export interface RoomInfo {
   room_id: string;
   name: string;
   created_at?: string;
-  status: "Open" | "InProgress" | "Closed";
+  status: "Open" | "Ready" | "InProgress" | "Closed";
   max_players: number;
   currentPlayers?: number;
   remainingTime?: number;

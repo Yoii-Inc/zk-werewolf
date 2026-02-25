@@ -266,6 +266,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
   const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
+  const isLobbyState = roomInfo?.status === "Open" || roomInfo?.status === "Ready";
   const isInProgress = roomInfo?.status === "InProgress";
   const isRoomActionDisabled = isInProgress || isLeavingRoom || isDeletingRoom;
 
@@ -385,6 +386,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     Room Status: Open (Waiting for players)
                   </span>
                 )}
+                {roomInfo.status === "Ready" && (
+                  <span className="flex items-center gap-2 text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full text-sm border">
+                    Room Status: Ready (All players prepared)
+                  </span>
+                )}
                 {gameInfo && (
                   <>
                     {gameInfo.phase === "Night" ? (
@@ -452,7 +458,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <span className={`px-3 py-1 rounded-full text-sm border ${websocketStatusClass}`}>
                   Connection: {websocketStatusLabel}
                 </span>
-                {roomInfo.status === "Open" && currentPlayer && (
+                {isLobbyState && currentPlayer && (
                   <button
                     onClick={handleToggleReady}
                     disabled={isTogglingReady}
@@ -465,19 +471,17 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {isTogglingReady ? "Updating..." : isCurrentPlayerReady ? "Ready: ON" : "Ready: OFF"}
                   </button>
                 )}
-                {roomInfo.status === "Open" && (
+                {isLobbyState && (
                   <button
                     onClick={handleStartGame}
-                    disabled={isStarting || roomInfo.players.length < 2}
+                    disabled={isStarting || roomInfo.players.length < 2 || !allPlayersReady}
                     className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
-                      isStarting || roomInfo.players.length < 2
+                      isStarting || roomInfo.players.length < 2 || !allPlayersReady
                         ? "bg-gray-400 cursor-not-allowed"
-                        : allPlayersReady
-                          ? "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-300"
-                          : "bg-green-600 hover:bg-green-700"
+                        : "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-300"
                     }`}
                   >
-                    {isStarting ? "Starting..." : "Start Game"}
+                    {isStarting ? "Starting..." : !allPlayersReady ? "Waiting for all Ready" : "Start Game"}
                   </button>
                 )}
                 {gameInfo?.phase === "Night" &&
