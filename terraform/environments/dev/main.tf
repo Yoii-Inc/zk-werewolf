@@ -369,6 +369,26 @@ module "mpc_node_0" {
       value = "9000"
     },
     {
+      name  = "ROLE_ASSIGNMENT_GROTH16_PK_PATH"
+      value = "/app/data/groth16/role_assignment_max5_v1.pk"
+    },
+    {
+      name  = "ANONYMOUS_VOTING_GROTH16_PK_PATH"
+      value = "/app/data/groth16/anonymous_voting_max5_v1.pk"
+    },
+    {
+      name  = "DIVINATION_GROTH16_PK_PATH"
+      value = "/app/data/groth16/divination_max5_v1.pk"
+    },
+    {
+      name  = "WINNING_JUDGEMENT_GROTH16_PK_PATH"
+      value = "/app/data/groth16/winning_judgement_max5_v1.pk"
+    },
+    {
+      name  = "KEY_PUBLICIZE_GROTH16_PK_PATH"
+      value = "/app/data/groth16/key_publicize_max5_v1.pk"
+    },
+    {
       name  = "MPC_NODE_0_PUBLIC_KEY"
       value = local.secrets.mpc_nodes.node_0.public_key
     },
@@ -445,6 +465,26 @@ module "mpc_node_1" {
       value = "9000"
     },
     {
+      name  = "ROLE_ASSIGNMENT_GROTH16_PK_PATH"
+      value = "/app/data/groth16/role_assignment_max5_v1.pk"
+    },
+    {
+      name  = "ANONYMOUS_VOTING_GROTH16_PK_PATH"
+      value = "/app/data/groth16/anonymous_voting_max5_v1.pk"
+    },
+    {
+      name  = "DIVINATION_GROTH16_PK_PATH"
+      value = "/app/data/groth16/divination_max5_v1.pk"
+    },
+    {
+      name  = "WINNING_JUDGEMENT_GROTH16_PK_PATH"
+      value = "/app/data/groth16/winning_judgement_max5_v1.pk"
+    },
+    {
+      name  = "KEY_PUBLICIZE_GROTH16_PK_PATH"
+      value = "/app/data/groth16/key_publicize_max5_v1.pk"
+    },
+    {
       name  = "MPC_NODE_0_PUBLIC_KEY"
       value = local.secrets.mpc_nodes.node_0.public_key
     },
@@ -519,6 +559,26 @@ module "mpc_node_2" {
     {
       name  = "MPC_HTTP_PORT"
       value = "9000"
+    },
+    {
+      name  = "ROLE_ASSIGNMENT_GROTH16_PK_PATH"
+      value = "/app/data/groth16/role_assignment_max5_v1.pk"
+    },
+    {
+      name  = "ANONYMOUS_VOTING_GROTH16_PK_PATH"
+      value = "/app/data/groth16/anonymous_voting_max5_v1.pk"
+    },
+    {
+      name  = "DIVINATION_GROTH16_PK_PATH"
+      value = "/app/data/groth16/divination_max5_v1.pk"
+    },
+    {
+      name  = "WINNING_JUDGEMENT_GROTH16_PK_PATH"
+      value = "/app/data/groth16/winning_judgement_max5_v1.pk"
+    },
+    {
+      name  = "KEY_PUBLICIZE_GROTH16_PK_PATH"
+      value = "/app/data/groth16/key_publicize_max5_v1.pk"
     },
     {
       name  = "MPC_NODE_0_PUBLIC_KEY"

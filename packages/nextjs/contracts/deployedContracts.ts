@@ -6,153 +6,8 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
 const deployedContracts = {
   31337: {
-    YourContract: {
-      address: "0x700b6a60ce7eaaea56f065753d8dcb9653dbad35",
-      abi: [
-        {
-          type: "constructor",
-          inputs: [
-            {
-              name: "_owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "receive",
-          stateMutability: "payable",
-        },
-        {
-          type: "function",
-          name: "greeting",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "owner",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "premium",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setGreeting",
-          inputs: [
-            {
-              name: "_newGreeting",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-          outputs: [],
-          stateMutability: "payable",
-        },
-        {
-          type: "function",
-          name: "totalCounter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "userGreetingCounter",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "withdraw",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "event",
-          name: "GreetingChange",
-          inputs: [
-            {
-              name: "greetingSetter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "newGreeting",
-              type: "string",
-              indexed: false,
-              internalType: "string",
-            },
-            {
-              name: "premium",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-            {
-              name: "value",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-      ],
-      inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
-    },
     WerewolfGame: {
-      address: "0xa15bb66138824a1c7167f5e85b957d04dd34e468",
+      address: "0x700b6a60ce7eaaea56f065753d8dcb9653dbad35",
       abi: [
         {
           type: "constructor",
@@ -762,11 +617,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     WerewolfProofVerifier: {
-      address: "0xb19b36b1456e65e3a6d514d3f715f204bd59f431",
+      address: "0xa15bb66138824a1c7167f5e85b957d04dd34e468",
       abi: [
         {
           type: "constructor",
@@ -1215,11 +1070,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     WerewolfRewards: {
-      address: "0x8ce361602b935680e8dec218b820ff5056beb7af",
+      address: "0xb19b36b1456e65e3a6d514d3f715f204bd59f431",
       abi: [
         {
           type: "constructor",
@@ -1576,11 +1431,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentGroth16Verifier: {
-      address: "0xe1aa25618fa0c7a1cfdab5d6b456af611873b629",
+      address: "0x8ce361602b935680e8dec218b820ff5056beb7af",
       abi: [
         {
           type: "function",
@@ -1661,11 +1516,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentGroth16VerifierAdapter: {
-      address: "0xe1da8919f262ee86f9be05059c9280142cf23f48",
+      address: "0xe1aa25618fa0c7a1cfdab5d6b456af611873b629",
       abi: [
         {
           type: "constructor",
@@ -1717,11 +1572,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationGroth16Verifier: {
-      address: "0x0c8e79f3534b00d9a3d4a856b665bf4ebc22f2ba",
+      address: "0xe1da8919f262ee86f9be05059c9280142cf23f48",
       abi: [
         {
           type: "function",
@@ -1802,11 +1657,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationGroth16VerifierAdapter: {
-      address: "0xed1db453c3156ff3155a97ad217b3087d5dc5f6e",
+      address: "0x0c8e79f3534b00d9a3d4a856b665bf4ebc22f2ba",
       abi: [
         {
           type: "constructor",
@@ -1858,11 +1713,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingGroth16Verifier: {
-      address: "0xf7cd8fa9b94db2aa972023b379c7f72c65e4de9d",
+      address: "0xed1db453c3156ff3155a97ad217b3087d5dc5f6e",
       abi: [
         {
           type: "function",
@@ -1943,11 +1798,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingGroth16VerifierAdapter: {
-      address: "0x12975173b87f7595ee45dffb2ab812ece596bf84",
+      address: "0xf7cd8fa9b94db2aa972023b379c7f72c65e4de9d",
       abi: [
         {
           type: "constructor",
@@ -1999,11 +1854,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementGroth16Verifier: {
-      address: "0x82dc47734901ee7d4f4232f398752cb9dd5daccc",
+      address: "0x12975173b87f7595ee45dffb2ab812ece596bf84",
       abi: [
         {
           type: "function",
@@ -2084,11 +1939,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementGroth16VerifierAdapter: {
-      address: "0x196dbcbb54b8ec4958c959d8949ebfe87ac2aaaf",
+      address: "0x82dc47734901ee7d4f4232f398752cb9dd5daccc",
       abi: [
         {
           type: "constructor",
@@ -2140,11 +1995,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeGroth16Verifier: {
-      address: "0x82c6d3ed4cd33d8ec1e51d0b5cc1d822eaa0c3dc",
+      address: "0x196dbcbb54b8ec4958c959d8949ebfe87ac2aaaf",
       abi: [
         {
           type: "function",
@@ -2220,11 +2075,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeGroth16VerifierAdapter: {
-      address: "0x05b4cb126885fb10464fdd12666feb25e2563b76",
+      address: "0x82c6d3ed4cd33d8ec1e51d0b5cc1d822eaa0c3dc",
       abi: [
         {
           type: "constructor",
@@ -2276,8 +2131,8 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1771660372866.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
   },
 } as const;

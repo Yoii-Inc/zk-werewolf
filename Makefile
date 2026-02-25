@@ -1,4 +1,4 @@
-.PHONY: help install frontend server node stop clean groth16-setup groth16-export-verifier
+.PHONY: help install frontend server node stop clean groth16-setup groth16-export-verifier docker-up docker-up-detached docker-down
 
 ROLE_ASSIGNMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
 ANONYMOUS_VOTING_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk
@@ -16,6 +16,9 @@ help:
 	@echo "  make clean    - Remove build artifacts and node_modules"
 	@echo "  make groth16-setup - Generate Groth16 setup artifacts for all circuits"
 	@echo "  make groth16-export-verifier - Export verifier contracts for all circuits from proving keys"
+	@echo "  make docker-up - Build and start local stack with docker compose (foreground)"
+	@echo "  make docker-up-detached - Build and start local stack with docker compose (background)"
+	@echo "  make docker-down - Stop docker compose stack"
 
 # Install dependencies
 install:
@@ -85,3 +88,12 @@ groth16-export-verifier:
 		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin winning_judgement_groth16_verifier_export
 	KEY_PUBLICIZE_GROTH16_PK_PATH=$(KEY_PUBLICIZE_GROTH16_PK_PATH) \
 		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin key_publicize_groth16_verifier_export
+
+docker-up:
+	docker compose up --build
+
+docker-up-detached:
+	docker compose up --build -d
+
+docker-down:
+	docker compose down --remove-orphans
