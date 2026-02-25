@@ -15,6 +15,7 @@ import {
   KeyPublicizePublicInput,
   NodeKey,
   PedersenCommitment,
+  PedersenCommitmentInput,
   PedersenParam,
   RoleAssignmentInput,
   RoleAssignmentPrivateInput,
@@ -375,7 +376,7 @@ export function generateIndividualShuffleMatrix(n: number, m: number, rng?: () =
   }
 
   // 平坦化された行列をゼロ要素で初期化
-  const mat: Field[][] = new Array(size);
+  const mat: Field[][] = new Array(total);
   for (let idx = 0; idx < total; idx++) {
     mat[idx] = FINITE_FIELD_ZERO;
   }
@@ -475,20 +476,20 @@ export async function submitCommitment(
     throw new Error("Pedersen parameters not available");
   }
 
-  const pedersenInput = {
+  const pedersenInput: PedersenCommitmentInput = {
     pedersenParams: params.pedersenParam,
     x: randomness,
     pedersenRandomness: randomness, // 同じランダムネスを使用
   };
 
-  console.log("Computing Pedersen commitment with input:", pedersenInput);
+  console.log("Computing Pedersen commitment...");
 
   const commitment = await MPCEncryption.pedersenCommitment(pedersenInput);
 
   console.log("Computed commitment:", commitment);
 
   // サーバーへ送信
-  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
   const res = await fetch(`${base}/game/${roomId}/commitment`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

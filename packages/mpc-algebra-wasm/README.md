@@ -25,5 +25,5 @@ The library is designed to be used as a WebAssembly module in JavaScript/TypeScr
 
 Build as WebAssembly:
 ```bash
-wasm-pack build --target web --out-dir pkg-node
+wasm-pack build --target web --out-dir pkg-web
 ```

@@ -81,6 +81,12 @@ export interface PedersenCommitment {
   _params: null;
 }
 
+export interface PedersenCommitmentInput {
+  pedersenParams: PedersenParam;
+  x: Field[];
+  pedersenRandomness: any;
+}
+
 export interface ElGamalParam {
   generator: {
     x: Field[];

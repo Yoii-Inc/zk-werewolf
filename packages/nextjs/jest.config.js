@@ -1,3 +1,5 @@
+require('dotenv').config({ path: '.env.local' });
+
 module.exports = {
     preset: 'ts-jest',
     testEnvironment: 'node',
@@ -11,4 +13,7 @@ module.exports = {
         '**/__tests__/**/*.spec.ts'
     ],
     moduleDirectories: ['node_modules', '<rootDir>'],
+    moduleNameMapper: {
+        '^~~/(.*)$': '<rootDir>/$1'
+    },
 }

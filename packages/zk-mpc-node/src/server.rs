@@ -11,7 +11,6 @@ use mpc_net::MpcMultiNet as Net;
 use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::spawn;
 use tower_http::cors::CorsLayer;
@@ -38,6 +37,7 @@ pub async fn run_server(addr: &SocketAddr, state: AppState) -> Result<(), anyhow
         .route("/", post(handle_proof_request))
         .route("/proof/:proof_id", get(get_proof_status))
         .route("/proof/:proof_id/output", get(get_proof_output))
+        .layer(cors)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -62,16 +62,41 @@ async fn handle_proof_request(
 
     // Simulate the network request to generate the proof
     spawn(async move {
-        Net::simulate(state.node.net.clone(), payload_clone, move |_, request| {
-            let node_clone = state.node.clone();
-            async move {
-                println!(
-                    "Node {} is generating proof for request: {}",
-                    node_clone.id, request.proof_id
-                );
-                node_clone.generate_proof(request).await;
-            }
-        })
+        Net::simulate(
+            state.node.net.clone(),
+            payload_clone.clone(),
+            move |_, request| {
+                let node_clone = state.node.clone();
+                let proof_manager = state.proof_manager.clone();
+                async move {
+                    println!(
+                        "Node {} is generating proof for request: {}",
+                        node_clone.id, request.proof_id
+                    );
+                    match node_clone.generate_proof(request.clone()).await {
+                        Ok(_) => {
+                            println!(
+                                "Proof generation completed successfully for {}",
+                                request.proof_id
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Error during proof generation for {}: {:?}",
+                                request.proof_id, e
+                            );
+                            proof_manager
+                                .update_proof_status(
+                                    &request.proof_id,
+                                    "failed",
+                                    Some(format!("Error: {:?}", e)),
+                                )
+                                .await;
+                        }
+                    }
+                }
+            },
+        )
         .await
     });
 
@@ -86,7 +111,7 @@ async fn handle_proof_request(
 }
 
 async fn get_proof_output(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(proof_id): Path<String>,
 ) -> impl IntoResponse {
     // if let Some(output) = state.proof_manager.get_proof_output(&proof_id).await {

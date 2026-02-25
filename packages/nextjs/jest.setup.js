@@ -2,7 +2,7 @@ global.TextEncoder = require('util').TextEncoder;
 global.TextDecoder = require('util').TextDecoder;
 
 // WASMモジュールのモック設定
-jest.mock('../mpc-algebra-wasm/pkg-node', () => ({
+jest.mock('../mpc-algebra-wasm/pkg-web', () => ({
     __esModule: true,
     default: jest.fn(),
     init: jest.fn().mockResolvedValue(undefined),

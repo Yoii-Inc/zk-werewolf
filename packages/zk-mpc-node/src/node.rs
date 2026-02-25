@@ -37,10 +37,9 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                 // Base64デコード
                 let private_key_bytes = base64::decode(&private_key_base64)
                     .expect("Failed to decode MPC_PRIVATE_KEY from base64");
-                let public_key_bytes = base64::decode(&public_key_base64).expect(&format!(
-                    "Failed to decode {} from base64",
-                    public_key_env_name
-                ));
+                let public_key_bytes = base64::decode(&public_key_base64).unwrap_or_else(|_| {
+                    panic!("Failed to decode {} from base64", public_key_env_name)
+                });
 
                 key_manager
                     .set_keys_from_base64_bytes(private_key_bytes, public_key_bytes)
@@ -87,13 +86,20 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         Ok(())
     }
 
-    pub async fn generate_proof(&self, request: ProofRequest) {
+    pub async fn generate_proof(
+        &self,
+        request: ProofRequest,
+    ) -> Result<(), Box<dyn std::error::Error + Send>> {
         let pm = self.proof_manager.clone();
 
         // Setup circuit
         let local_circuit = CircuitFactory::create_local_circuit(&request.circuit_type);
 
-        let secret_key = self.key_manager.get_secret_key().await.unwrap();
+        let secret_key = self
+            .key_manager
+            .get_secret_key()
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error + Send> { Box::new(e) })?;
 
         let mpc_circuit = CircuitFactory::create_mpc_circuit(
             &request.circuit_type,
@@ -103,8 +109,13 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
 
         let inputs = CircuitFactory::create_verify_inputs(&mpc_circuit);
 
-        let (index_pk, index_vk) =
-            LocalMarlin::index(&self.proof_manager.srs, local_circuit).unwrap();
+        let (index_pk, index_vk) = LocalMarlin::index(&self.proof_manager.srs, local_circuit)
+            .map_err(|e| -> Box<dyn std::error::Error + Send> {
+                Box::new(std::io::Error::other(format!(
+                    "Failed to index circuit: {:?}",
+                    e
+                )))
+            })?;
         let mpc_index_pk = IndexProverKey::from_public(index_pk);
 
         let (outputs, is_valid) =
@@ -124,8 +135,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                             // TODO: 出力をシェアに分割して暗号化
                             let shares = self
                                 .split_and_encrypt_output(&proof_outputs, pubkeys)
-                                .await
-                                .unwrap();
+                                .await?;
                             let proof_output = ProofOutput {
                                 output_type: request.output_type.clone(),
                                 value: None,
@@ -135,8 +145,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                         }
                         ProofOutputType::PrivateToPrivate(pubkey) => {
                             // TODO: 出力を直接暗号化
-                            let encrypted =
-                                self.encrypt_output(&proof_outputs, pubkey).await.unwrap();
+                            let encrypted = self.encrypt_output(&proof_outputs, pubkey).await?;
                             let proof_output = ProofOutput {
                                 output_type: request.output_type.clone(),
                                 value: Some(encrypted),
@@ -170,39 +179,44 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             )
             .await;
         }
+
+        Ok(())
     }
 
     async fn split_and_encrypt_output(
         &self,
         output: &[u8],
         pubkeys: &[UserPublicKey],
-    ) -> Result<Vec<EncryptedShare>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<EncryptedShare>, Box<dyn std::error::Error + Send>> {
         // outputをJSONとしてパース（RoleAssignmentの場合は配列）
         let output_str = std::str::from_utf8(output)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-        
-        // JSON配列として解釈を試みる
-        let shares: Vec<Vec<u8>> = if let Ok(role_array) = serde_json::from_str::<Vec<String>>(output_str) {
-            // RoleAssignmentの場合：各プレイヤーに対応するインデックスの値のみを送る
-            role_array
-                .iter()
-                .take(pubkeys.len())
-                .map(|role| serde_json::to_vec(&vec![role]).unwrap())
-                .collect()
-        } else {
-            // その他の場合：全データを各プレイヤーに送る（従来の動作）
-            vec![output.to_vec(); pubkeys.len()]
-        };
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
-        let pubkeys = pubkeys.to_vec();
+        // JSON配列として解釈を試みる
+        let shares: Vec<Vec<u8>> =
+            if let Ok(role_array) = serde_json::from_str::<Vec<String>>(output_str) {
+                // RoleAssignmentの場合：各プレイヤーに対応するインデックスの値のみを送る
+                role_array
+                    .iter()
+                    .take(pubkeys.len())
+                    .map(|role| serde_json::to_vec(&vec![role]))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?
+            } else {
+                // その他の場合：全データを各プレイヤーに送る（従来の動作）
+                vec![output.to_vec(); pubkeys.len()]
+            };
+
+        let pubkeys_vec = pubkeys.to_vec();
 
         // 各シェアを暗号化
         let mut encrypted_shares = Vec::new();
-        for (share, pubkey) in zip(shares, pubkeys) {
+        for (share, pubkey) in zip(shares, pubkeys_vec) {
             let encrypted = self
                 .key_manager
                 .encrypt_share(&share, &pubkey.public_key)
-                .await?;
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send> { Box::new(e) })?;
             encrypted_shares.push(EncryptedShare {
                 node_id: self.id,
                 user_id: pubkey.user_id,
@@ -217,11 +231,11 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         &self,
         output: &[u8],
         pubkey: &str,
-    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send>> {
         self.key_manager
             .encrypt_share(output, pubkey)
             .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
     }
 
     pub async fn get_public_key(&self) -> Result<String, crate::crypto::CryptoError> {

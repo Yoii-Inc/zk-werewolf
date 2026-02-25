@@ -92,11 +92,14 @@ impl CircuitFactory {
                 let mut rng = ark_std::test_rng();
 
                 let public_input = c[0].public_input.clone();
+
+                let n = public_input.grouping_parameter.get_num_players();
+                let m = public_input.grouping_parameter.get_num_groups();
                 BuiltinCircuit::RoleAssignment(RoleAssignmentCircuit {
                     private_input: (0..player_num)
                         .map(|_| RoleAssignmentPrivateInput::<Fr> {
                             id: 0,
-                            shuffle_matrices: nalgebra::DMatrix::<Fr>::zeros(8, 8), // TODO: fix hardcoding
+                            shuffle_matrices: nalgebra::DMatrix::<Fr>::zeros(n + m, n + m),
                             player_randomness: Fr::default(),
                             randomness:
                                 ark_crypto_primitives::commitment::pedersen::Randomness::rand(
@@ -382,6 +385,13 @@ impl CircuitFactory {
 
                 let revealed_is_target_werewolf = is_target_werewolf.sync_reveal();
 
+                inputs.push(circuit.public_input.elgamal_param.generator.sync_reveal().x);
+                inputs.push(circuit.public_input.elgamal_param.generator.sync_reveal().y);
+
+                inputs.push(circuit.public_input.pub_key.sync_reveal().x);
+                inputs.push(circuit.public_input.pub_key.sync_reveal().y);
+
+                // elgamal ciphertext
                 inputs.push(revealed_is_target_werewolf.0.x);
                 inputs.push(revealed_is_target_werewolf.0.y);
                 inputs.push(revealed_is_target_werewolf.1.x);
@@ -409,14 +419,24 @@ impl CircuitFactory {
 
                 let num_alive = Fr::from(circuit.private_input.len() as u32);
 
-                // let game_state = circuit.calculate_output();
+                let game_state = circuit.calculate_output();
 
                 inputs.push(num_alive);
-                // inputs.push(game_state.sync_reveal());
+                inputs.push(game_state.sync_reveal());
                 inputs
             }
             BuiltinCircuit::RoleAssignment(circuit) => {
-                todo!()
+                let mut inputs = Vec::new();
+
+                let tau_matrix = &circuit.public_input.tau_matrix;
+
+                for i in 0..tau_matrix.nrows() {
+                    for j in 0..tau_matrix.ncols() {
+                        inputs.push(tau_matrix[(i, j)].sync_reveal());
+                    }
+                }
+
+                inputs
             }
             BuiltinCircuit::KeyPublicize(circuit) => {
                 let mut inputs = Vec::new();
@@ -426,8 +446,8 @@ impl CircuitFactory {
                 let revealed_pub_key_y = pub_key_y.sync_reveal();
 
                 // 公開鍵のX座標とY座標を入力として返す
-                inputs.push(revealed_pub_key_x);
-                inputs.push(revealed_pub_key_y);
+                // inputs.push(revealed_pub_key_x);
+                // inputs.push(revealed_pub_key_y);
                 inputs
             }
             _ => panic!("Unsupported circuit type for create_local_circuit"),
