@@ -13,7 +13,7 @@ use mpc_algebra_wasm::{
 // };
 use server::{
     models::{game::ProverInfo, player::Player, room::Room},
-    services::game_service,
+    services::{game_service, room_service},
     state::AppState,
 };
 use zk_mpc::circuits::LocalOrMPC;
@@ -249,9 +249,25 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
     let state = AppState::new();
     let room_id = setup_test_room_with_players(&state).await;
 
+    for player_id in ["1", "2", "3", "4"] {
+        let ready_result = room_service::toggle_ready(state.clone(), &room_id, player_id).await;
+        assert!(
+            ready_result.is_ok(),
+            "Failed to set ready for player {}: {:?}",
+            player_id,
+            ready_result
+        );
+    }
+
     // ゲーム開始
     println!("Starting game in room: {}", room_id);
-    let _start_result = game_service::start_game(state.clone(), &room_id).await;
+    let start_result = game_service::start_game(state.clone(), &room_id).await;
+    assert!(
+        start_result.is_ok(),
+        "Failed to start game in room {}: {:?}",
+        room_id,
+        start_result
+    );
     let mut games = state.games.lock().await;
     let game = games.get_mut(&room_id).unwrap();
 
