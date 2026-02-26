@@ -103,7 +103,11 @@ pub async fn get_room_info(state: &AppState, room_id: &str) -> Option<Room> {
     rooms.get(room_id).cloned()
 }
 
-pub async fn delete_room(state: AppState, room_id: &str, requester_id: &str) -> Result<String, String> {
+pub async fn delete_room(
+    state: AppState,
+    room_id: &str,
+    requester_id: &str,
+) -> Result<String, String> {
     let mut rooms = state.rooms.lock().await;
 
     let Some(room) = rooms.get(room_id) else {

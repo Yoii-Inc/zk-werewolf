@@ -78,7 +78,7 @@ async fn main() {
         eprintln!("Warning: .envファイルの読み込みに失敗しました: {}", e);
     }
 
-    init_logger(); // ロガーの初期化
+    // init_logger(); // ロガーの初期化
 
     // 環境変数の存在確認
     let required_vars = [
