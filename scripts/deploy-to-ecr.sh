@@ -35,6 +35,12 @@ ENVIRONMENT=""
 SERVICE="all"
 SKIP_BUILD=false
 
+ROLE_ASSIGNMENT_GROTH16_PK_PATH=${ROLE_ASSIGNMENT_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk}
+ANONYMOUS_VOTING_GROTH16_PK_PATH=${ANONYMOUS_VOTING_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk}
+DIVINATION_GROTH16_PK_PATH=${DIVINATION_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/divination_max5_v1.pk}
+WINNING_JUDGEMENT_GROTH16_PK_PATH=${WINNING_JUDGEMENT_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/winning_judgement_max5_v1.pk}
+KEY_PUBLICIZE_GROTH16_PK_PATH=${KEY_PUBLICIZE_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/key_publicize_max5_v1.pk}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --skip-build)
@@ -155,14 +161,32 @@ build_and_push() {
     echo ""
 }
 
-prepare_groth16_artifacts() {
-    log_info "Preparing Groth16 artifacts for MPC node image..."
-    cd "${PROJECT_ROOT}"
-    if make groth16-setup; then
-        log_info "Groth16 artifacts generated successfully"
+resolve_path() {
+    local path=$1
+    if [[ "${path}" = /* ]]; then
+        echo "${path}"
     else
-        log_error "Failed to generate Groth16 artifacts"
+        echo "${PROJECT_ROOT}/${path}"
     fi
+}
+
+verify_groth16_artifacts() {
+    local paths=(
+        "${ROLE_ASSIGNMENT_GROTH16_PK_PATH}"
+        "${ANONYMOUS_VOTING_GROTH16_PK_PATH}"
+        "${DIVINATION_GROTH16_PK_PATH}"
+        "${WINNING_JUDGEMENT_GROTH16_PK_PATH}"
+        "${KEY_PUBLICIZE_GROTH16_PK_PATH}"
+    )
+
+    for p in "${paths[@]}"; do
+        local abs_path
+        abs_path=$(resolve_path "${p}")
+        if [ ! -f "${abs_path}" ]; then
+            log_error "Groth16 artifact not found: ${abs_path}"
+        fi
+    done
+    log_info "Using pre-generated Groth16 artifacts."
 }
 
 # Deploy services based on selection
@@ -177,7 +201,7 @@ case $SERVICE in
         ;;
     mpc-node)
         if [ "$SKIP_BUILD" = false ]; then
-            prepare_groth16_artifacts
+            verify_groth16_artifacts
         fi
         build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
@@ -187,7 +211,7 @@ case $SERVICE in
             "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
             "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
         if [ "$SKIP_BUILD" = false ]; then
-            prepare_groth16_artifacts
+            verify_groth16_artifacts
         fi
         build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
