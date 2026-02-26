@@ -710,6 +710,22 @@ impl Game {
                 if app_state.blockchain_client.is_enabled() {
                     let proof_id = compute_proof_id(&self.batch_request.batch_id);
                     let game_id = compute_game_id(&self.room_id);
+                    let Some(circuit_profile) = identifier.circuit_profile() else {
+                        self.batch_request.status = BatchStatus::Failed;
+                        self.chat_log.add_system_message(
+                            "On-chain proof verification skipped: failed to derive circuit profile."
+                                .to_string(),
+                        );
+                        return;
+                    };
+                    if !circuit_profile.is_supported_onchain_profile() {
+                        self.batch_request.status = BatchStatus::Failed;
+                        self.chat_log.add_system_message(
+                            "On-chain proof verification skipped: unsupported circuit profile."
+                                .to_string(),
+                        );
+                        return;
+                    }
                     let (proof_type, proof_type_label) = match &identifier {
                         CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
                             (ChainProofType::RoleAssignment, "RoleAssignment")
@@ -725,6 +741,28 @@ impl Game {
                         }
                         CircuitEncryptedInputIdentifier::KeyPublicize(_) => {
                             (ChainProofType::KeyPublicize, "KeyPublicize")
+                        }
+                    };
+                    let player_count: u8 = match u8::try_from(circuit_profile.player_count()) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification skipped: invalid player count for {}.",
+                                proof_type_label
+                            ));
+                            return;
+                        }
+                    };
+                    let werewolf_count: u8 = match u8::try_from(circuit_profile.werewolf_count()) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification skipped: invalid werewolf count for {}.",
+                                proof_type_label
+                            ));
+                            return;
                         }
                     };
                     let proof_data = match output.proof.clone() {
@@ -753,7 +791,15 @@ impl Game {
 
                     match app_state
                         .blockchain_client
-                        .verify_proof(proof_id, game_id, proof_type, &proof_data, &public_inputs)
+                        .verify_proof(
+                            proof_id,
+                            game_id,
+                            proof_type,
+                            player_count,
+                            werewolf_count,
+                            &proof_data,
+                            &public_inputs,
+                        )
                         .await
                     {
                         Ok(Some(true)) => {

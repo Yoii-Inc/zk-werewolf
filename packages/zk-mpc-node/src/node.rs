@@ -8,9 +8,10 @@ use ark_groth16::{generate_random_parameters, prepare_verifying_key, verify_proo
 use ark_serialize::CanonicalDeserialize;
 use ark_std::test_rng;
 use mpc_algebra::{AdditivePairingShare, MpcPairingEngine, Reveal};
-use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
+use mpc_algebra_wasm::{CircuitEncryptedInputIdentifier, CircuitProfile};
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
+use std::collections::HashMap;
 use std::iter::zip;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -29,8 +30,8 @@ struct Groth16Setup {
 impl Groth16Setup {
     fn from_pk_path(path: &PathBuf, label: &str) -> Result<Self, std::io::Error> {
         let bytes = std::fs::read(path)?;
-        let local_proving_key =
-            LocalProvingKey::deserialize_uncompressed(bytes.as_slice()).map_err(|e| {
+        let local_proving_key = LocalProvingKey::deserialize_uncompressed(bytes.as_slice())
+            .map_err(|e| {
                 std::io::Error::other(format!(
                     "failed to deserialize {label} proving key {}: {:?}",
                     path.display(),
@@ -54,6 +55,7 @@ impl Groth16Setup {
 
 #[derive(Clone, Default)]
 struct CircuitGroth16Setups {
+    by_profile: HashMap<CircuitProfile, Groth16Setup>,
     role_assignment: Option<Groth16Setup>,
     divination: Option<Groth16Setup>,
     anonymous_voting: Option<Groth16Setup>,
@@ -63,7 +65,11 @@ struct CircuitGroth16Setups {
 
 impl CircuitGroth16Setups {
     fn load() -> Result<Self, std::io::Error> {
+        let mut by_profile = HashMap::new();
+        load_profile_setups_from_data_dir(&mut by_profile)?;
+
         Ok(Self {
+            by_profile,
             role_assignment: load_setup_with_fallback(
                 "ROLE_ASSIGNMENT_GROTH16_PK_PATH",
                 "role_assignment_max5_v1.pk",
@@ -93,6 +99,15 @@ impl CircuitGroth16Setups {
     }
 
     fn for_circuit(&self, circuit_type: &CircuitEncryptedInputIdentifier) -> Option<&Groth16Setup> {
+        if let Some(profile) = circuit_type.circuit_profile() {
+            if let Some(setup) = self.by_profile.get(&profile) {
+                return Some(setup);
+            }
+            // プロファイルが判別できるのに一致する setup がない場合、
+            // max5 等へのフォールバックを行うと不正な鍵で証明してしまうため禁止する。
+            return None;
+        }
+
         match circuit_type {
             CircuitEncryptedInputIdentifier::RoleAssignment(_) => self.role_assignment.as_ref(),
             CircuitEncryptedInputIdentifier::Divination(_) => self.divination.as_ref(),
@@ -186,6 +201,14 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         request: ProofRequest,
     ) -> Result<(), Box<dyn std::error::Error + Send>> {
         let pm = self.proof_manager.clone();
+        if let Some(profile) = request.circuit_type.circuit_profile() {
+            if !profile.is_supported_onchain_profile() {
+                println!(
+                    "Warning: unsupported on-chain profile requested: {} (proof generation continues off-chain)",
+                    circuit_profile_label(profile)
+                );
+            }
+        }
 
         // Setup circuit
         let local_circuit = CircuitFactory::create_local_circuit(&request.circuit_type);
@@ -205,21 +228,21 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         let inputs = CircuitFactory::create_verify_inputs(&mpc_circuit);
 
         let rng = &mut test_rng();
-        let (pvk, mpc_params): (_, MPCProvingKey) =
-            if let Some(setup) = self.groth16_setups.for_circuit(&request.circuit_type) {
-                (setup.prepared_verifying_key(), setup.mpc_proving_key())
-            } else {
-                let params =
-                    generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
-                        .map_err(|e| -> Box<dyn std::error::Error + Send> {
-                            Box::new(std::io::Error::other(format!(
-                                "Failed to generate Groth16 parameters: {:?}",
-                                e
-                            )))
-                        })?;
-                let pvk = prepare_verifying_key(&params.vk);
-                (pvk, ProvingKey::from_public(params))
-            };
+        let (pvk, mpc_params): (_, MPCProvingKey) = if let Some(setup) =
+            self.groth16_setups.for_circuit(&request.circuit_type)
+        {
+            (setup.prepared_verifying_key(), setup.mpc_proving_key())
+        } else {
+            let params = generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
+                .map_err(|e| -> Box<dyn std::error::Error + Send> {
+                Box::new(std::io::Error::other(format!(
+                    "Failed to generate Groth16 parameters: {:?}",
+                    e
+                )))
+            })?;
+            let pvk = prepare_verifying_key(&params.vk);
+            (pvk, ProvingKey::from_public(params))
+        };
 
         let mpc_proof = create_random_proof::<
             MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>,
@@ -413,6 +436,117 @@ fn pk_path_from_env_or_default(env_var: &str, default_pk_file: &str) -> Option<P
     }
 }
 
+fn load_profile_setups_from_data_dir(
+    setups: &mut HashMap<CircuitProfile, Groth16Setup>,
+) -> Result<(), std::io::Error> {
+    let data_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data/groth16");
+    if !data_dir.exists() {
+        return Ok(());
+    }
+
+    for entry in std::fs::read_dir(data_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("pk") {
+            continue;
+        }
+
+        let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some(profile) = parse_profile_from_pk_filename(file_name) else {
+            continue;
+        };
+
+        let label = format!("{} profile", circuit_profile_label(profile));
+        let setup = Groth16Setup::from_pk_path(&path, &label)?;
+        setups.insert(profile, setup);
+        println!(
+            "Loaded {} Groth16 proving key from {}.",
+            circuit_profile_label(profile),
+            path.display()
+        );
+    }
+
+    Ok(())
+}
+
+fn parse_profile_from_pk_filename(file_name: &str) -> Option<CircuitProfile> {
+    let stem = file_name.strip_suffix(".pk")?;
+
+    if let Some(rest) = stem.strip_prefix("role_assignment_n") {
+        let (players, tail) = rest.split_once("_w")?;
+        let (werewolves, _) = tail.split_once("_v")?;
+        return Some(CircuitProfile::RoleAssignment {
+            player_count: players.parse().ok()?,
+            werewolf_count: werewolves.parse().ok()?,
+        });
+    }
+    if let Some(rest) = stem.strip_prefix("role_assignment_max") {
+        let (players, _) = rest.split_once("_v")?;
+        let player_count: usize = players.parse().ok()?;
+        let werewolf_count = default_werewolf_count_for_player_count(player_count);
+        return Some(CircuitProfile::RoleAssignment {
+            player_count,
+            werewolf_count,
+        });
+    }
+
+    parse_single_count_profile(stem, "divination")
+        .map(|player_count| CircuitProfile::Divination { player_count })
+        .or_else(|| {
+            parse_single_count_profile(stem, "anonymous_voting")
+                .map(|player_count| CircuitProfile::AnonymousVoting { player_count })
+        })
+        .or_else(|| {
+            parse_single_count_profile(stem, "winning_judgement")
+                .map(|player_count| CircuitProfile::WinningJudge { player_count })
+        })
+        .or_else(|| {
+            parse_single_count_profile(stem, "key_publicize")
+                .map(|player_count| CircuitProfile::KeyPublicize { player_count })
+        })
+}
+
+fn parse_single_count_profile(stem: &str, prefix: &str) -> Option<usize> {
+    if let Some(rest) = stem.strip_prefix(&format!("{}_n", prefix)) {
+        let (players, _) = rest.split_once("_v")?;
+        return players.parse().ok();
+    }
+    if let Some(rest) = stem.strip_prefix(&format!("{}_max", prefix)) {
+        let (players, _) = rest.split_once("_v")?;
+        return players.parse().ok();
+    }
+    None
+}
+
+fn default_werewolf_count_for_player_count(player_count: usize) -> usize {
+    if player_count <= 6 {
+        1
+    } else if player_count <= 9 {
+        2
+    } else {
+        3
+    }
+}
+
+fn circuit_profile_label(profile: CircuitProfile) -> String {
+    match profile {
+        CircuitProfile::RoleAssignment {
+            player_count,
+            werewolf_count,
+        } => format!("role_assignment_n{}_w{}", player_count, werewolf_count),
+        CircuitProfile::Divination { player_count } => format!("divination_n{}", player_count),
+        CircuitProfile::AnonymousVoting { player_count } => {
+            format!("anonymous_voting_n{}", player_count)
+        }
+        CircuitProfile::WinningJudge { player_count } => {
+            format!("winning_judgement_n{}", player_count)
+        }
+        CircuitProfile::KeyPublicize { player_count } => format!("key_publicize_n{}", player_count),
+    }
+}
+
 fn load_setup_with_fallback(
     env_var: &str,
     default_pk_file: &str,
@@ -426,7 +560,10 @@ fn load_setup_with_fallback(
     };
 
     let setup = Groth16Setup::from_pk_path(&path, label)?;
-    println!("Loaded {label} Groth16 proving key from {}.", path.display());
+    println!(
+        "Loaded {label} Groth16 proving key from {}.",
+        path.display()
+    );
     Ok(Some(setup))
 }
 
@@ -445,7 +582,15 @@ fn abi_encode_groth16_proof(proof: &ark_groth16::Proof<ark_bn254::Bn254>) -> Vec
 
 fn expected_public_input_len(circuit_type: &CircuitEncryptedInputIdentifier) -> usize {
     match circuit_type {
-        CircuitEncryptedInputIdentifier::RoleAssignment(_) => 100,
+        CircuitEncryptedInputIdentifier::RoleAssignment(items) => {
+            let Some(first) = items.first() else {
+                return 0;
+            };
+            let n = first.public_input.grouping_parameter.get_num_players();
+            let m = first.public_input.grouping_parameter.get_num_groups();
+            let matrix_size = n + m;
+            matrix_size * matrix_size
+        }
         CircuitEncryptedInputIdentifier::Divination(_) => 8,
         CircuitEncryptedInputIdentifier::AnonymousVoting(_) => 1,
         CircuitEncryptedInputIdentifier::WinningJudge(_) => 2,

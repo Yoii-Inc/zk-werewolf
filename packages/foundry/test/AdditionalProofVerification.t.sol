@@ -48,10 +48,10 @@ contract AdditionalProofVerificationTest is Test {
 
         game.setVerifier(address(verifier));
         verifier.setGameContract(address(game));
-        verifier.setAnonymousVotingVerifierAdapter(address(anonymousVotingAdapter));
-        verifier.setDivinationVerifierAdapter(address(divinationAdapter));
-        verifier.setWinningJudgementVerifierAdapter(address(winningJudgementAdapter));
-        verifier.setKeyPublicizeVerifierAdapter(address(keyPublicizeAdapter));
+        verifier.setVerifierAdapter(WerewolfProofVerifier.ProofType.AnonymousVoting, 5, 0, address(anonymousVotingAdapter));
+        verifier.setVerifierAdapter(WerewolfProofVerifier.ProofType.Divination, 5, 0, address(divinationAdapter));
+        verifier.setVerifierAdapter(WerewolfProofVerifier.ProofType.WinningJudgement, 5, 0, address(winningJudgementAdapter));
+        verifier.setVerifierAdapter(WerewolfProofVerifier.ProofType.KeyPublicize, 5, 0, address(keyPublicizeAdapter));
     }
 
     function testDivinationProofCanBeVerifiedViaWerewolfVerifier() public {
@@ -69,7 +69,7 @@ contract AdditionalProofVerificationTest is Test {
         assertTrue(offchainVerified, "offchain Groth16 verification should be true");
 
         bool ok = game.verifyProofAndRecord(
-            proofId, gameId, IWerewolfProofVerifier.ProofType.Divination, proof, publicInputs
+            proofId, gameId, IWerewolfProofVerifier.ProofType.Divination, 5, 0, proof, publicInputs
         );
 
         assertTrue(ok, "verification call should return true");
@@ -97,7 +97,7 @@ contract AdditionalProofVerificationTest is Test {
         assertTrue(offchainVerified, "offchain Groth16 verification should be true");
 
         bool ok = game.verifyProofAndRecord(
-            proofId, gameId, IWerewolfProofVerifier.ProofType.AnonymousVoting, proof, publicInputs
+            proofId, gameId, IWerewolfProofVerifier.ProofType.AnonymousVoting, 5, 0, proof, publicInputs
         );
 
         assertTrue(ok, "verification call should return true");
@@ -123,7 +123,7 @@ contract AdditionalProofVerificationTest is Test {
         assertTrue(offchainVerified, "offchain Groth16 verification should be true");
 
         bool ok = game.verifyProofAndRecord(
-            proofId, gameId, IWerewolfProofVerifier.ProofType.WinningJudgement, proof, publicInputs
+            proofId, gameId, IWerewolfProofVerifier.ProofType.WinningJudgement, 5, 0, proof, publicInputs
         );
 
         assertTrue(ok, "verification call should return true");
@@ -148,7 +148,7 @@ contract AdditionalProofVerificationTest is Test {
         assertTrue(offchainVerified, "offchain Groth16 verification should be true");
 
         bool ok = game.verifyProofAndRecord(
-            proofId, gameId, IWerewolfProofVerifier.ProofType.KeyPublicize, proof, publicInputs
+            proofId, gameId, IWerewolfProofVerifier.ProofType.KeyPublicize, 5, 0, proof, publicInputs
         );
 
         assertTrue(ok, "verification call should return true");
