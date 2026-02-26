@@ -2,7 +2,7 @@ use crate::*;
 
 use ark_bn254::Fr;
 use ark_crypto_primitives::encryption::AsymmetricEncryptionScheme;
-use ark_ec::{group, AffineCurve};
+use ark_ec::AffineCurve;
 use ark_ff::{BigInteger, PrimeField, SquareRootField};
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::eq::EqGadget;
@@ -12,9 +12,9 @@ use ark_r1cs_std::groups::CurveVar;
 use ark_r1cs_std::prelude::Boolean;
 use ark_r1cs_std::select::CondSelectGadget;
 use ark_r1cs_std::{R1CSVar, ToBitsGadget};
+use ark_relations::r1cs::ConstraintSynthesizer;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use ark_relations::{lc, r1cs::ConstraintSynthesizer};
-use ark_std::{rand, test_rng};
+use ark_std::test_rng;
 use ark_std::{One, Zero};
 use mpc_algebra::groups::MpcCurveVar;
 use mpc_algebra::mpc_fields::MpcFieldVar;
@@ -29,7 +29,6 @@ use mpc_algebra::{BitDecomposition, BooleanWire};
 use mpc_algebra::{EqualityZero, ModulusConversion};
 use mpc_algebra_wasm::{calc_shuffle_matrix, Role};
 use nalgebra as na;
-use zk_mpc::circuits::serialize::werewolf;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 use zk_mpc::field::*;
 
@@ -161,7 +160,7 @@ impl ConstraintSynthesizer<Fr> for AnonymousVotingCircuit<Fr> {
         }
 
         // enforce equal
-        is_most_voted_id_var.enforce_equal(&calced_is_most_voted_id);
+        is_most_voted_id_var.enforce_equal(&calced_is_most_voted_id)?;
 
         println!(
             "[AnonymousVotingCircuit(Local)] instance vars: {}",
@@ -268,7 +267,7 @@ impl ConstraintSynthesizer<MpcField<Fr>> for AnonymousVotingCircuit<MpcField<Fr>
         }
 
         // enforce equal
-        is_most_voted_id_var.enforce_equal(&calced_is_most_voted_id);
+        is_most_voted_id_var.enforce_equal(&calced_is_most_voted_id)?;
 
         println!(
             "[AnonymousVotingCircuit(MPC)] instance vars: {}",
@@ -784,20 +783,20 @@ impl ConstraintSynthesizer<Fr> for RoleAssignmentCircuit<Fr> {
 
         // calculate
         // M = Product of shuffle_matrix
-        let matrix_M_var = shuffle_matrix_var
+        let matrix_m_var = shuffle_matrix_var
             .clone()
             .iter()
             .skip(1)
             .fold(shuffle_matrix_var[0].clone(), |acc, x| acc * x);
 
-        let inverse_matrix_M_var = inverse_shuffle_matrix_var
+        let inverse_matrix_m_var = inverse_shuffle_matrix_var
             .clone()
             .iter()
             .skip(1)
             .fold(inverse_shuffle_matrix_var[0].clone(), |acc, x| acc * x);
 
         // rho = M^-1 * tau * M
-        let rho_var = inverse_matrix_M_var * &tau_matrix_var * &matrix_M_var;
+        let rho_var = inverse_matrix_m_var * &tau_matrix_var * &matrix_m_var;
 
         let mut rho_sequence_var = Vec::with_capacity(self.public_input.num_players);
         let mut current_rho = rho_var.clone();
@@ -830,7 +829,7 @@ impl ConstraintSynthesizer<Fr> for RoleAssignmentCircuit<Fr> {
             .collect::<Vec<_>>();
 
         // Warning: This should be enforced, but we skip it to reduce the constraint count.
-        let calced_role = calced_vec
+        let _calced_role = calced_vec
             .iter()
             .map(|val| test_max(val, self.public_input.num_players, false).unwrap())
             .collect::<Vec<_>>();
@@ -939,20 +938,20 @@ impl ConstraintSynthesizer<MpcField<Fr>> for RoleAssignmentCircuit<MpcField<Fr>>
 
         // calculate
         // M = Product of shuffle_matrix
-        let matrix_M_var = shuffle_matrix_var
+        let matrix_m_var = shuffle_matrix_var
             .clone()
             .iter()
             .skip(1)
             .fold(shuffle_matrix_var[0].clone(), |acc, x| acc * x);
 
-        let inverse_matrix_M_var = inverse_shuffle_matrix_var
+        let inverse_matrix_m_var = inverse_shuffle_matrix_var
             .clone()
             .iter()
             .skip(1)
             .fold(inverse_shuffle_matrix_var[0].clone(), |acc, x| acc * x);
 
         // rho = M^-1 * tau * M
-        let rho_var = inverse_matrix_M_var * &tau_matrix_var * &matrix_M_var;
+        let rho_var = inverse_matrix_m_var * &tau_matrix_var * &matrix_m_var;
 
         let mut rho_sequence_var = Vec::with_capacity(self.public_input.num_players);
         let mut current_rho = rho_var.clone();
@@ -985,7 +984,7 @@ impl ConstraintSynthesizer<MpcField<Fr>> for RoleAssignmentCircuit<MpcField<Fr>>
             .collect::<Vec<_>>();
 
         // Warning: This should be enforced, but we skip it to reduce the constraint count.
-        let calced_role = calced_vec
+        let _calced_role = calced_vec
             .iter()
             .map(|val| test_max_mpc(val, self.public_input.num_players, false).unwrap())
             .collect::<Vec<_>>();
@@ -1081,12 +1080,12 @@ impl DivinationCircuit<MpcField<Fr>> {
     pub fn calculate_output(
         &self,
     ) -> <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalCiphertext {
-        let is_target_vec = self
+        let _is_target_vec = self
             .private_input
             .iter()
             .map(|input| input.is_target.clone())
             .collect::<Vec<_>>();
-        let is_werewolf_vec = self
+        let _is_werewolf_vec = self
             .private_input
             .iter()
             .map(|input| input.is_werewolf)
@@ -1125,7 +1124,7 @@ impl DivinationCircuit<MpcField<Fr>> {
 }
 
 impl KeyPublicizeCircuit<Fr> {
-    fn calculate_output(&self) -> (Fr, Fr) {
+    pub fn calculate_output(&self) -> (Fr, Fr) {
         let pub_key_x = self
             .private_input
             .iter()
@@ -1181,7 +1180,7 @@ impl RoleAssignmentCircuit<MpcField<Fr>> {
         let mut output_vec = Vec::new();
 
         for id in 0..num_players {
-            let (role, role_val, player_ids) =
+            let (role, _role_val, _player_ids) =
                 calc_shuffle_matrix(grouping_parameter, &revealed_shuffle_matrix, id).unwrap();
 
             match role {
@@ -1504,6 +1503,7 @@ where
     res
 }
 
+#[allow(dead_code)]
 fn enforce_permutation_matrix<F: PrimeField>(
     matrix: &na::DMatrix<FpVar<F>>,
     n: usize,
@@ -1553,6 +1553,7 @@ fn enforce_permutation_matrix<F: PrimeField>(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn enforce_permutation_matrix_mpc<
     F: PrimeField + Reveal + ark_ff::SquareRootField + mpc_algebra::EqualityZero,
 >(

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ChatMessage, RoomInfo } from "~~/types/game";
+import type { ChatMessage } from "~~/types/game";
 
 // localStorageのキーを生成
 const getClientMessagesKey = (roomId: string) => `client_messages_${roomId}`;
@@ -26,7 +26,15 @@ const saveClientMessages = (roomId: string, messages: ChatMessage[]) => {
   }
 };
 
-export const useGameChat = (roomId: string, roomInfo: RoomInfo | null) => {
+const getMessageKey = (message: ChatMessage) =>
+  `${message.source ?? "unknown"}|${message.id ?? ""}|${message.sender}|${message.message}|${message.timestamp}`;
+
+const parseTimestamp = (timestamp: string) => {
+  const value = new Date(timestamp).getTime();
+  return Number.isNaN(value) ? 0 : value;
+};
+
+export const useGameChat = (roomId: string) => {
   // サーバー側メッセージ（setMessagesで外部から設定）
   const [serverMessages, setServerMessages] = useState<ChatMessage[]>([]);
 
@@ -38,9 +46,20 @@ export const useGameChat = (roomId: string, roomInfo: RoomInfo | null) => {
 
   // サーバー側とクライアント側のメッセージをマージ
   useEffect(() => {
-    const merged = [...serverMessages, ...clientMessages].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-    );
+    const dedupedMap = new Map<string, ChatMessage>();
+    [...serverMessages, ...clientMessages].forEach(message => {
+      const key = getMessageKey(message);
+      if (!dedupedMap.has(key)) {
+        dedupedMap.set(key, message);
+      }
+    });
+
+    const merged = Array.from(dedupedMap.values()).sort((a, b) => {
+      const timeDiff = parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp);
+      if (timeDiff !== 0) return timeDiff;
+      return getMessageKey(a).localeCompare(getMessageKey(b));
+    });
+
     setMessages(merged);
   }, [serverMessages, clientMessages]);
 
@@ -55,7 +74,13 @@ export const useGameChat = (roomId: string, roomInfo: RoomInfo | null) => {
       ...message,
       source: message.source ?? "client", // sourceが未設定ならclientを設定
     };
-    setClientMessages(prev => [...prev, messageWithSource]);
+    setClientMessages(prev => {
+      const key = getMessageKey(messageWithSource);
+      if (prev.some(existing => getMessageKey(existing) === key)) {
+        return prev;
+      }
+      return [...prev, messageWithSource];
+    });
   }, []);
 
   // サーバー側メッセージを追加（WebSocketで受信したメッセージなど）
@@ -64,7 +89,13 @@ export const useGameChat = (roomId: string, roomInfo: RoomInfo | null) => {
       ...message,
       source: "server",
     };
-    setServerMessages(prev => [...prev, messageWithSource]);
+    setServerMessages(prev => {
+      const key = getMessageKey(messageWithSource);
+      if (prev.some(existing => getMessageKey(existing) === key)) {
+        return prev;
+      }
+      return [...prev, messageWithSource];
+    });
   }, []);
 
   // サーバー側メッセージを設定（useGameInfoから呼ばれる）

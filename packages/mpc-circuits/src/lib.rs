@@ -3,7 +3,11 @@ pub mod factory;
 pub mod inputs;
 pub mod traits;
 
-pub use circuits::*;
+pub use circuits::{
+    anonymous_voting::*, divination::*, key_publicize::*, role_assignment::*, winning_judgement::*,
+    BuiltinCircuit, CircuitIdentifier,
+};
 pub use factory::*;
-pub use inputs::*;
-pub use traits::*;
+pub use inputs::{
+    anonymous_voting::*, divination::*, key_publicize::*, role_assignment::*, winning_judgement::*,
+};

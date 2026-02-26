@@ -204,6 +204,34 @@ module "backend_service" {
       value = local.secrets.backend.jwt_secret
     },
     {
+      name  = "BLOCKCHAIN_ENABLED"
+      value = tostring(try(local.secrets.backend.blockchain_enabled, true))
+    },
+    {
+      name  = "ETHEREUM_RPC_URL"
+      value = try(local.secrets.backend.ethereum_rpc_url, "https://ethereum-sepolia-rpc.publicnode.com")
+    },
+    {
+      name  = "ETHEREUM_CHAIN_ID"
+      value = tostring(try(local.secrets.backend.ethereum_chain_id, 11155111))
+    },
+    {
+      name  = "DEPLOYER_PRIVATE_KEY"
+      value = try(local.secrets.backend.deployer_private_key, "")
+    },
+    {
+      name  = "WEREWOLF_GAME_CONTRACT"
+      value = try(local.secrets.backend.werewolf_game_contract, "")
+    },
+    {
+      name  = "WEREWOLF_VERIFIER_CONTRACT"
+      value = try(local.secrets.backend.werewolf_verifier_contract, "")
+    },
+    {
+      name  = "WEREWOLF_REWARDS_CONTRACT"
+      value = try(local.secrets.backend.werewolf_rewards_contract, "")
+    },
+    {
       name  = "ZK_MPC_NODE_0_HTTP"
       value = "http://mpc-node-0.mpc.local:9000"
     },

@@ -2,16 +2,12 @@ use crate::utils::config::CONFIG;
 use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
 use reqwest::Client;
 use tokio::time::{sleep, Duration};
-use zk_mpc::marlin::MFr;
 use zk_mpc_node::{
     models::{ProofOutput, ProofOutputType, ProofRequest, ProofResponse},
     ProofStatus,
 };
 
-use crate::{
-    models::game::{BatchRequest, BatchStatus, ClientRequestType},
-    state::AppState,
-};
+use crate::{models::game::ClientRequestType, state::AppState};
 
 const MAX_RETRY_ATTEMPTS: u32 = 180;
 const RETRY_DELAY_SECS: u64 = 1;
@@ -32,7 +28,7 @@ pub async fn request_proof_with_output(
     };
 
     // TODO: revise individual node payloads
-    let proof_requests = [payload.clone(), payload.clone(), payload.clone()];
+    let _proof_requests = [payload.clone(), payload.clone(), payload.clone()];
 
     let mut responses = Vec::new();
 

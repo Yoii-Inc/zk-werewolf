@@ -2,18 +2,14 @@ use ark_bn254::Fr;
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 use ark_std::{test_rng, UniformRand};
-use mpc_algebra::{crh::pedersen, reveal::Reveal};
-use mpc_algebra::{reveal, FromLocal};
-use zk_mpc::circuits::{circuit, ElGamalLocalOrMPC};
-use zk_mpc::{
-    circuits::{circuit::MySimpleCircuit, LocalOrMPC},
-    marlin::MFr,
-};
+use mpc_algebra::reveal::Reveal;
+use mpc_algebra::FromLocal;
+use zk_mpc::circuits::ElGamalLocalOrMPC;
+use zk_mpc::{circuits::LocalOrMPC, marlin::MFr};
 
 use mpc_algebra_wasm::{
     AnonymousVotingEncryption, CircuitEncryptedInputIdentifier, DivinationEncryption,
-    KeyPublicizeEncryption, NodeEncryptedShare, RoleAssignmentEncryption, SplitAndEncrypt,
-    WinningJudgementEncryption,
+    KeyPublicizeEncryption, RoleAssignmentEncryption, SplitAndEncrypt, WinningJudgementEncryption,
 };
 
 use crate::*;
@@ -130,8 +126,6 @@ impl CircuitFactory {
                     },
                 })
             }
-
-            _ => panic!("Unsupported circuit type for create_local_circuit"),
         }
     }
 
@@ -369,16 +363,13 @@ impl CircuitFactory {
                     },
                 })
             }
-            _ => panic!("Unsupported circuit type for create_mpc_circuit"),
         }
     }
 
     // TODO: implement for all circuits
     pub fn create_verify_inputs(circuit_type: &BuiltinCircuit<MFr>) -> Vec<Fr> {
         match circuit_type {
-            // CircuitIdentifier::Built(BuiltinCircuit::MySimple(circuit)) => {
-            //     vec![circuit.a.unwrap().sync_reveal() * circuit.b.unwrap().sync_reveal()]
-            // }
+            BuiltinCircuit::MySimple(_) => Vec::new(),
             BuiltinCircuit::Divination(circuit) => {
                 let mut inputs = Vec::new();
                 let is_target_werewolf = circuit.calculate_output();
@@ -439,23 +430,19 @@ impl CircuitFactory {
                 inputs
             }
             BuiltinCircuit::KeyPublicize(circuit) => {
-                let mut inputs = Vec::new();
-                let (pub_key_x, pub_key_y) = circuit.calculate_output();
-
-                let revealed_pub_key_x = pub_key_x.sync_reveal();
-                let revealed_pub_key_y = pub_key_y.sync_reveal();
+                let (_pub_key_x, _pub_key_y) = circuit.calculate_output();
 
                 // 公開鍵のX座標とY座標を入力として返す
                 // inputs.push(revealed_pub_key_x);
                 // inputs.push(revealed_pub_key_y);
-                inputs
+                Vec::new()
             }
-            _ => panic!("Unsupported circuit type for create_local_circuit"),
         }
     }
 
     pub fn get_circuit_outputs(circuit_type: &BuiltinCircuit<MFr>) -> Vec<u8> {
         match circuit_type {
+            BuiltinCircuit::MySimple(_) => Vec::new(),
             BuiltinCircuit::Divination(circuit) => {
                 let is_target_werewolf = circuit.calculate_output().sync_reveal();
 
@@ -496,7 +483,6 @@ impl CircuitFactory {
                 // JSONとしてシリアライズ
                 serde_json::to_vec(&role_strings).unwrap()
             }
-            _ => panic!("Unsupported circuit type for get_circuit_outputs"),
         }
     }
 }

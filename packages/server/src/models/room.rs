@@ -1,5 +1,6 @@
 use super::chat::ChatLog;
 use super::player::Player;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -62,6 +63,8 @@ pub enum RoomStatus {
 pub struct Room {
     pub room_id: String,
     pub name: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub empty_since: Option<DateTime<Utc>>,
     pub players: Vec<Player>,
     pub max_players: usize,
     pub room_config: RoomConfig,
@@ -75,6 +78,8 @@ impl Room {
         Room {
             room_id: room_id.clone(),
             name,
+            created_at: Utc::now(),
+            empty_since: Some(Utc::now()),
             players: Vec::new(),
             max_players: config.max_players,
             room_config: config,

@@ -8,14 +8,34 @@ import { toast } from "react-hot-toast";
 interface Village {
   room_id: string;
   name: string;
+  created_at?: string;
   lobby_id: string;
   players?: Player[] | null;
   max_players: number;
-  status: "Open" | "InProgress" | "Closed";
+  status: "Open" | "Ready" | "InProgress" | "Closed";
   roles: string[];
   voting_status: "not_started" | "in_progress" | "completed";
   votes: Record<number, Vote>;
 }
+
+const formatCreatedAt = (createdAt?: string) => {
+  if (!createdAt) {
+    return "Unknown";
+  }
+
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown";
+  }
+
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 interface Player {
   id: number;
@@ -206,10 +226,14 @@ const Home = () => {
               </h2>
               <span
                 className={`px-4 py-1.5 rounded-full text-sm font-medium ${
-                  room.status === "Open" ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                  room.status === "Open"
+                    ? "bg-green-50 text-green-700"
+                    : room.status === "Ready"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
                 }`}
               >
-                {room.status === "Open" ? "Waiting" : "In Game"}
+                {room.status === "Open" ? "Waiting" : room.status === "Ready" ? "Ready" : "In Game"}
               </span>
             </div>
 
@@ -222,7 +246,7 @@ const Home = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Clock size={18} />
-                <span>Created: Unknown</span>
+                <span>Created: {formatCreatedAt(room.created_at)}</span>
               </div>
             </div>
 

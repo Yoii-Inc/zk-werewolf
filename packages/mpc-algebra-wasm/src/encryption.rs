@@ -26,7 +26,7 @@ pub trait SplitAndEncrypt {
 
     fn split(input: &Self::Input) -> Vec<Self::ShareForNode>;
 
-    fn combine(shares: Vec<Self::ShareForNode>) -> Self::Input {
+    fn combine(_shares: Vec<Self::ShareForNode>) -> Self::Input {
         unimplemented!()
     }
 
@@ -348,12 +348,12 @@ impl SplitAndEncrypt for WinningJudgementEncryption {
 }
 
 // シンプルな分割: secret = s1 + s2 + ... + sn (mod modulus)
-fn split(secret: u64, total_shares: usize, modulus: u64) -> Vec<u64> {
+fn _split(secret: u64, total_shares: usize, modulus: u64) -> Vec<u64> {
     let mut shares = Vec::with_capacity(total_shares);
     let mut sum = 0u64;
     let mut rng = rand::thread_rng();
 
-    for i in 0..(total_shares - 1) {
+    for _i in 0..(total_shares - 1) {
         let share = rand::Rng::gen_range(&mut rng, 0..modulus);
         shares.push(share);
         sum = (sum + share) % modulus;
@@ -374,7 +374,7 @@ fn split_fr(x: Fr, scheme: &SecretSharingScheme) -> Vec<Fr> {
 
     let rng = &mut rand::thread_rng();
 
-    for i in 0..(scheme.total_shares - 1) {
+    for _ in 0..(scheme.total_shares - 1) {
         let share = Fr::pub_rand(rng);
         shares.push(share);
         sum += share;
@@ -422,11 +422,11 @@ fn split_pedersen_randomness(
 
     let rng = &mut rand::thread_rng();
 
-    for i in 0..(scheme.total_shares - 1) {
-        let share =
+    for share in &mut shares[0..(scheme.total_shares - 1)] {
+        let value =
             <ark_ed_on_bn254::EdwardsProjective as ProjectiveCurve>::ScalarField::pub_rand(rng);
-        shares[i].0 = share;
-        sum += share;
+        share.0 = value;
+        sum += value;
     }
     let last_share = x.0 - sum;
     shares[scheme.total_shares - 1].0 = last_share;
@@ -455,49 +455,46 @@ fn split_elgamal_randomness(
     shares
 }
 
-fn combine_anonymous_voting(
-    share: Vec<AnonymousVotingPrivateInput>,
-    public_input: &AnonymousVotingPublicInput,
-    node_keys: Vec<NodeKey>,
-    scheme: &SecretSharingScheme,
-) -> AnonymousVotingPrivateInput {
-    // let private_input = AnonymousVotingPrivateInput {
-    //     id: share[0].id,
-    //     is_target_id: share.iter().map(|s| s.is_target_id.clone()).collect(),
-    //     player_randomness: share.iter().map(|s| s.player_randomness).sum(),
-    // };
-
-    let is_target_id = share.iter().map(|s| s.is_target_id.clone()).fold(
-        vec![Fr::zero(); share[0].is_target_id.len()],
-        |mut acc, curr| {
-            for (a, c) in acc.iter_mut().zip(curr.iter()) {
-                *a += c;
-            }
-            acc
-        },
-    );
-
-    let player_randomness = share
-        .iter()
-        .fold(Fr::zero(), |acc, s| acc + s.player_randomness);
-
-    AnonymousVotingPrivateInput {
-        id: 33,
-        is_target_id,
-        player_randomness,
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
     // use mpc_algebra::crh::pedersen;
 
-    use crate::{PedersenComScheme, PedersenCommitment, PedersenParam, PedersenRandomness};
+    use crate::{PedersenComScheme, PedersenCommitment};
     use ark_crypto_primitives::CommitmentScheme;
     use rand::CryptoRng;
 
     use super::*;
+
+    fn combine_anonymous_voting(
+        share: Vec<AnonymousVotingPrivateInput>,
+    ) -> AnonymousVotingPrivateInput {
+        // let private_input = AnonymousVotingPrivateInput {
+        //     id: share[0].id,
+        //     is_target_id: share.iter().map(|s| s.is_target_id.clone()).collect(),
+        //     player_randomness: share.iter().map(|s| s.player_randomness).sum(),
+        // };
+
+        let is_target_id = share.iter().map(|s| s.is_target_id.clone()).fold(
+            vec![Fr::zero(); share[0].is_target_id.len()],
+            |mut acc, curr| {
+                for (a, c) in acc.iter_mut().zip(curr.iter()) {
+                    *a += c;
+                }
+                acc
+            },
+        );
+
+        let player_randomness = share
+            .iter()
+            .fold(Fr::zero(), |acc, s| acc + s.player_randomness);
+
+        AnonymousVotingPrivateInput {
+            id: 33,
+            is_target_id,
+            player_randomness,
+        }
+    }
 
     #[test]
     fn test_split_combine_simple() {
@@ -587,8 +584,7 @@ mod tests {
         let shares = AnonymousVotingEncryption::split(&input);
         // assert_eq!(shares.len(), scheme.total_shares);
 
-        let combined =
-            combine_anonymous_voting(shares, &input.public_input, input.node_keys, &input.scheme);
+        let combined = combine_anonymous_voting(shares);
         assert_eq!(
             combined.player_randomness,
             input.private_input.player_randomness

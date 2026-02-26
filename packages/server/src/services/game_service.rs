@@ -1,28 +1,19 @@
 use crate::{
     blockchain::state_hash::{compute_game_id, compute_game_state_hash, is_evm_address},
     models::{
-        chat::{ChatMessage, ChatMessageType},
-        game::{Game, GamePhase, GameResult, NightAction, NightActionRequest},
+        game::{BatchStatus, Game, GamePhase, NightAction, NightActionRequest},
         role::Role,
-        room::{RoleConfig, RoomStatus},
+        room::{RoleConfig, RoomStatus, TimeConfig},
     },
-    services::zk_proof::{check_proof_status, request_proof_with_output},
     state::AppState,
 };
 use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
-use ark_ff::UniformRand;
+use chrono::Utc;
 use mpc_algebra_wasm::{GroupingParameter, Role as GroupingRole};
 use rand::seq::SliceRandom;
-use serde_json::json;
 use std::collections::BTreeMap;
-use std::time::Duration;
-use tokio::time::sleep;
-use zk_mpc::{
-    circuits::{ElGamalLocalOrMPC, KeyPublicizeCircuit, LocalOrMPC},
-    input::{MpcInputTrait, WerewolfKeyInput, WerewolfMpcInput},
-    marlin::MFr,
-};
+use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 
 fn grouping_parameter_from_role_config(role_config: &RoleConfig) -> GroupingParameter {
     let mut map = BTreeMap::new();
@@ -40,6 +31,19 @@ pub async fn start_game(state: AppState, room_id: &str) -> Result<String, String
     let game_snapshot = {
         let mut rooms = state.rooms.lock().await;
         let room = rooms.get_mut(room_id).ok_or("Room not found".to_string())?;
+
+        if room.status == RoomStatus::InProgress {
+            return Err("Game is already in progress".to_string());
+        }
+        if room.status == RoomStatus::Closed {
+            return Err("Room is already closed".to_string());
+        }
+        if room.players.is_empty() {
+            return Err("No players in room".to_string());
+        }
+        if !room.players.iter().all(|player| player.is_ready) {
+            return Err("All participants must be ready before starting the game".to_string());
+        }
 
         // プレイヤー数に応じて役職を振り分け（デバッグ用に生成のみ）
         let _roles = assign_roles(room.players.len())?;
@@ -103,7 +107,7 @@ pub async fn end_game(state: AppState, room_id: String) -> Result<String, String
             .ok_or("Game not found".to_string())?;
 
         room.status = RoomStatus::Closed;
-        game.phase = GamePhase::Finished;
+        game.change_phase(GamePhase::Finished);
         game.clone()
     };
 
@@ -153,12 +157,9 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
             game.resolve_night_actions();
         } else if current_phase == GamePhase::Voting {
             game.resolve_voting();
-        } else if current_phase == GamePhase::Result {
-            game.advance_to_next_day();
         }
 
-        game.add_phase_change_message(current_phase.clone(), next_phase.clone());
-        game.phase = next_phase.clone();
+        game.change_phase(next_phase.clone());
 
         (
             format!("{:?}", current_phase),
@@ -176,6 +177,66 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
 
     update_game_state_on_chain(&state, &game_snapshot).await;
     Ok(format!("フェーズを更新しました: {:?}", next_phase))
+}
+
+fn phase_duration_seconds(time_config: &TimeConfig, phase: &GamePhase) -> Option<u64> {
+    match phase {
+        GamePhase::Night => Some(time_config.night_phase),
+        GamePhase::Discussion => Some(time_config.day_phase),
+        GamePhase::Voting => Some(time_config.voting_phase),
+        // DivinationProcessing は既存挙動に合わせて短めの固定値
+        GamePhase::DivinationProcessing => Some(3),
+        // Result は一旦固定値で運用
+        GamePhase::Result => Some(30),
+        GamePhase::Waiting | GamePhase::Finished => None,
+    }
+}
+
+pub async fn auto_advance_due_phases(state: AppState) {
+    let now = Utc::now();
+    let due_room_ids = {
+        let rooms = state.rooms.lock().await;
+        let games = state.games.lock().await;
+
+        games
+            .iter()
+            .filter_map(|(room_id, game)| {
+                let room = rooms.get(room_id)?;
+
+                if room.status != RoomStatus::InProgress {
+                    return None;
+                }
+
+                if game.phase == GamePhase::Waiting || game.phase == GamePhase::Finished {
+                    return None;
+                }
+
+                if game.batch_request.status == BatchStatus::Processing {
+                    return None;
+                }
+
+                let duration_secs =
+                    phase_duration_seconds(&room.room_config.time_config, &game.phase)?;
+                let elapsed_secs = now
+                    .signed_duration_since(game.phase_started_at)
+                    .num_seconds();
+
+                if elapsed_secs >= duration_secs as i64 {
+                    Some(room_id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+
+    for room_id in due_room_ids {
+        if let Err(error) = advance_game_phase(state.clone(), &room_id).await {
+            tracing::debug!("Auto phase advance skipped for room {}: {}", room_id, error);
+        } else {
+            tracing::info!("Auto advanced phase for room {}", room_id);
+        }
+    }
 }
 
 async fn persist_game_on_chain(state: &AppState, game: &Game) {
@@ -307,16 +368,6 @@ pub async fn process_night_action(
             Ok("襲撃先を登録しました".to_string())
         }
     }
-}
-
-async fn check_status_with_retry(proof_id: &str) -> Result<bool, String> {
-    for _ in 0..30 {
-        if check_proof_status(proof_id).await?.0 {
-            return Ok(true);
-        }
-        sleep(Duration::from_secs(1)).await;
-    }
-    Ok(false)
 }
 
 // // 勝利判定
@@ -470,13 +521,6 @@ pub fn initialize_crypto_parameters(game: &mut Game) {
             &mut rng,
         )
         .unwrap();
-    let (pk, sk) =
-        <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::keygen(
-            &elgamal_param,
-            &mut rng,
-        )
-        .unwrap();
-
     // プレイヤーごとのコミットメント（空で初期化、後でクライアントから受信）
     let player_commitment: Vec<
         <<Fr as LocalOrMPC<Fr>>::PedersenComScheme as CommitmentScheme>::Output,

@@ -10,7 +10,7 @@ use serde_json::json;
 use crate::{state::AppState, utils::auth::verify_token};
 
 pub async fn auth_middleware(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {

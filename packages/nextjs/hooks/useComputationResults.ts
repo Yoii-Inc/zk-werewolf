@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import JSONbig from "json-bigint";
+import { useEffect, useState } from "react";
 import { getFortuneTellerSecretKey, loadCryptoParams } from "~~/services/gameInputGenerator";
 import type { ChatMessage, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
 import { CryptoManager } from "~~/utils/crypto/encryption";
 import { getPrivateGameInfo, setPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
-
-const JSONbigNative = JSONbig({ useNativeBigInt: true });
 
 interface ComputationResult {
   computationType: string;
@@ -42,6 +39,67 @@ interface AnonymousVotingResult {
   status: string;
 }
 
+interface PersistedDivinationLog {
+  id: string;
+  batchId: string;
+  timestamp: string;
+  message: string;
+}
+
+const getDivinationLogsKey = (roomId: string, playerId: string) => `divination_logs_${roomId}_${playerId}`;
+
+const parseTimestamp = (timestamp: string) => {
+  const value = new Date(timestamp).getTime();
+  return Number.isNaN(value) ? 0 : value;
+};
+
+const loadDivinationLogs = (roomId: string, playerId: string): PersistedDivinationLog[] => {
+  if (typeof window === "undefined" || !roomId || !playerId) return [];
+  try {
+    const stored = localStorage.getItem(getDivinationLogsKey(roomId, playerId));
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      item =>
+        item &&
+        typeof item.id === "string" &&
+        typeof item.batchId === "string" &&
+        typeof item.timestamp === "string" &&
+        typeof item.message === "string",
+    );
+  } catch (error) {
+    console.error("Failed to load divination logs:", error);
+    return [];
+  }
+};
+
+const saveDivinationLogs = (roomId: string, playerId: string, logs: PersistedDivinationLog[]) => {
+  if (typeof window === "undefined" || !roomId || !playerId) return;
+  try {
+    localStorage.setItem(getDivinationLogsKey(roomId, playerId), JSON.stringify(logs));
+  } catch (error) {
+    console.error("Failed to save divination logs:", error);
+  }
+};
+
+const upsertDivinationLog = (roomId: string, playerId: string, log: PersistedDivinationLog) => {
+  const current = loadDivinationLogs(roomId, playerId);
+  const filtered = current.filter(existing => existing.batchId !== log.batchId);
+  filtered.push(log);
+  filtered.sort((a, b) => {
+    const timeDiff = parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp);
+    if (timeDiff !== 0) return timeDiff;
+    return a.id.localeCompare(b.id);
+  });
+  saveDivinationLogs(roomId, playerId, filtered);
+};
+
+const clearDivinationLogs = (roomId: string, playerId: string) => {
+  if (typeof window === "undefined" || !roomId || !playerId) return;
+  localStorage.removeItem(getDivinationLogsKey(roomId, playerId));
+};
+
 export const useComputationResults = (
   roomId: string,
   playerId: string,
@@ -53,6 +111,36 @@ export const useComputationResults = (
   const [winningJudgeResult, setWinningJudgeResult] = useState<WinningJudgeResult | null>(null);
   const [votingResult, setVotingResult] = useState<AnonymousVotingResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    if (!roomId || !playerId) return;
+    const persisted = loadDivinationLogs(roomId, playerId).sort(
+      (a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp),
+    );
+
+    persisted.forEach(log => {
+      addMessage({
+        id: log.id,
+        sender: "System",
+        message: log.message,
+        timestamp: log.timestamp,
+        type: "system",
+      });
+    });
+  }, [addMessage, playerId, roomId]);
+
+  useEffect(() => {
+    if (!roomId || !playerId) return;
+
+    const handleGameReset = () => {
+      clearDivinationLogs(roomId, playerId);
+    };
+
+    window.addEventListener("gameResetNotification", handleGameReset);
+    return () => {
+      window.removeEventListener("gameResetNotification", handleGameReset);
+    };
+  }, [playerId, roomId]);
 
   // WebSocketからの計算結果通知を処理
   useEffect(() => {
@@ -113,10 +201,12 @@ export const useComputationResults = (
                 const decryptedResult = await MPCEncryption.decryptElGamal(decryptInput);
                 console.log("Decryption result:", decryptedResult);
 
+                // DivinationCircuitでは 0=default(), 1=prime_subgroup_generator() を平文として使う。
+                // 現在の曲線は ed_on_bn254（旧BLS12-377値から置換）。
                 const notWerewolf = {
                   x: [["0", "0", "0", "0"], null],
                   y: [
-                    ["9015221291577245683", "8239323489949974514", "1646089257421115374", "958099254763297437"],
+                    ["12436184717236109307", "3962172157175319849", "7381016538464732718", "1011752739694698287"],
                     null,
                   ],
                   _params: null,
@@ -124,11 +214,11 @@ export const useComputationResults = (
 
                 const werewolf = {
                   x: [
-                    ["469834705808616970", "3489346716202062344", "3775031930862818012", "1284874629665735135"],
+                    ["15389767686415328915", "4532183014000888185", "6625844415766270035", "470379343721047487"],
                     null,
                   ],
                   y: [
-                    ["3606830077131325521", "9477679840825260018", "8867541030756743570", "1156619796726615314"],
+                    ["10215293119099184011", "9361858917463510870", "15793394060027790616", "2556078677302762916"],
                     null,
                   ],
                   _params: null,
@@ -173,14 +263,28 @@ export const useComputationResults = (
                   }
                 }
 
+                const divinationMessage = isWerewolf
+                  ? `🐺 Divination result: ${targetName} is a Werewolf`
+                  : `✅ Divination result: ${targetName} is not a Werewolf`;
+                const divinationTimestamp =
+                  typeof result.resultData?.performed_at === "string"
+                    ? result.resultData.performed_at
+                    : result.timestamp || new Date().toISOString();
+                const divinationBatchId = result.batchId || `unknown-${divinationTimestamp}`;
+                const divinationMessageId = `divination-${divinationBatchId}`;
+
                 addMessage({
-                  id: Date.now().toString(),
+                  id: divinationMessageId,
                   sender: "System",
-                  message: isWerewolf
-                    ? `🐺 Divination result: ${targetName} is a Werewolf`
-                    : `✅ Divination result: ${targetName} is not a Werewolf`,
-                  timestamp: new Date().toISOString(),
+                  message: divinationMessage,
+                  timestamp: divinationTimestamp,
                   type: "system",
+                });
+                upsertDivinationLog(roomId, playerId, {
+                  id: divinationMessageId,
+                  batchId: divinationBatchId,
+                  timestamp: divinationTimestamp,
+                  message: divinationMessage,
                 });
 
                 // 占い処理完了をグローバルイベントで通知

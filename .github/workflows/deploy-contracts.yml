@@ -1,0 +1,147 @@
+name: Deploy Contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "GitHub Environment (for secrets/protection rules)"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      verify:
+        description: "Verify contracts on explorer"
+        required: true
+        default: false
+        type: boolean
+      prepare_groth16:
+        description: "Run Groth16 setup and verifier export before deploy"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-contracts-${{ github.event.inputs.environment }}-sepolia
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to sepolia
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    defaults:
+      run:
+        working-directory: packages/foundry
+    env:
+      NETWORK: sepolia
+      SCRIPT_FILE: DeployWerewolf.s.sol
+      SCRIPT_CONTRACT: DeployWerewolf
+      VERIFY_ENABLED: ${{ github.event.inputs.verify }}
+      ETH_KEYSTORE_ACCOUNT: ci-private-key
+      ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+      ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+      DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        if: ${{ github.event.inputs.prepare_groth16 == 'true' }}
+        uses: ./.github/actions/setup-rust
+
+      - name: Prepare Groth16 artifacts
+        if: ${{ github.event.inputs.prepare_groth16 == 'true' }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+          make groth16-setup
+          make groth16-export-verifier
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+
+      - name: Install Foundry workspace dependencies
+        working-directory: .
+        run: yarn install --immutable
+
+      - name: Validate required secrets
+        run: |
+          set -euo pipefail
+          if [[ -z "${ALCHEMY_API_KEY}" ]]; then
+            echo "::error::Missing secret ALCHEMY_API_KEY"
+            exit 1
+          fi
+          if [[ -z "${DEPLOYER_PRIVATE_KEY}" ]]; then
+            echo "::error::Missing secret DEPLOYER_PRIVATE_KEY"
+            exit 1
+          fi
+          if [[ "${VERIFY_ENABLED}" == "true" && -z "${ETHERSCAN_API_KEY}" ]]; then
+            echo "::error::Missing secret ETHERSCAN_API_KEY (required when verify=true)"
+            exit 1
+          fi
+
+      - name: Deploy contracts
+        run: |
+          set -euo pipefail
+          if [[ "${VERIFY_ENABLED}" == "true" ]]; then
+            yarn deploy:verify --network "${NETWORK}" --file "${SCRIPT_FILE}"
+          else
+            yarn deploy --network "${NETWORK}" --file "${SCRIPT_FILE}"
+          fi
+
+      - name: Summarize deployment
+        run: |
+          set -euo pipefail
+          CHAIN_ID="$(cast chain-id --rpc-url "${NETWORK}")"
+          BROADCAST_FILE="broadcast/${SCRIPT_FILE}/${CHAIN_ID}/run-latest.json"
+
+          if [[ ! -f "${BROADCAST_FILE}" ]]; then
+            echo "::error::Deployment broadcast file not found: ${BROADCAST_FILE}"
+            exit 1
+          fi
+
+          CREATE_COUNT="$(jq '[.transactions[] | select(.transactionType == "CREATE")] | length' "${BROADCAST_FILE}")"
+
+          {
+            echo "## Contract Deployment Result"
+            echo ""
+            echo "- Environment: \`${{ github.event.inputs.environment }}\`"
+            echo "- Network: \`${NETWORK}\` (chain id: \`${CHAIN_ID}\`)"
+            echo "- Script: \`${SCRIPT_FILE}:${SCRIPT_CONTRACT}\`"
+            echo "- Create tx count: \`${CREATE_COUNT}\`"
+            echo "- Verify enabled: \`${VERIFY_ENABLED}\`"
+            echo ""
+            echo "| Contract | Address | Tx |"
+            echo "|---|---|---|"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          jq -r '
+            .transactions[]
+            | select(.transactionType == "CREATE")
+            | "| \(.contractName) | `\(.contractAddress)` | [link](https://sepolia.etherscan.io/tx/\(.hash)) |"
+          ' "${BROADCAST_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-deploy-sepolia-${{ github.run_id }}
+          path: |
+            packages/foundry/broadcast/DeployWerewolf.s.sol
+            packages/foundry/deployments

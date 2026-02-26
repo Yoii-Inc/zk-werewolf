@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { GameResultModal } from "../../../components/game/GameResultModal";
 import NightActionModal from "../../../components/game/NightActionModal";
 import VoteModal from "../../../components/game/VoteModal";
@@ -19,6 +20,7 @@ const isDebugMode = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
 
 export default function RoomPage({ params }: { params: { id: string } }) {
   const { user } = useAuth();
+  const router = useRouter();
 
   // State for UI components
   const [newMessage, setNewMessage] = useState("");
@@ -27,17 +29,26 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showGameResult, setShowGameResult] = useState(false);
   const [isTogglingReady, setIsTogglingReady] = useState(false);
-  const [timerBaseline, setTimerBaseline] = useState(1);
+  const [isLeavingRoom, setIsLeavingRoom] = useState(false);
+  const [isDeletingRoom, setIsDeletingRoom] = useState(false);
+  const [remainingTime, setRemainingTime] = useState(0);
+  const [phaseDuration, setPhaseDuration] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Custom hooks
-  const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id, null);
-  const { roomInfo, gameInfo, isLoading, privateGameInfo } = useGameInfo(params.id, user?.id, setMessages);
-  const { websocketRef, websocketStatus, connectWebSocket, disconnectWebSocket, sendMessage } = useGameWebSocket(
+  const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id);
+  const { roomInfo, gameInfo, isLoading, privateGameInfo, refetchRoomAndGame } = useGameInfo(
     params.id,
-    addServerMessage,
-    user?.username,
+    user?.id,
+    setMessages,
   );
+  const handleWebSocketReconnect = useCallback(() => {
+    void refetchRoomAndGame();
+  }, [refetchRoomAndGame]);
+  const { websocketRef, websocketStatus, reconnectAttempt, connectWebSocket, disconnectWebSocket, sendMessage } =
+    useGameWebSocket(params.id, addServerMessage, user?.username, {
+      onReconnect: handleWebSocketReconnect,
+    });
   const {
     isStarting,
     startGame,
@@ -103,6 +114,10 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   }, [gameInfo?.result]);
 
   const handleSendMessage = () => {
+    if (websocketStatus !== "connected") {
+      return;
+    }
+
     if (newMessage.trim() !== "") {
       const success = sendMessage(newMessage);
       if (success) {
@@ -199,32 +214,168 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   };
 
   useEffect(() => {
-    if (roomInfo?.remainingTime && roomInfo.remainingTime > timerBaseline) {
-      setTimerBaseline(roomInfo.remainingTime);
+    if (!gameInfo) {
+      setRemainingTime(0);
+      setPhaseDuration(1);
+      return;
     }
-  }, [roomInfo?.remainingTime, timerBaseline]);
+
+    const configured = roomInfo?.room_config?.time_config;
+    const dayPhase = configured?.day_phase ?? 300;
+    const nightPhase = configured?.night_phase ?? 120;
+    const votingPhase = configured?.voting_phase ?? 90;
+
+    const durationByPhase: Record<string, number> = {
+      Night: nightPhase,
+      DivinationProcessing: 3,
+      Discussion: dayPhase,
+      Voting: votingPhase,
+      Result: 30,
+    };
+
+    const targetDuration = durationByPhase[gameInfo.phase] ?? 0;
+    setPhaseDuration(Math.max(targetDuration, 1));
+
+    const updateRemainingTime = () => {
+      if (targetDuration <= 0) {
+        setRemainingTime(0);
+        return;
+      }
+
+      if (!gameInfo.phase_started_at) {
+        setRemainingTime(targetDuration);
+        return;
+      }
+
+      const phaseStartMs = new Date(gameInfo.phase_started_at).getTime();
+      if (Number.isNaN(phaseStartMs)) {
+        setRemainingTime(targetDuration);
+        return;
+      }
+
+      const elapsedSec = Math.floor((Date.now() - phaseStartMs) / 1000);
+      setRemainingTime(Math.max(0, targetDuration - elapsedSec));
+    };
+
+    updateRemainingTime();
+    const intervalId = window.setInterval(updateRemainingTime, 1000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [gameInfo, roomInfo?.room_config?.time_config]);
 
   const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
   const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
+  const isLobbyState = roomInfo?.status === "Open" || roomInfo?.status === "Ready";
+  const isInProgress = roomInfo?.status === "InProgress";
+  const isRoomActionDisabled = isInProgress || isLeavingRoom || isDeletingRoom;
+
+  const handleLeaveRoom = async () => {
+    if (!roomInfo || !user?.id) return;
+    setIsLeavingRoom(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/room/${roomInfo.room_id}/leave/${user.id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(errorMessage || "Failed to leave room");
+      }
+
+      router.push("/");
+    } catch (error) {
+      addMessage({
+        id: Date.now().toString(),
+        sender: "System",
+        message: error instanceof Error ? error.message : "Failed to leave room",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+    } finally {
+      setIsLeavingRoom(false);
+    }
+  };
+
+  const handleDeleteRoom = async () => {
+    if (!roomInfo || !user?.id) return;
+    setIsDeletingRoom(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/room/${roomInfo.room_id}/delete/${user.id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        throw new Error(errorMessage || "Failed to delete room");
+      }
+
+      router.push("/");
+    } catch (error) {
+      addMessage({
+        id: Date.now().toString(),
+        sender: "System",
+        message: error instanceof Error ? error.message : "Failed to delete room",
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+    } finally {
+      setIsDeletingRoom(false);
+    }
+  };
+
   const isCurrentPlayerReady = currentPlayer
     ? getPlayerReady(currentPlayer as { isReady?: boolean; is_ready?: boolean })
     : false;
   const allPlayersReady =
     playersForView.length > 0 &&
     playersForView.every(player => getPlayerReady(player as { isReady?: boolean; is_ready?: boolean }));
-  const timerProgressPercent = roomInfo?.remainingTime
-    ? Math.max(0, Math.min(100, (roomInfo.remainingTime / Math.max(timerBaseline, 1)) * 100))
-    : 0;
-  const isTimeWarning = (roomInfo?.remainingTime ?? 0) <= 30;
+  const timerProgressPercent = Math.max(0, Math.min(100, (remainingTime / Math.max(phaseDuration, 1)) * 100));
+  const isTimeWarning = roomInfo?.status === "InProgress" && remainingTime <= 30;
+  const isWebSocketConnected = websocketStatus === "connected";
+  const websocketStatusLabel =
+    websocketStatus === "connected"
+      ? "Connected"
+      : websocketStatus === "reconnecting"
+        ? `Reconnecting (${reconnectAttempt})`
+        : websocketStatus === "connecting"
+          ? "Connecting"
+          : websocketStatus === "error"
+            ? "Connection issue"
+            : "Offline";
+  const websocketStatusClass =
+    websocketStatus === "connected"
+      ? "bg-green-50 text-green-700 border-green-200"
+      : websocketStatus === "reconnecting"
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : websocketStatus === "connecting"
+          ? "bg-blue-50 text-blue-700 border-blue-200"
+          : websocketStatus === "error"
+            ? "bg-rose-50 text-rose-700 border-rose-200"
+            : "bg-slate-100 text-slate-700 border-slate-200";
 
   return (
-    <div className="h-screen flex bg-gradient-to-br from-indigo-50 to-purple-50">
+    <div className="flex flex-1 min-h-0 overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50">
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-xl text-indigo-600">Loading room information...</div>
         </div>
       ) : roomInfo ? (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex min-h-0 flex-col">
           {/* Game Info */}
           <div className="bg-white/80 backdrop-blur-sm border-b border-indigo-100 p-4 shadow-sm">
             <div className="flex items-center justify-between">
@@ -233,6 +384,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 {roomInfo.status === "Open" && (
                   <span className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm border">
                     Room Status: Open (Waiting for players)
+                  </span>
+                )}
+                {roomInfo.status === "Ready" && (
+                  <span className="flex items-center gap-2 text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full text-sm border">
+                    Room Status: Ready (All players prepared)
                   </span>
                 )}
                 {gameInfo && (
@@ -288,8 +444,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2 text-indigo-700">
                   <Clock size={18} />
                   <span>
-                    Time Remaining: {Math.floor(roomInfo.remainingTime / 60)}:
-                    {String(roomInfo.remainingTime % 60).padStart(2, "0")}
+                    Time Remaining: {Math.floor(remainingTime / 60)}:{String(remainingTime % 60).padStart(2, "0")}
                   </span>
                 </div>
                 <div className="w-40">
@@ -300,7 +455,10 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     />
                   </div>
                 </div>
-                {roomInfo.status === "Open" && currentPlayer && (
+                <span className={`px-3 py-1 rounded-full text-sm border ${websocketStatusClass}`}>
+                  Connection: {websocketStatusLabel}
+                </span>
+                {isLobbyState && currentPlayer && (
                   <button
                     onClick={handleToggleReady}
                     disabled={isTogglingReady}
@@ -313,19 +471,17 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     {isTogglingReady ? "Updating..." : isCurrentPlayerReady ? "Ready: ON" : "Ready: OFF"}
                   </button>
                 )}
-                {roomInfo.status === "Open" && (
+                {isLobbyState && (
                   <button
                     onClick={handleStartGame}
-                    disabled={isStarting || roomInfo.players.length < 2}
+                    disabled={isStarting || roomInfo.players.length < 2 || !allPlayersReady}
                     className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
-                      isStarting || roomInfo.players.length < 2
+                      isStarting || roomInfo.players.length < 2 || !allPlayersReady
                         ? "bg-gray-400 cursor-not-allowed"
-                        : allPlayersReady
-                          ? "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-300"
-                          : "bg-green-600 hover:bg-green-700"
+                        : "bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-300"
                     }`}
                   >
-                    {isStarting ? "Starting..." : "Start Game"}
+                    {isStarting ? "Starting..." : !allPlayersReady ? "Waiting for all Ready" : "Start Game"}
                   </button>
                 )}
                 {gameInfo?.phase === "Night" &&
@@ -347,17 +503,39 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     Vote
                   </button>
                 )}
+                {currentPlayer && (
+                  <>
+                    <button
+                      onClick={handleLeaveRoom}
+                      disabled={isRoomActionDisabled}
+                      className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+                        isRoomActionDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-slate-600 hover:bg-slate-700"
+                      }`}
+                    >
+                      {isLeavingRoom ? "Leaving..." : "Leave Room"}
+                    </button>
+                    <button
+                      onClick={handleDeleteRoom}
+                      disabled={isRoomActionDisabled}
+                      className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+                        isRoomActionDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"
+                      }`}
+                    >
+                      {isDeletingRoom ? "Deleting..." : "Delete Room"}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex-1 flex">
+          <div className="flex-1 flex min-h-0">
             {/* Players List */}
-            <div className="w-64 bg-white/80 backdrop-blur-sm border-l border-indigo-100">
+            <div className="w-64 bg-white/80 backdrop-blur-sm border-l border-indigo-100 flex min-h-0 flex-col">
               <div className="p-4 border-b border-indigo-100">
                 <h2 className="text-lg font-semibold text-indigo-900">Players List</h2>
               </div>
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-3 overflow-y-auto">
                 {(gameInfo ? gameInfo.players : roomInfo.players).map(player => {
                   const isMe = player.name === user?.username;
                   return (
@@ -441,10 +619,16 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
                   <button
                     onClick={connectWebSocket}
-                    disabled={websocketStatus === "connected" || websocketStatus === "connecting"}
+                    disabled={
+                      websocketStatus === "connected" ||
+                      websocketStatus === "connecting" ||
+                      websocketStatus === "reconnecting"
+                    }
                     className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
                   >
-                    {websocketStatus === "connecting" ? "Connecting..." : "Connect WebSocket"}
+                    {websocketStatus === "connecting" || websocketStatus === "reconnecting"
+                      ? "Connecting..."
+                      : "Connect WebSocket"}
                   </button>
                   <button
                     onClick={disconnectWebSocket}
@@ -508,8 +692,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col">
-              <div className="h-[600px] overflow-y-auto p-4">
+            <div className="flex-1 flex min-h-0 flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4">
                 {messages.map((msg, index) => (
                   <div
                     key={`${msg.id}-${index}`}
@@ -548,18 +732,20 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     type="text"
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
+                    disabled={!isWebSocketConnected}
                     onKeyDown={e => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleSendMessage();
                       }
                     }}
-                    placeholder="Enter message..."
-                    className="flex-1 border border-indigo-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm"
+                    placeholder={isWebSocketConnected ? "Enter message..." : "Reconnecting chat..."}
+                    className="flex-1 border border-indigo-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                   />
                   <button
                     onClick={handleSendMessage}
-                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm"
+                    disabled={!isWebSocketConnected}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <Send size={20} />
                     Send
@@ -576,7 +762,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       )}
 
       {/* Notes Panel */}
-      <div className="w-80 bg-white/80 backdrop-blur-sm border-l border-indigo-100 flex flex-col">
+      <div className="w-80 bg-white/80 backdrop-blur-sm border-l border-indigo-100 flex min-h-0 flex-col">
         <div className="p-4 border-b border-indigo-100 flex items-center gap-2">
           <StickyNote size={20} className="text-indigo-600" />
           <h2 className="text-lg font-semibold text-indigo-900">Notes</h2>
@@ -611,7 +797,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           role={privateGameInfo?.playerRole ?? "Villager"}
           gameInfo={gameInfo}
           username={user?.username ?? ""}
-          onSubmit={(targetPlayerId: string) => {
+          onSubmit={() => {
             // handleNightAction(targetPlayerId, privateGameInfo?.playerRole);
             setShowNightAction(false);
           }}
@@ -627,7 +813,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           players={gameInfo.players}
           gameInfo={gameInfo}
           username={user?.username ?? ""}
-          onSubmit={(targetId: string) => {
+          onSubmit={() => {
             // handleVote(targetId);
             setShowVoteModal(false);
           }}

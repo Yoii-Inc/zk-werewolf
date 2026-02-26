@@ -138,7 +138,7 @@ impl GroupingParameter {
         for (role, (role_count, is_not_alone)) in self.0.iter() {
             count += if *is_not_alone { 1 } else { *role_count };
             if role_id < count {
-                return role.clone();
+                return *role;
             }
         }
 
