@@ -424,9 +424,7 @@ fn pk_path_from_env_or_default(env_var: &str, default_pk_file: &str) -> Option<P
     match std::env::var(env_var) {
         Ok(value) if !value.trim().is_empty() => Some(PathBuf::from(value)),
         _ => {
-            let default_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("data/groth16")
-                .join(default_pk_file);
+            let default_path = groth16_data_dir().join(default_pk_file);
             if default_path.exists() {
                 Some(default_path)
             } else {
@@ -436,10 +434,31 @@ fn pk_path_from_env_or_default(env_var: &str, default_pk_file: &str) -> Option<P
     }
 }
 
+fn groth16_data_dir() -> PathBuf {
+    if let Ok(value) = std::env::var("GROTH16_DATA_DIR") {
+        let path = PathBuf::from(value);
+        if path.exists() {
+            return path;
+        }
+    }
+
+    let cargo_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data/groth16");
+    if cargo_dir.exists() {
+        return cargo_dir;
+    }
+
+    let app_dir = PathBuf::from("/app/data/groth16");
+    if app_dir.exists() {
+        return app_dir;
+    }
+
+    cargo_dir
+}
+
 fn load_profile_setups_from_data_dir(
     setups: &mut HashMap<CircuitProfile, Groth16Setup>,
 ) -> Result<(), std::io::Error> {
-    let data_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data/groth16");
+    let data_dir = groth16_data_dir();
     if !data_dir.exists() {
         return Ok(());
     }

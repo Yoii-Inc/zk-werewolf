@@ -1,0 +1,7 @@
+{
+  "circuitId": "key_publicize_n5_v1",
+  "maxPlayers": 5,
+  "publicInputLen": 0,
+  "pkPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../zk-mpc-node/data/groth16/key_publicize_n5_v1.pk",
+  "verifierPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../foundry/contracts/verifiers/generated/KeyPublicizeN5Groth16Verifier.sol"
+}

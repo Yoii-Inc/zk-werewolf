@@ -1,0 +1,7 @@
+{
+  "circuitId": "winning_judgement_n8_v1",
+  "maxPlayers": 8,
+  "publicInputLen": 2,
+  "pkPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../zk-mpc-node/data/groth16/winning_judgement_n8_v1.pk",
+  "verifierPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../foundry/contracts/verifiers/generated/WinningJudgementN8Groth16Verifier.sol"
+}

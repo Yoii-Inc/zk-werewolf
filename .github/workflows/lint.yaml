@@ -50,10 +50,35 @@ jobs:
         with:
           version: nightly
 
-      - name: Run foundry node, deploy contracts (& generate contracts typescript output)
+      - name: Generate Groth16 verifier artifacts
+        run: make groth16-setup
+
+      - name: Start foundry node
+        run: |
+          yarn chain > /tmp/anvil.log 2>&1 &
+          echo $! > /tmp/anvil.pid
+          for i in $(seq 1 60); do
+            if (echo > /dev/tcp/127.0.0.1/8545) >/dev/null 2>&1; then
+              echo "Anvil is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Failed to start Anvil within timeout"
+          cat /tmp/anvil.log || true
+          exit 1
+
+      - name: Deploy contracts on localhost (and generate contract TS output)
         env:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-        run: yarn chain & yarn deploy
+        run: yarn deploy --network localhost
+
+      - name: Stop foundry node
+        if: always()
+        run: |
+          if [ -f /tmp/anvil.pid ]; then
+            kill "$(cat /tmp/anvil.pid)" || true
+          fi
 
       - name: Run nextjs lint
         run: yarn next:lint

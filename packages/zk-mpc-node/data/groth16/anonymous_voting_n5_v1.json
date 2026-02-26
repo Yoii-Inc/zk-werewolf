@@ -1,0 +1,7 @@
+{
+  "circuitId": "anonymous_voting_n5_v1",
+  "maxPlayers": 5,
+  "publicInputLen": 1,
+  "pkPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../zk-mpc-node/data/groth16/anonymous_voting_n5_v1.pk",
+  "verifierPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../foundry/contracts/verifiers/generated/AnonymousVotingN5Groth16Verifier.sol"
+}
