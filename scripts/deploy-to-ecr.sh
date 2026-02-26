@@ -183,10 +183,12 @@ verify_groth16_artifacts() {
         local abs_path
         abs_path=$(resolve_path "${p}")
         if [ ! -f "${abs_path}" ]; then
-            log_error "Groth16 artifact not found: ${abs_path}"
+            log_warn "Groth16 artifact not found: ${abs_path}"
+            return 1
         fi
     done
     log_info "Using pre-generated Groth16 artifacts."
+    return 0
 }
 
 # Deploy services based on selection
@@ -201,7 +203,9 @@ case $SERVICE in
         ;;
     mpc-node)
         if [ "$SKIP_BUILD" = false ]; then
-            verify_groth16_artifacts
+            if ! verify_groth16_artifacts; then
+                log_error "Groth16 artifacts are required for mpc-node deployment. Please provide the .pk files."
+            fi
         fi
         build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
@@ -210,10 +214,11 @@ case $SERVICE in
         build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
             "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
             "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
-        if [ "$SKIP_BUILD" = false ]; then
-            verify_groth16_artifacts
+        if [ "$SKIP_BUILD" = false ] && ! verify_groth16_artifacts; then
+            log_warn "Skipping mpc-node deployment: Groth16 artifacts not found."
+        else
+            build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         fi
-        build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
     *)
         log_error "Unknown service: ${SERVICE}. Valid options: backend, frontend, mpc-node, all"

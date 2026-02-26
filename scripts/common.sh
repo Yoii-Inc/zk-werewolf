@@ -11,11 +11,9 @@ NC='\033[0m' # No Color
 # Logging functions
 # Usage: log_info "message" or log_info << EOF
 log_info() {
-    if [ -t 0 ]; then
-        # stdin is a terminal (argument provided)
+    if [ $# -gt 0 ]; then
         echo -e "${GREEN}[INFO]${NC} $1"
     else
-        # stdin is not a terminal (heredoc or pipe)
         while IFS= read -r line; do
             echo -e "${GREEN}${line}${NC}"
         done
@@ -23,7 +21,7 @@ log_info() {
 }
 
 log_warn() {
-    if [ -t 0 ]; then
+    if [ $# -gt 0 ]; then
         echo -e "${YELLOW}[WARN]${NC} $1"
     else
         while IFS= read -r line; do
@@ -33,18 +31,18 @@ log_warn() {
 }
 
 log_error() {
-    if [ -t 0 ]; then
-        echo -e "${RED}[ERROR]${NC} $1"
+    if [ $# -gt 0 ]; then
+        echo -e "${RED}[ERROR]${NC} $1" >&2
     else
         while IFS= read -r line; do
-            echo -e "${RED}${line}${NC}"
+            echo -e "${RED}${line}${NC}" >&2
         done
     fi
     exit 1
 }
 
 log_debug() {
-    if [ -t 0 ]; then
+    if [ $# -gt 0 ]; then
         echo -e "${BLUE}[DEBUG]${NC} $1"
     else
         while IFS= read -r line; do
