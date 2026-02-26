@@ -33,7 +33,11 @@ deploy:
 			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi; \
 		fi \
 	else \
-		forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi; \
+		if [ -n "$(DEPLOYER_PRIVATE_KEY)" ]; then \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --private-key $(DEPLOYER_PRIVATE_KEY); \
+		else \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi; \
+		fi \
 	fi
 
 # Build and deploy target
@@ -80,7 +84,11 @@ deploy-verify:
 			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify; \
 		fi \
 	else \
-		forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify; \
+		if [ -n "$(DEPLOYER_PRIVATE_KEY)" ]; then \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify --private-key $(DEPLOYER_PRIVATE_KEY); \
+		else \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify; \
+		fi \
 	fi
 	node scripts-js/generateTsAbis.js
 
@@ -101,3 +109,5 @@ verify:
 	forge script script/VerifyAll.s.sol --ffi --rpc-url $(RPC_URL)
 
 build-and-verify: build verify
+
+build-and-deploy-verify: build deploy-verify

@@ -12,23 +12,6 @@ on:
           - dev
           - staging
           - prod
-      network:
-        description: "Foundry RPC endpoint key from foundry.toml"
-        required: true
-        default: "sepolia"
-        type: choice
-        options:
-          - sepolia
-      script_file:
-        description: "Script file under packages/foundry/script"
-        required: true
-        default: "DeployWerewolf.s.sol"
-        type: string
-      script_contract:
-        description: "Contract name inside the script file"
-        required: true
-        default: "DeployWerewolf"
-        type: string
       verify:
         description: "Verify contracts on explorer"
         required: true
@@ -44,22 +27,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-contracts-${{ github.event.inputs.environment }}-${{ github.event.inputs.network }}
+  group: deploy-contracts-${{ github.event.inputs.environment }}-sepolia
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to ${{ github.event.inputs.network }}
+    name: Deploy to sepolia
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
     defaults:
       run:
         working-directory: packages/foundry
     env:
-      NETWORK: ${{ github.event.inputs.network }}
-      SCRIPT_FILE: ${{ github.event.inputs.script_file }}
-      SCRIPT_CONTRACT: ${{ github.event.inputs.script_contract }}
+      NETWORK: sepolia
+      SCRIPT_FILE: DeployWerewolf.s.sol
+      SCRIPT_CONTRACT: DeployWerewolf
       VERIFY_ENABLED: ${{ github.event.inputs.verify }}
+      ETH_KEYSTORE_ACCOUNT: ci-private-key
       ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
       ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
       DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
@@ -85,6 +69,17 @@ jobs:
         with:
           version: stable
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+
+      - name: Install Foundry workspace dependencies
+        working-directory: .
+        run: yarn install --immutable
+
       - name: Validate required secrets
         run: |
           set -euo pipefail
@@ -104,21 +99,11 @@ jobs:
       - name: Deploy contracts
         run: |
           set -euo pipefail
-          ARGS=(
-            script
-            "script/${SCRIPT_FILE}:${SCRIPT_CONTRACT}"
-            --rpc-url "${NETWORK}"
-            --broadcast
-            --legacy
-            --ffi
-            --private-key "${DEPLOYER_PRIVATE_KEY}"
-          )
-
           if [[ "${VERIFY_ENABLED}" == "true" ]]; then
-            ARGS+=(--verify --etherscan-api-key "${ETHERSCAN_API_KEY}")
+            yarn deploy:verify --network "${NETWORK}" --file "${SCRIPT_FILE}"
+          else
+            yarn deploy --network "${NETWORK}" --file "${SCRIPT_FILE}"
           fi
-
-          forge "${ARGS[@]}"
 
       - name: Summarize deployment
         run: |
@@ -129,11 +114,6 @@ jobs:
           if [[ ! -f "${BROADCAST_FILE}" ]]; then
             echo "::error::Deployment broadcast file not found: ${BROADCAST_FILE}"
             exit 1
-          fi
-
-          EXPLORER_BASE=""
-          if [[ "${NETWORK}" == "sepolia" ]]; then
-            EXPLORER_BASE="https://sepolia.etherscan.io"
           fi
 
           CREATE_COUNT="$(jq '[.transactions[] | select(.transactionType == "CREATE")] | length' "${BROADCAST_FILE}")"
@@ -151,25 +131,17 @@ jobs:
             echo "|---|---|---|"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          if [[ -n "${EXPLORER_BASE}" ]]; then
-            jq -r --arg explorer "${EXPLORER_BASE}" '
-              .transactions[]
-              | select(.transactionType == "CREATE")
-              | "| \(.contractName) | `\(.contractAddress)` | [link](\($explorer)/tx/\(.hash)) |"
-            ' "${BROADCAST_FILE}" >> "${GITHUB_STEP_SUMMARY}"
-          else
-            jq -r '
-              .transactions[]
-              | select(.transactionType == "CREATE")
-              | "| \(.contractName) | `\(.contractAddress)` | `\(.hash)` |"
-            ' "${BROADCAST_FILE}" >> "${GITHUB_STEP_SUMMARY}"
-          fi
+          jq -r '
+            .transactions[]
+            | select(.transactionType == "CREATE")
+            | "| \(.contractName) | `\(.contractAddress)` | [link](https://sepolia.etherscan.io/tx/\(.hash)) |"
+          ' "${BROADCAST_FILE}" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload deployment artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: contract-deploy-${{ github.event.inputs.network }}-${{ github.run_id }}
+          name: contract-deploy-sepolia-${{ github.run_id }}
           path: |
-            packages/foundry/broadcast/${{ github.event.inputs.script_file }}
+            packages/foundry/broadcast/DeployWerewolf.s.sol
             packages/foundry/deployments

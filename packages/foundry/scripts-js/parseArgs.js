@@ -12,6 +12,7 @@ config();
 const args = process.argv.slice(2);
 let fileName = "Deploy.s.sol";
 let network = "localhost";
+let verify = false;
 const localNetworks = new Set(["localhost", "docker"]);
 
 // Show help message if --help is provided
@@ -21,9 +22,11 @@ Usage: yarn deploy [options]
 Options:
   --file <filename>     Specify the deployment script file (default: Deploy.s.sol)
   --network <network>   Specify the network (default: localhost)
+  --verify              Verify deployed contracts
   --help, -h           Show this help message
 Examples:
   yarn deploy --file DeployYourContract.s.sol --network sepolia
+  yarn deploy --file DeployYourContract.s.sol --network sepolia --verify
   yarn deploy --network sepolia
   yarn deploy --file DeployYourContract.s.sol
   yarn deploy
@@ -39,6 +42,8 @@ for (let i = 0; i < args.length; i++) {
   } else if (args[i] === "--file" && args[i + 1]) {
     fileName = args[i + 1];
     i++; // Skip next arg since we used it
+  } else if (args[i] === "--verify") {
+    verify = true;
   }
 }
 
@@ -62,6 +67,7 @@ try {
 
 // Check for default account on live network
 if (
+  !process.env.DEPLOYER_PRIVATE_KEY &&
   process.env.ETH_KEYSTORE_ACCOUNT === "scaffold-eth-default" &&
   !localNetworks.has(network)
 ) {
@@ -78,7 +84,7 @@ To deploy to ${network}, please follow these steps:
 
 The default account (scaffold-eth-default) can only be used for local deployments (localhost/docker).
 `);
-  process.exit(0);
+  process.exit(1);
 }
 
 if (
@@ -103,7 +109,7 @@ process.env.RPC_URL = network;
 const result = spawnSync(
   "make",
   [
-    "build-and-deploy",
+    verify ? "build-and-deploy-verify" : "build-and-deploy",
     `DEPLOY_SCRIPT=${process.env.DEPLOY_SCRIPT}`,
     `RPC_URL=${process.env.RPC_URL}`,
   ],
