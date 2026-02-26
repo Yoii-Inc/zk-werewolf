@@ -353,6 +353,28 @@ mod tests {
     use axum::{body::Body, http::Request};
     use tower::ServiceExt;
 
+    async fn join_and_ready_players(state: &AppState, room_id: u32, player_count: usize) {
+        for i in 0..player_count {
+            let player_id = format!("test_id_{}", i);
+            let joined = crate::services::room_service::join_room(
+                state.clone(),
+                &room_id.to_string(),
+                &player_id,
+                &format!("test_player_{}", i),
+            )
+            .await;
+            assert!(joined);
+
+            crate::services::room_service::toggle_ready(
+                state.clone(),
+                &room_id.to_string(),
+                &player_id,
+            )
+            .await
+            .unwrap();
+        }
+    }
+
     #[tokio::test]
     async fn test_start_game() {
         setup_test_env();
@@ -360,15 +382,7 @@ mod tests {
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
-        for i in 0..4 {
-            crate::services::room_service::join_room(
-                state.clone(),
-                &room_id.to_string(),
-                &format!("test_id_{}", i),
-                &format!("test_player_{}", i),
-            )
-            .await;
-        }
+        join_and_ready_players(&state, room_id, 4).await;
 
         let request = Request::builder()
             .method("POST")
@@ -387,15 +401,7 @@ mod tests {
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
-        for i in 0..4 {
-            crate::services::room_service::join_room(
-                state.clone(),
-                &room_id.to_string(),
-                &format!("test_id_{}", i),
-                &format!("test_player_{}", i),
-            )
-            .await;
-        }
+        join_and_ready_players(&state, room_id, 4).await;
 
         game_service::start_game(state.clone(), &room_id.to_string())
             .await
@@ -418,16 +424,8 @@ mod tests {
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
-        // プレイヤーを追加
-        for i in 0..4 {
-            crate::services::room_service::join_room(
-                state.clone(),
-                &room_id.to_string(),
-                &format!("test_id_{}", i),
-                &format!("test_player_{}", i),
-            )
-            .await;
-        }
+        // プレイヤーを追加して全員Ready
+        join_and_ready_players(&state, room_id, 4).await;
 
         // ゲームを開始
         game_service::start_game(state.clone(), &room_id.to_string())
@@ -466,16 +464,8 @@ mod tests {
         let app = routes(state.clone());
         let room_id = crate::services::room_service::create_room(state.clone(), None, None).await;
 
-        // プレイヤーを追加
-        for i in 0..4 {
-            crate::services::room_service::join_room(
-                state.clone(),
-                &room_id.to_string(),
-                &format!("test_id_{}", i),
-                &format!("test_player_{}", i),
-            )
-            .await;
-        }
+        // プレイヤーを追加して全員Ready
+        join_and_ready_players(&state, room_id, 4).await;
 
         // ゲームを開始
         game_service::start_game(state.clone(), &room_id.to_string())

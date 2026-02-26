@@ -17,25 +17,25 @@ async fn setup_test_room_with_players(state: &AppState) -> String {
             id: "1".to_string(),
             name: "Player1".to_string(),
             is_dead: false,
-            is_ready: false,
+            is_ready: true,
         },
         Player {
             id: "2".to_string(),
             name: "Player2".to_string(),
             is_dead: false,
-            is_ready: false,
+            is_ready: true,
         },
         Player {
             id: "3".to_string(),
             name: "Player3".to_string(),
             is_dead: false,
-            is_ready: false,
+            is_ready: true,
         },
         Player {
             id: "4".to_string(),
             name: "Player4".to_string(),
             is_dead: false,
-            is_ready: false,
+            is_ready: true,
         },
     ];
 
