@@ -49,6 +49,12 @@ temp/
 **/tests/
 **/*.wasm
 
+# Keep Groth16 artifacts for MPC node image builds
+!packages/zk-mpc-node/data/
+!packages/zk-mpc-node/data/groth16/
+!packages/zk-mpc-node/data/groth16/*.pk
+!packages/zk-mpc-node/data/groth16/*.json
+
 # Terraform artifacts
 terraform/.terraform/
 **/.terraform/

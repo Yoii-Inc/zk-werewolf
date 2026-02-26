@@ -15,6 +15,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 mod app;
+mod blockchain;
 mod models;
 mod routes;
 mod services;

@@ -25,5 +25,14 @@ pub fn setup_test_env() {
         if std::env::var("JWT_SECRET").is_err() {
             std::env::set_var("JWT_SECRET", "test-jwt-secret");
         }
+        if std::env::var("BLOCKCHAIN_ENABLED").is_err() {
+            std::env::set_var("BLOCKCHAIN_ENABLED", "false");
+        }
+        if std::env::var("ETHEREUM_RPC_URL").is_err() {
+            std::env::set_var("ETHEREUM_RPC_URL", "http://localhost:8545");
+        }
+        if std::env::var("ETHEREUM_CHAIN_ID").is_err() {
+            std::env::set_var("ETHEREUM_CHAIN_ID", "31337");
+        }
     });
 }

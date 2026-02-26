@@ -111,6 +111,18 @@ fn merge_proof_outputs(statuses: Vec<ProofStatus>) -> Option<ProofOutput> {
 
     let mut all_shares = Vec::new();
     let first_output = statuses[0].output.as_ref()?;
+    let proof_bytes = statuses.iter().find_map(|status| {
+        status
+            .output
+            .as_ref()
+            .and_then(|output| output.proof.clone())
+    });
+    let public_input_bytes = statuses.iter().find_map(|status| {
+        status
+            .output
+            .as_ref()
+            .and_then(|output| output.public_inputs.clone())
+    });
 
     // 各ノードからの暗号化シェアを集める
     for status in &statuses {
@@ -128,6 +140,8 @@ fn merge_proof_outputs(statuses: Vec<ProofStatus>) -> Option<ProofOutput> {
     Some(ProofOutput {
         output_type: first_output.output_type.clone(),
         value: first_output.value.clone(),
+        proof: proof_bytes,
+        public_inputs: public_input_bytes,
         shares: if all_shares.is_empty() {
             None
         } else {

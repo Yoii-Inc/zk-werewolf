@@ -1,28 +1,110 @@
-version: "3.8"
-
 services:
+  init-groth16:
+    image: docker.io/library/rust:1.88-bookworm
+    pull_policy: always
+    restart: "no"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - groth16_artifacts:/groth16
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        export PATH="/usr/local/cargo/bin:$${PATH}"
+        cargo --version
+        apt-get update
+        apt-get install -y --no-install-recommends pkg-config libssl-dev curl
+        rm -rf /var/lib/apt/lists/*
+        cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin role_assignment_groth16_setup
+        cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin anonymous_voting_groth16_setup
+        cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin divination_groth16_setup
+        cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin winning_judgement_groth16_setup
+        cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin key_publicize_groth16_setup
+        ROLE_ASSIGNMENT_GROTH16_PK_PATH=packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin role_assignment_groth16_verifier_export
+        ANONYMOUS_VOTING_GROTH16_PK_PATH=packages/zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin anonymous_voting_groth16_verifier_export
+        DIVINATION_GROTH16_PK_PATH=packages/zk-mpc-node/data/groth16/divination_max5_v1.pk cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin divination_groth16_verifier_export
+        WINNING_JUDGEMENT_GROTH16_PK_PATH=packages/zk-mpc-node/data/groth16/winning_judgement_max5_v1.pk cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin winning_judgement_groth16_verifier_export
+        KEY_PUBLICIZE_GROTH16_PK_PATH=packages/zk-mpc-node/data/groth16/key_publicize_max5_v1.pk cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin key_publicize_groth16_verifier_export
+        rm -f /groth16/*
+        cp packages/zk-mpc-node/data/groth16/*.pk /groth16/
+        cp packages/zk-mpc-node/data/groth16/*.json /groth16/
+
+  chain:
+    build:
+      context: .
+      dockerfile: packages/foundry/Dockerfile.local
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - foundry_home:/root/.foundry
+    ports:
+      - "8545:8545"
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        yarn install --immutable
+        yarn workspace @se-2/foundry chain
+    healthcheck:
+      test: ["CMD", "cast", "block-number", "--rpc-url", "http://localhost:8545"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  deploy:
+    build:
+      context: .
+      dockerfile: packages/foundry/Dockerfile.local
+    restart: "no"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - foundry_home:/root/.foundry
+    depends_on:
+      init-groth16:
+        condition: service_completed_successfully
+      chain:
+        condition: service_healthy
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        yarn install --immutable
+        yarn deploy --file DeployWerewolf.s.sol --network docker
+
   backend:
     build:
       context: .
-      dockerfile: packages/server/Dockerfile.dev
+      dockerfile: packages/server/Dockerfile
     ports:
       - "8080:8080"
     env_file:
       - ./packages/server/.env
+    depends_on:
+      init-groth16:
+        condition: service_completed_successfully
+      deploy:
+        condition: service_completed_successfully
     environment:
+      - ETHEREUM_RPC_URL=http://chain:8545
       - ZK_MPC_NODE_0_HTTP=http://zk-mpc-node-0:9000
       - ZK_MPC_NODE_1_HTTP=http://zk-mpc-node-1:9001
       - ZK_MPC_NODE_2_HTTP=http://zk-mpc-node-2:9002
       - RUST_LOG=${RUST_LOG:-debug}
-    volumes:
-      - .:/usr/src/workspace
-      - backend_target:/usr/src/workspace/target
-    working_dir: /usr/src/workspace/packages/server
 
   zk-mpc-node-0:
     build:
       context: .
       dockerfile: packages/zk-mpc-node/Dockerfile
+    depends_on:
+      init-groth16:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
     environment:
       - RUST_LOG=debug
       - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
@@ -30,16 +112,21 @@ services:
       - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
       - MPC_HTTP_PORT=9000
       - SERVER_URL=http://backend:8080
+    ports:
+      - "9000:9000"
     volumes:
-      - .:/usr/src/workspace
-      - mpc_target_0:/usr/src/workspace/target
-    working_dir: /usr/src/workspace/packages/zk-mpc-node
+      - groth16_artifacts:/app/data/groth16:ro
     command: ["start", "--id", "0"]
 
   zk-mpc-node-1:
     build:
       context: .
       dockerfile: packages/zk-mpc-node/Dockerfile
+    depends_on:
+      init-groth16:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
     environment:
       - RUST_LOG=debug
       - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
@@ -47,16 +134,21 @@ services:
       - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
       - MPC_HTTP_PORT=9000
       - SERVER_URL=http://backend:8080
+    ports:
+      - "9001:9001"
     volumes:
-      - .:/usr/src/workspace
-      - mpc_target_1:/usr/src/workspace/target
-    working_dir: /usr/src/workspace/packages/zk-mpc-node
+      - groth16_artifacts:/app/data/groth16:ro
     command: ["start", "--id", "1"]
 
   zk-mpc-node-2:
     build:
       context: .
       dockerfile: packages/zk-mpc-node/Dockerfile
+    depends_on:
+      init-groth16:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
     environment:
       - RUST_LOG=debug
       - ZK_MPC_NODE_0_TCP=zk-mpc-node-0:8000
@@ -64,10 +156,10 @@ services:
       - ZK_MPC_NODE_2_TCP=zk-mpc-node-2:8002
       - MPC_HTTP_PORT=9000
       - SERVER_URL=http://backend:8080
+    ports:
+      - "9002:9002"
     volumes:
-      - .:/usr/src/workspace
-      - mpc_target_2:/usr/src/workspace/target
-    working_dir: /usr/src/workspace/packages/zk-mpc-node
+      - groth16_artifacts:/app/data/groth16:ro
     command: ["start", "--id", "2"]
 
   frontend:
@@ -79,9 +171,12 @@ services:
         - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:8080/api}
     env_file:
       - ./packages/nextjs/.env.local
+    depends_on:
+      backend:
+        condition: service_started
+      deploy:
+        condition: service_completed_successfully
 
 volumes:
-  backend_target:
-  mpc_target_0:
-  mpc_target_1:
-  mpc_target_2:
+  groth16_artifacts:
+  foundry_home:

@@ -10,7 +10,7 @@ setup-anvil-wallet:
 
 # Start local chain
 chain: setup-anvil-wallet
-	anvil
+	anvil --host 0.0.0.0
 
 # Start a fork
 fork: setup-anvil-wallet
@@ -26,11 +26,11 @@ deploy:
 		echo "Error: Deploy script '$(DEPLOY_SCRIPT)' not found"; \
 		exit 1; \
 	fi
-	@if [ "$(RPC_URL)" = "localhost" ]; then \
+	@if [ "$(RPC_URL)" = "localhost" ] || [ "$(RPC_URL)" = "docker" ]; then \
 		if [ "$(ETH_KEYSTORE_ACCOUNT)" = "scaffold-eth-default" ]; then \
-			forge script $(DEPLOY_SCRIPT) --rpc-url localhost --password localhost --broadcast --legacy --ffi; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --password localhost --broadcast --legacy --ffi; \
 		else \
-			forge script $(DEPLOY_SCRIPT) --rpc-url localhost --broadcast --legacy --ffi; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi; \
 		fi \
 	else \
 		forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi; \
@@ -73,11 +73,11 @@ deploy-verify:
 		echo "Error: Deploy script '$(DEPLOY_SCRIPT)' not found"; \
 		exit 1; \
 	fi
-	@if [ "$(RPC_URL)" = "localhost" ]; then \
+	@if [ "$(RPC_URL)" = "localhost" ] || [ "$(RPC_URL)" = "docker" ]; then \
 		if [ "$(ETH_KEYSTORE_ACCOUNT)" = "scaffold-eth-default" ]; then \
-			forge script $(DEPLOY_SCRIPT) --rpc-url localhost --password localhost --broadcast --legacy --ffi --verify; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --password localhost --broadcast --legacy --ffi --verify; \
 		else \
-			forge script $(DEPLOY_SCRIPT) --rpc-url localhost --broadcast --legacy --ffi --verify; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify; \
 		fi \
 	else \
 		forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify; \
@@ -101,4 +101,3 @@ verify:
 	forge script script/VerifyAll.s.sol --ffi --rpc-url $(RPC_URL)
 
 build-and-verify: build verify
-

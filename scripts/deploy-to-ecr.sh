@@ -155,6 +155,16 @@ build_and_push() {
     echo ""
 }
 
+prepare_groth16_artifacts() {
+    log_info "Preparing Groth16 artifacts for MPC node image..."
+    cd "${PROJECT_ROOT}"
+    if make groth16-setup; then
+        log_info "Groth16 artifacts generated successfully"
+    else
+        log_error "Failed to generate Groth16 artifacts"
+    fi
+}
+
 # Deploy services based on selection
 case $SERVICE in
     backend)
@@ -166,6 +176,9 @@ case $SERVICE in
             "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
         ;;
     mpc-node)
+        if [ "$SKIP_BUILD" = false ]; then
+            prepare_groth16_artifacts
+        fi
         build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
     all)
@@ -173,6 +186,9 @@ case $SERVICE in
         build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
             "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
             "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
+        if [ "$SKIP_BUILD" = false ]; then
+            prepare_groth16_artifacts
+        fi
         build_and_push "mpc-node" "packages/zk-mpc-node/Dockerfile" "${MPC_NODE_REPO}" "latest"
         ;;
     *)

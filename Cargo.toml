@@ -4,5 +4,6 @@ members = [
     "packages/zk-mpc-node",
     "packages/mpc-circuits",
     "packages/mpc-algebra-wasm",
+    "packages/arkworks-solidity-verifier",
 ]
 resolver = "2"

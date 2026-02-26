@@ -1,4 +1,4 @@
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 use ark_std::{test_rng, UniformRand};

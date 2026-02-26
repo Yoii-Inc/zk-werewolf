@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   frontend:
     build:
@@ -7,7 +5,7 @@ services:
       dockerfile: packages/nextjs/Dockerfile.dev
     volumes:
       - ./packages/nextjs:/workspace/packages/nextjs
-      - /workspace/node_modules
+      - /workspace/packages/nextjs/node_modules
       - /workspace/packages/nextjs/.next
     ports:
       - "3000:3000"

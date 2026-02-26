@@ -6,33 +6,273 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
 const deployedContracts = {
   31337: {
-    YourContract: {
+    WerewolfGame: {
       address: "0x700b6a60ce7eaaea56f065753d8dcb9653dbad35",
       abi: [
         {
           type: "constructor",
+          inputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "commitmentCounts",
           inputs: [
             {
-              name: "_owner",
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "commitments",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
               type: "address",
               internalType: "address",
             },
           ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "receive",
-          stateMutability: "payable",
+          outputs: [
+            {
+              name: "commitment",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "timestamp",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
-          name: "greeting",
+          name: "createGame",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "players",
+              type: "address[]",
+              internalType: "address[]",
+            },
+            {
+              name: "rulesHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "createGame",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "players",
+              type: "address[]",
+              internalType: "address[]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "distributeRewards",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "winners",
+              type: "address[]",
+              internalType: "address[]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "finalizeGame",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "result",
+              type: "uint8",
+              internalType: "enum WerewolfGame.GameResult",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "gameMaster",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "string",
-              internalType: "string",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "gameRulesHashes",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "games",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "stateHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "startTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "endTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "status",
+              type: "uint8",
+              internalType: "enum WerewolfGame.GameStatus",
+            },
+            {
+              name: "result",
+              type: "uint8",
+              internalType: "enum WerewolfGame.GameResult",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getGamePlayers",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address[]",
+              internalType: "address[]",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "hasSubmittedCommitment",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "isGamePlayer",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -52,93 +292,231 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "premium",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setGreeting",
-          inputs: [
-            {
-              name: "_newGreeting",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-          outputs: [],
-          stateMutability: "payable",
-        },
-        {
-          type: "function",
-          name: "totalCounter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "userGreetingCounter",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "withdraw",
+          name: "renounceOwnership",
           inputs: [],
           outputs: [],
           stateMutability: "nonpayable",
         },
         {
-          type: "event",
-          name: "GreetingChange",
+          type: "function",
+          name: "rewardsContract",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IWerewolfRewards",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setGameMaster",
           inputs: [
             {
-              name: "greetingSetter",
+              name: "_gameMaster",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setRewardsContract",
+          inputs: [
+            {
+              name: "_rewards",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setVerifier",
+          inputs: [
+            {
+              name: "_verifier",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "submitCommitment",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "commitment",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "transferOwnership",
+          inputs: [
+            {
+              name: "newOwner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "updateGameState",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "stateHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IWerewolfProofVerifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verifyGameState",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "expectedHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verifyProofAndRecord",
+          inputs: [
+            {
+              name: "proofId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum IWerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "proof",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputs",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "event",
+          name: "CommitmentSubmitted",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "player",
               type: "address",
               indexed: true,
               internalType: "address",
             },
             {
-              name: "newGreeting",
-              type: "string",
+              name: "commitment",
+              type: "bytes32",
               indexed: false,
-              internalType: "string",
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "GameCreated",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
             },
             {
-              name: "premium",
-              type: "bool",
+              name: "players",
+              type: "address[]",
               indexed: false,
-              internalType: "bool",
+              internalType: "address[]",
             },
             {
-              name: "value",
+              name: "timestamp",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -146,10 +524,1615 @@ const deployedContracts = {
           ],
           anonymous: false,
         },
+        {
+          type: "event",
+          name: "GameFinalized",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "result",
+              type: "uint8",
+              indexed: false,
+              internalType: "enum WerewolfGame.GameResult",
+            },
+            {
+              name: "timestamp",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "GameStateUpdated",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "stateHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "timestamp",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "OwnershipTransferred",
+          inputs: [
+            {
+              name: "previousOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "OwnableInvalidOwner",
+          inputs: [
+            {
+              name: "owner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "OwnableUnauthorizedAccount",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1747822395.json",
-      deploymentScript: "Deploy.s.sol",
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WerewolfProofVerifier: {
+      address: "0xa15bb66138824a1c7167f5e85b957d04dd34e468",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "anonymousVotingVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "divinationVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "gameContract",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getProofRecord",
+          inputs: [
+            {
+              name: "proofId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct WerewolfProofVerifier.ProofRecord",
+              components: [
+                {
+                  name: "proofType",
+                  type: "uint8",
+                  internalType: "enum WerewolfProofVerifier.ProofType",
+                },
+                {
+                  name: "gameId",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "proofHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "verified",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "timestamp",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "isProofVerified",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "keyPublicizeVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "owner",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "proofs",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "proofHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "verified",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "timestamp",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "renounceOwnership",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "roleAssignmentVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setAnonymousVotingVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setDivinationVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setGameContract",
+          inputs: [
+            {
+              name: "_gameContract",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setKeyPublicizeVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setRoleAssignmentVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setWinningJudgementVerifierAdapter",
+          inputs: [
+            {
+              name: "_adapter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "transferOwnership",
+          inputs: [
+            {
+              name: "newOwner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifyProof",
+          inputs: [
+            {
+              name: "proofId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "proof",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputs",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "winningJudgementVerifierAdapter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "OwnershipTransferred",
+          inputs: [
+            {
+              name: "previousOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ProofFailed",
+          inputs: [
+            {
+              name: "proofId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "proofType",
+              type: "uint8",
+              indexed: false,
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "reason",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ProofVerified",
+          inputs: [
+            {
+              name: "proofId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "proofType",
+              type: "uint8",
+              indexed: false,
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "timestamp",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "OwnableInvalidOwner",
+          inputs: [
+            {
+              name: "owner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "OwnableUnauthorizedAccount",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WerewolfRewards: {
+      address: "0xb19b36b1456e65e3a6d514d3f715f204bd59f431",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "_gameContract",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "claimReward",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "claimableRewards",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "claimed",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "depositReward",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "distributeRewards",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "winners",
+              type: "address[]",
+              internalType: "address[]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "gameContract",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "gamePools",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "totalAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "entryFee",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "winnerShare",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "distributed",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "joinGameWithFee",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "owner",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "renounceOwnership",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setGameContract",
+          inputs: [
+            {
+              name: "_gameContract",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setGamePool",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "entryFee",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "winnerShare",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "transferOwnership",
+          inputs: [
+            {
+              name: "newOwner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "event",
+          name: "OwnershipTransferred",
+          inputs: [
+            {
+              name: "previousOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RewardClaimed",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "winner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RewardDeposited",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RewardsDistributed",
+          inputs: [
+            {
+              name: "gameId",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "totalAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "winnerCount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "OwnableInvalidOwner",
+          inputs: [
+            {
+              name: "owner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "OwnableUnauthorizedAccount",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "ReentrancyGuardReentrantCall",
+          inputs: [],
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentGroth16Verifier: {
+      address: "0x8ce361602b935680e8dec218b820ff5056beb7af",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct Pairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct Pairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct Pairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[100]",
+              internalType: "uint256[100]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentGroth16VerifierAdapter: {
+      address: "0xe1aa25618fa0c7a1cfdab5d6b456af611873b629",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract RoleAssignmentGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationGroth16Verifier: {
+      address: "0xe1da8919f262ee86f9be05059c9280142cf23f48",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationGroth16VerifierAdapter: {
+      address: "0x0c8e79f3534b00d9a3d4a856b665bf4ebc22f2ba",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract DivinationGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingGroth16Verifier: {
+      address: "0xed1db453c3156ff3155a97ad217b3087d5dc5f6e",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingGroth16VerifierAdapter: {
+      address: "0xf7cd8fa9b94db2aa972023b379c7f72c65e4de9d",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract AnonymousVotingGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementGroth16Verifier: {
+      address: "0x12975173b87f7595ee45dffb2ab812ece596bf84",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementGroth16VerifierAdapter: {
+      address: "0x82dc47734901ee7d4f4232f398752cb9dd5daccc",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract WinningJudgementGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeGroth16Verifier: {
+      address: "0x196dbcbb54b8ec4958c959d8949ebfe87ac2aaaf",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeGroth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizePairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizePairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizePairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeGroth16VerifierAdapter: {
+      address: "0x82c6d3ed4cd33d8ec1e51d0b5cc1d822eaa0c3dc",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract KeyPublicizeGroth16Verifier",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772019225718.json",
+      deploymentScript: "DeployWerewolf.s.sol",
     },
   },
 } as const;

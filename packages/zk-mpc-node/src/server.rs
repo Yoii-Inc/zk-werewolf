@@ -2,6 +2,7 @@ use crate::models::ProofRequest;
 use crate::node::Node;
 use crate::proof::ProofManager;
 use crate::ProofStatus;
+use anyhow::Context;
 use axum::extract::{Path, State};
 use axum::http::{self, HeaderValue, Method};
 use axum::response::IntoResponse;
@@ -40,8 +41,12 @@ pub async fn run_server(addr: &SocketAddr, state: AppState) -> Result<(), anyhow
         .layer(cors)
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .with_context(|| format!("failed to bind zk-mpc-node HTTP listener on {addr}"))?;
+    axum::serve(listener, app)
+        .await
+        .context("zk-mpc-node HTTP server terminated unexpectedly")?;
 
     Ok(())
 }

@@ -2,11 +2,11 @@ use chrono::Utc;
 use reqwest::Client;
 use serde_json::json;
 
-use crate::utils::config::CONFIG;
 use crate::models::user::{
     AuthResponse, LoginUserRequest, RegisterUserRequest, User, UserResponse,
 };
 use crate::utils::auth::{create_token, hash_password, verify_password, AuthError};
+use crate::utils::config::CONFIG;
 
 #[derive(Clone)]
 pub struct UserService {

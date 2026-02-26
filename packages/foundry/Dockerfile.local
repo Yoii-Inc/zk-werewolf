@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+FROM node:20-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    make \
+    bash \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable
+
+RUN curl -L https://foundry.paradigm.xyz | bash
+RUN /root/.foundry/bin/foundryup
+
+ENV PATH="/root/.foundry/bin:${PATH}"
+
+WORKDIR /workspace

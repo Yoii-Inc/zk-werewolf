@@ -1,24 +1,115 @@
 use crate::crypto::KeyManager;
+use crate::models::ProofRequest;
 use crate::proof::ProofManager;
 use crate::server::ApiClient;
 use crate::{EncryptedShare, ProofOutput, ProofOutputType, UserPublicKey};
-// 追加
-use crate::models::ProofRequest;
-use ark_marlin::IndexProverKey;
-use mpc_algebra::Reveal;
+use ark_ff::{BigInteger, PrimeField};
+use ark_groth16::{generate_random_parameters, prepare_verifying_key, verify_proof, ProvingKey};
+use ark_serialize::CanonicalDeserialize;
+use ark_std::test_rng;
+use mpc_algebra::{AdditivePairingShare, MpcPairingEngine, Reveal};
+use mpc_algebra_wasm::CircuitEncryptedInputIdentifier;
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
 use std::iter::zip;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
-use zk_mpc::marlin::{prove_and_verify, LocalMarlin};
+use zk_mpc::groth16::create_random_proof;
+
+type LocalProvingKey = ProvingKey<ark_bn254::Bn254>;
+type MPCProvingKey =
+    ProvingKey<MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>>;
+
+#[derive(Clone)]
+struct Groth16Setup {
+    local_proving_key: Arc<LocalProvingKey>,
+}
+
+impl Groth16Setup {
+    fn from_pk_path(path: &PathBuf, label: &str) -> Result<Self, std::io::Error> {
+        let bytes = std::fs::read(path)?;
+        let local_proving_key =
+            LocalProvingKey::deserialize_uncompressed(bytes.as_slice()).map_err(|e| {
+                std::io::Error::other(format!(
+                    "failed to deserialize {label} proving key {}: {:?}",
+                    path.display(),
+                    e
+                ))
+            })?;
+
+        Ok(Self {
+            local_proving_key: Arc::new(local_proving_key),
+        })
+    }
+
+    fn prepared_verifying_key(&self) -> ark_groth16::PreparedVerifyingKey<ark_bn254::Bn254> {
+        prepare_verifying_key(&self.local_proving_key.vk)
+    }
+
+    fn mpc_proving_key(&self) -> MPCProvingKey {
+        ProvingKey::from_public((*self.local_proving_key).clone())
+    }
+}
+
+#[derive(Clone, Default)]
+struct CircuitGroth16Setups {
+    role_assignment: Option<Groth16Setup>,
+    divination: Option<Groth16Setup>,
+    anonymous_voting: Option<Groth16Setup>,
+    winning_judgement: Option<Groth16Setup>,
+    key_publicize: Option<Groth16Setup>,
+}
+
+impl CircuitGroth16Setups {
+    fn load() -> Result<Self, std::io::Error> {
+        Ok(Self {
+            role_assignment: load_setup_with_fallback(
+                "ROLE_ASSIGNMENT_GROTH16_PK_PATH",
+                "role_assignment_max5_v1.pk",
+                "RoleAssignment",
+            )?,
+            divination: load_setup_with_fallback(
+                "DIVINATION_GROTH16_PK_PATH",
+                "divination_max5_v1.pk",
+                "Divination",
+            )?,
+            anonymous_voting: load_setup_with_fallback(
+                "ANONYMOUS_VOTING_GROTH16_PK_PATH",
+                "anonymous_voting_max5_v1.pk",
+                "AnonymousVoting",
+            )?,
+            winning_judgement: load_setup_with_fallback(
+                "WINNING_JUDGEMENT_GROTH16_PK_PATH",
+                "winning_judgement_max5_v1.pk",
+                "WinningJudgement",
+            )?,
+            key_publicize: load_setup_with_fallback(
+                "KEY_PUBLICIZE_GROTH16_PK_PATH",
+                "key_publicize_max5_v1.pk",
+                "KeyPublicize",
+            )?,
+        })
+    }
+
+    fn for_circuit(&self, circuit_type: &CircuitEncryptedInputIdentifier) -> Option<&Groth16Setup> {
+        match circuit_type {
+            CircuitEncryptedInputIdentifier::RoleAssignment(_) => self.role_assignment.as_ref(),
+            CircuitEncryptedInputIdentifier::Divination(_) => self.divination.as_ref(),
+            CircuitEncryptedInputIdentifier::AnonymousVoting(_) => self.anonymous_voting.as_ref(),
+            CircuitEncryptedInputIdentifier::WinningJudge(_) => self.winning_judgement.as_ref(),
+            CircuitEncryptedInputIdentifier::KeyPublicize(_) => self.key_publicize.as_ref(),
+        }
+    }
+}
 
 pub struct Node<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
     pub id: u32,
     pub net: Arc<MPCNetConnection<IO>>,
     pub proof_manager: Arc<ProofManager>,
     pub key_manager: Arc<KeyManager>,
-    pub api_client: Arc<ApiClient>, // 追加
+    pub api_client: Arc<ApiClient>,
+    groth16_setups: CircuitGroth16Setups,
 }
 
 impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
@@ -27,7 +118,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         net: Arc<MPCNetConnection<IO>>,
         proof_manager: Arc<ProofManager>,
         key_manager: Arc<KeyManager>,
-        server_url: String, // 追加
+        server_url: String,
     ) -> Self {
         // 環境変数から秘密鍵と公開鍵を取得（優先）、なければファイルから読込
         if let Ok(private_key_base64) = std::env::var("MPC_PRIVATE_KEY") {
@@ -60,6 +151,9 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         }
 
         let api_client = Arc::new(ApiClient::new(server_url.clone()));
+        let groth16_setups = CircuitGroth16Setups::load().unwrap_or_else(|e| {
+            panic!("Failed to load Groth16 proving key(s): {}", e);
+        });
 
         let node = Self {
             id,
@@ -67,6 +161,7 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             proof_manager,
             key_manager,
             api_client: api_client.clone(),
+            groth16_setups,
         };
 
         // 生成した公開鍵をサーバーに登録
@@ -109,54 +204,96 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
 
         let inputs = CircuitFactory::create_verify_inputs(&mpc_circuit);
 
-        let (index_pk, index_vk) = LocalMarlin::index(&self.proof_manager.srs, local_circuit)
-            .map_err(|e| -> Box<dyn std::error::Error + Send> {
+        let rng = &mut test_rng();
+        let (pvk, mpc_params): (_, MPCProvingKey) =
+            if let Some(setup) = self.groth16_setups.for_circuit(&request.circuit_type) {
+                (setup.prepared_verifying_key(), setup.mpc_proving_key())
+            } else {
+                let params =
+                    generate_random_parameters::<ark_bn254::Bn254, _, _>(local_circuit, rng)
+                        .map_err(|e| -> Box<dyn std::error::Error + Send> {
+                            Box::new(std::io::Error::other(format!(
+                                "Failed to generate Groth16 parameters: {:?}",
+                                e
+                            )))
+                        })?;
+                let pvk = prepare_verifying_key(&params.vk);
+                (pvk, ProvingKey::from_public(params))
+            };
+
+        let mpc_proof = create_random_proof::<
+            MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>,
+            _,
+            _,
+        >(mpc_circuit.clone(), &mpc_params, rng)
+        .map_err(|e| -> Box<dyn std::error::Error + Send> {
+            Box::new(std::io::Error::other(format!(
+                "Failed to generate collaborative Groth16 proof: {:?}",
+                e
+            )))
+        })?;
+        let publicized_proof = mpc_proof.reveal().await;
+        let is_valid = verify_proof(&pvk, &publicized_proof, &inputs).map_err(
+            |e| -> Box<dyn std::error::Error + Send> {
                 Box::new(std::io::Error::other(format!(
-                    "Failed to index circuit: {:?}",
+                    "Failed to verify Groth16 proof: {:?}",
                     e
                 )))
-            })?;
-        let mpc_index_pk = IndexProverKey::from_public(index_pk);
+            },
+        )?;
 
-        let (outputs, is_valid) =
-            match prove_and_verify(&mpc_index_pk, &index_vk, mpc_circuit.clone(), inputs).await {
-                true => {
-                    let proof_outputs = CircuitFactory::get_circuit_outputs(&mpc_circuit);
-                    match &request.output_type {
-                        ProofOutputType::Public => {
-                            let proof_output = ProofOutput {
-                                output_type: request.output_type.clone(),
-                                value: Some(proof_outputs),
-                                shares: None,
-                            };
-                            (Some(proof_output), true)
-                        }
-                        ProofOutputType::PrivateToPublic(pubkeys) => {
-                            // TODO: 出力をシェアに分割して暗号化
-                            let shares = self
-                                .split_and_encrypt_output(&proof_outputs, pubkeys)
-                                .await?;
-                            let proof_output = ProofOutput {
-                                output_type: request.output_type.clone(),
-                                value: None,
-                                shares: Some(shares),
-                            };
-                            (Some(proof_output), true)
-                        }
-                        ProofOutputType::PrivateToPrivate(pubkey) => {
-                            // TODO: 出力を直接暗号化
-                            let encrypted = self.encrypt_output(&proof_outputs, pubkey).await?;
-                            let proof_output = ProofOutput {
-                                output_type: request.output_type.clone(),
-                                value: Some(encrypted),
-                                shares: None,
-                            };
-                            (Some(proof_output), true)
-                        }
+        let outputs = if is_valid {
+            let proof_bytes = abi_encode_groth16_proof(&publicized_proof);
+            let public_input_len = expected_public_input_len(&request.circuit_type);
+            let public_input_bytes = Some(
+                abi_encode_fixed_uint256_inputs(&inputs, public_input_len).map_err(
+                    |e| -> Box<dyn std::error::Error + Send> {
+                        Box::new(std::io::Error::other(format!(
+                            "Failed to encode public inputs: {}",
+                            e
+                        )))
+                    },
+                )?,
+            );
+
+            let proof_outputs = CircuitFactory::get_circuit_outputs(&mpc_circuit);
+            let proof_output = match &request.output_type {
+                ProofOutputType::Public => ProofOutput {
+                    output_type: request.output_type.clone(),
+                    value: Some(proof_outputs),
+                    proof: Some(proof_bytes.clone()),
+                    public_inputs: public_input_bytes.clone(),
+                    shares: None,
+                },
+                ProofOutputType::PrivateToPublic(pubkeys) => {
+                    // TODO: 出力をシェアに分割して暗号化
+                    let shares = self
+                        .split_and_encrypt_output(&proof_outputs, pubkeys)
+                        .await?;
+                    ProofOutput {
+                        output_type: request.output_type.clone(),
+                        value: None,
+                        proof: Some(proof_bytes.clone()),
+                        public_inputs: public_input_bytes.clone(),
+                        shares: Some(shares),
                     }
                 }
-                false => (None, false),
+                ProofOutputType::PrivateToPrivate(pubkey) => {
+                    // TODO: 出力を直接暗号化
+                    let encrypted = self.encrypt_output(&proof_outputs, pubkey).await?;
+                    ProofOutput {
+                        output_type: request.output_type.clone(),
+                        value: Some(encrypted),
+                        proof: Some(proof_bytes),
+                        public_inputs: public_input_bytes,
+                        shares: None,
+                    }
+                }
             };
+            Some(proof_output)
+        } else {
+            None
+        };
 
         println!(
             "output is {:?}",
@@ -258,4 +395,89 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
     ) -> Result<Vec<u8>, crate::crypto::CryptoError> {
         self.key_manager.decrypt_share(encrypted_share).await
     }
+}
+
+fn pk_path_from_env_or_default(env_var: &str, default_pk_file: &str) -> Option<PathBuf> {
+    match std::env::var(env_var) {
+        Ok(value) if !value.trim().is_empty() => Some(PathBuf::from(value)),
+        _ => {
+            let default_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("data/groth16")
+                .join(default_pk_file);
+            if default_path.exists() {
+                Some(default_path)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn load_setup_with_fallback(
+    env_var: &str,
+    default_pk_file: &str,
+    label: &str,
+) -> Result<Option<Groth16Setup>, std::io::Error> {
+    let Some(path) = pk_path_from_env_or_default(env_var, default_pk_file) else {
+        println!(
+            "{env_var} is not set and default key is missing. Falling back to runtime Groth16 setup for {label}."
+        );
+        return Ok(None);
+    };
+
+    let setup = Groth16Setup::from_pk_path(&path, label)?;
+    println!("Loaded {label} Groth16 proving key from {}.", path.display());
+    Ok(Some(setup))
+}
+
+fn abi_encode_groth16_proof(proof: &ark_groth16::Proof<ark_bn254::Bn254>) -> Vec<u8> {
+    let mut out = Vec::with_capacity(8 * 32);
+    out.extend_from_slice(&field_to_word(proof.a.x));
+    out.extend_from_slice(&field_to_word(proof.a.y));
+    out.extend_from_slice(&field_to_word(proof.b.x.c0));
+    out.extend_from_slice(&field_to_word(proof.b.x.c1));
+    out.extend_from_slice(&field_to_word(proof.b.y.c0));
+    out.extend_from_slice(&field_to_word(proof.b.y.c1));
+    out.extend_from_slice(&field_to_word(proof.c.x));
+    out.extend_from_slice(&field_to_word(proof.c.y));
+    out
+}
+
+fn expected_public_input_len(circuit_type: &CircuitEncryptedInputIdentifier) -> usize {
+    match circuit_type {
+        CircuitEncryptedInputIdentifier::RoleAssignment(_) => 100,
+        CircuitEncryptedInputIdentifier::Divination(_) => 8,
+        CircuitEncryptedInputIdentifier::AnonymousVoting(_) => 1,
+        CircuitEncryptedInputIdentifier::WinningJudge(_) => 2,
+        CircuitEncryptedInputIdentifier::KeyPublicize(_) => 0,
+    }
+}
+
+fn abi_encode_fixed_uint256_inputs<F: PrimeField>(
+    inputs: &[F],
+    expected_len: usize,
+) -> Result<Vec<u8>, String> {
+    if inputs.len() != expected_len {
+        return Err(format!(
+            "expected {} public inputs, got {}",
+            expected_len,
+            inputs.len()
+        ));
+    }
+
+    let mut out = Vec::with_capacity(expected_len * 32);
+    for input in inputs {
+        out.extend_from_slice(&field_to_word(*input));
+    }
+    Ok(out)
+}
+
+fn field_to_word<F: PrimeField>(value: F) -> [u8; 32] {
+    let mut le = value.into_repr().to_bytes_le();
+    le.resize(32, 0);
+    let mut out = [0u8; 32];
+    for i in 0..32 {
+        out[i] = le[31 - i];
+    }
+    out
 }

@@ -24,7 +24,7 @@ impl ark_crypto_primitives::crh::pedersen::Window for Window {
     const NUM_WINDOWS: usize = PERDERSON_WINDOW_NUM;
 }
 
-type PedersenComScheme = Commitment<ark_ed_on_bls12_377::EdwardsProjective, Window>;
+type PedersenComScheme = Commitment<ark_ed_on_bn254::EdwardsProjective, Window>;
 type PedersenParam = <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Parameters;
 pub type PedersenCommitment =
     <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Output;
@@ -32,7 +32,7 @@ type PedersenRandomness =
     <PedersenComScheme as ark_crypto_primitives::CommitmentScheme>::Randomness;
 
 type ElGamalScheme =
-    ark_crypto_primitives::encryption::elgamal::ElGamal<ark_ed_on_bls12_377::EdwardsProjective>;
+    ark_crypto_primitives::encryption::elgamal::ElGamal<ark_ed_on_bn254::EdwardsProjective>;
 type ElGamalParam = <ElGamalScheme as AsymmetricEncryptionScheme>::Parameters;
 type ElGamalPubKey = <ElGamalScheme as AsymmetricEncryptionScheme>::PublicKey;
 type ElGamalRandomness = <ElGamalScheme as AsymmetricEncryptionScheme>::Randomness;
@@ -140,7 +140,7 @@ pub fn elgamal_decrypt(input: JsValue) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn fr_rand() -> Result<JsValue, JsValue> {
-    let fr = ark_bls12_377::Fr::rand(&mut ark_std::rand::thread_rng());
+    let fr = ark_bn254::Fr::rand(&mut ark_std::rand::thread_rng());
     let json_str = serde_json::to_string(&fr)
         .map_err(|e| JsValue::from_str(&format!("Serialize error: {}", e)))?;
     Ok(JsValue::from_str(&json_str))
@@ -182,7 +182,7 @@ pub fn elgamal_keygen(input: JsValue) -> Result<JsValue, JsValue> {
 #[serde(rename_all = "camelCase")]
 struct PedersenCommitmentInput {
     pub pedersen_params: PedersenParam,
-    pub x: ark_bls12_377::Fr,
+    pub x: ark_bn254::Fr,
     pub pedersen_randomness: PedersenRandomness,
 }
 
@@ -207,7 +207,7 @@ mod tests {
     use super::*;
 
     use crate::types::*;
-    use ark_bls12_377::Fr;
+    use ark_bn254::Fr;
     use ark_crypto_primitives::CommitmentScheme;
     use ark_ff::{BigInteger, PrimeField, Zero};
     use ark_std::UniformRand;

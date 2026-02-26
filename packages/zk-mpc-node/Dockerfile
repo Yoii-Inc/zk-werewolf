@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM rust:1.83 AS builder
+FROM rust:1.88 AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -32,7 +32,14 @@ WORKDIR /app
 
 COPY --from=builder /tmp/zk-mpc-node /app/zk-mpc-node
 COPY packages/zk-mpc-node/address /app/address
+COPY packages/zk-mpc-node/data/groth16 /app/data/groth16
 RUN chmod +x /app/zk-mpc-node
+
+ENV ROLE_ASSIGNMENT_GROTH16_PK_PATH=/app/data/groth16/role_assignment_max5_v1.pk
+ENV ANONYMOUS_VOTING_GROTH16_PK_PATH=/app/data/groth16/anonymous_voting_max5_v1.pk
+ENV DIVINATION_GROTH16_PK_PATH=/app/data/groth16/divination_max5_v1.pk
+ENV WINNING_JUDGEMENT_GROTH16_PK_PATH=/app/data/groth16/winning_judgement_max5_v1.pk
+ENV KEY_PUBLICIZE_GROTH16_PK_PATH=/app/data/groth16/key_publicize_max5_v1.pk
 
 EXPOSE 9000
 

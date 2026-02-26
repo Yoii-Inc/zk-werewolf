@@ -127,6 +127,8 @@ Use the provided deployment script:
 ./scripts/deploy-to-ecr.sh dev --skip-build
 ```
 
+Note: when deploying `mpc-node` (or `all`) with build enabled, the script now runs `make groth16-setup` first and bakes generated `.pk/.json` artifacts into the MPC node image.
+
 ### Manual Deployment
 
 If you prefer to build and push manually:
@@ -151,6 +153,8 @@ docker build -f packages/nextjs/Dockerfile -t ${FRONTEND_REPO}:latest .
 docker push ${FRONTEND_REPO}:latest
 
 # Build and push MPC node
+# Groth16 setup artifacts are required before mpc-node image build
+make groth16-setup
 docker build -f packages/zk-mpc-node/Dockerfile -t ${MPC_NODE_REPO}:latest .
 docker push ${MPC_NODE_REPO}:latest
 ```

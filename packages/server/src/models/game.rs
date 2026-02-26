@@ -1,4 +1,8 @@
 use crate::{
+    blockchain::{
+        state_hash::{compute_game_id, compute_proof_id},
+        ProofType as ChainProofType,
+    },
     models::{
         chat::{ChatMessage, ChatMessageType},
         role::Role,
@@ -8,7 +12,7 @@ use crate::{
 };
 
 use super::player::Player;
-use ark_bls12_377::Fr;
+use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::CanonicalDeserialize;
@@ -699,6 +703,81 @@ impl Game {
                     "Proof ID {:?} is ready with output: {:?}",
                     self.batch_request.batch_id, output
                 );
+
+                if app_state.blockchain_client.is_enabled() {
+                    let proof_id = compute_proof_id(&self.batch_request.batch_id);
+                    let game_id = compute_game_id(&self.room_id);
+                    let (proof_type, proof_type_label) = match &identifier {
+                        CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
+                            (ChainProofType::RoleAssignment, "RoleAssignment")
+                        }
+                        CircuitEncryptedInputIdentifier::Divination(_) => {
+                            (ChainProofType::Divination, "Divination")
+                        }
+                        CircuitEncryptedInputIdentifier::AnonymousVoting(_) => {
+                            (ChainProofType::AnonymousVoting, "AnonymousVoting")
+                        }
+                        CircuitEncryptedInputIdentifier::WinningJudge(_) => {
+                            (ChainProofType::WinningJudgement, "WinningJudgement")
+                        }
+                        CircuitEncryptedInputIdentifier::KeyPublicize(_) => {
+                            (ChainProofType::KeyPublicize, "KeyPublicize")
+                        }
+                    };
+                    let proof_data = match output.proof.clone() {
+                        Some(bytes) if !bytes.is_empty() => bytes,
+                        _ => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification skipped: missing proof bytes for {}.",
+                                proof_type_label
+                            ));
+                            return;
+                        }
+                    };
+                    let public_inputs = match output.public_inputs.clone() {
+                        Some(bytes) => bytes,
+                        None if matches!(proof_type, ChainProofType::KeyPublicize) => Vec::new(),
+                        None => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification skipped: missing public inputs for {}.",
+                                proof_type_label
+                            ));
+                            return;
+                        }
+                    };
+
+                    match app_state
+                        .blockchain_client
+                        .verify_proof(proof_id, game_id, proof_type, &proof_data, &public_inputs)
+                        .await
+                    {
+                        Ok(Some(true)) => {
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification succeeded: {}.",
+                                proof_type_label
+                            ));
+                        }
+                        Ok(None) => {}
+                        Ok(Some(false)) => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(
+                                "On-chain proof verification failed.".to_string(),
+                            );
+                            return;
+                        }
+                        Err(e) => {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(format!(
+                                "On-chain proof verification error: {}",
+                                e
+                            ));
+                            return;
+                        }
+                    }
+                }
+
                 // プルーフ生成成功時の処理
                 // 例: WebSocketで結果をクライアントに通知
                 match identifier {

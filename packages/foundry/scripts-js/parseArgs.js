@@ -12,6 +12,7 @@ config();
 const args = process.argv.slice(2);
 let fileName = "Deploy.s.sol";
 let network = "localhost";
+const localNetworks = new Set(["localhost", "docker"]);
 
 // Show help message if --help is provided
 if (args.includes("--help") || args.includes("-h")) {
@@ -62,7 +63,7 @@ try {
 // Check for default account on live network
 if (
   process.env.ETH_KEYSTORE_ACCOUNT === "scaffold-eth-default" &&
-  network !== "localhost"
+  !localNetworks.has(network)
 ) {
   console.log(`
 ❌ Error: Cannot deploy to live network using default keystore account!
@@ -75,17 +76,17 @@ To deploy to ${network}, please follow these steps:
 2. Update your .env file:
    ETH_KEYSTORE_ACCOUNT='scaffold-eth-custom'
 
-The default account (scaffold-eth-default) can only be used for localhost deployments.
+The default account (scaffold-eth-default) can only be used for local deployments (localhost/docker).
 `);
   process.exit(0);
 }
 
 if (
   process.env.ETH_KEYSTORE_ACCOUNT !== "scaffold-eth-default" &&
-  network === "localhost"
+  localNetworks.has(network)
 ) {
   console.log(`
-⚠️ Warning: Using ${process.env.ETH_KEYSTORE_ACCOUNT} keystore account on localhost.
+⚠️ Warning: Using ${process.env.ETH_KEYSTORE_ACCOUNT} keystore account on local network (${network}).
 
 You can either:
 1. Enter the password for ${process.env.ETH_KEYSTORE_ACCOUNT} account

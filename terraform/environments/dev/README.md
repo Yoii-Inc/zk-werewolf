@@ -68,6 +68,12 @@ terraform plan
 terraform apply
 ```
 
+## Container Build Notes
+
+- `mpc-node` image requires Groth16 setup artifacts (`.pk`, `.json`) at build time.
+- `./scripts/deploy-to-ecr.sh dev mpc-node` and `./scripts/deploy-to-ecr.sh dev` automatically run `make groth16-setup` before building the MPC node image.
+- If you build manually, run `make groth16-setup` before `docker build -f packages/zk-mpc-node/Dockerfile ...`.
+
 ## Managing Secrets with SOPS
 
 ### Viewing Encrypted Secrets

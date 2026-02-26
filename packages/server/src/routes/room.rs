@@ -104,11 +104,7 @@ pub async fn join_room(
     Path((room_id, player_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
     // ユーザー認証情報からユーザー名を取得（auth_middlewareで設定される）
-    let user = match state
-        .user_service
-        .get_user_by_id(&player_id)
-        .await
-    {
+    let user = match state.user_service.get_user_by_id(&player_id).await {
         Ok(user) => user,
         Err(_) => return (StatusCode::BAD_REQUEST, Json("User not found")),
     };
