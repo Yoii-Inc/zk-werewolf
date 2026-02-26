@@ -3,16 +3,24 @@ set -ex
 trap "exit" INT TERM
 trap 'jobs -p | xargs -r kill' EXIT
 
-MAX_WAIT=60 # 最大待機時間（秒）
+SERVER_STARTUP_TIMEOUT=${SERVER_STARTUP_TIMEOUT:-60}   # サーバー待機秒
+NODE_STARTUP_TIMEOUT=${NODE_STARTUP_TIMEOUT:-300}      # ノード待機秒（PK読込を考慮）
 
 # ポートが開くのを待つ関数
 wait_for_port() {
     local port=$1
+    local timeout=$2
+    local label=$3
+    local pid=$4
     local start_time=$(date +%s)
 
     while ! curl -s http://localhost:${port} >/dev/null; do
-        if [ $(($(date +%s) - start_time)) -gt $MAX_WAIT ]; then
-            echo "タイムアウト: ポート ${port} が開きませんでした"
+        if [ -n "${pid}" ] && ! kill -0 "${pid}" 2>/dev/null; then
+            echo "失敗: ${label} プロセスが起動中に終了しました（PID=${pid}）"
+            exit 1
+        fi
+        if [ $(($(date +%s) - start_time)) -gt "${timeout}" ]; then
+            echo "タイムアウト: ${label} (${port}) が ${timeout}秒以内に起動しませんでした"
             exit 1
         fi
         sleep 1
@@ -43,7 +51,7 @@ run_server_node_tests() {
     SERVER_PID=$!
 
     # サーバーの起動を待機
-    wait_for_port 8080
+    wait_for_port 8080 "${SERVER_STARTUP_TIMEOUT}" "server" "${SERVER_PID}"
 
     # zk-mpc-nodeのビルド
     cd ../zk-mpc-node
@@ -63,9 +71,9 @@ run_server_node_tests() {
     NODE2_PID=$!
 
     # ノードの起動を待機
-    for PORT in 9000 9001 9002; do
-        wait_for_port $PORT
-    done
+    wait_for_port 9000 "${NODE_STARTUP_TIMEOUT}" "zk-mpc-node#0" "${NODE0_PID}"
+    wait_for_port 9001 "${NODE_STARTUP_TIMEOUT}" "zk-mpc-node#1" "${NODE1_PID}"
+    wait_for_port 9002 "${NODE_STARTUP_TIMEOUT}" "zk-mpc-node#2" "${NODE2_PID}"
 
     # zk-mpc-node インテグレーションテストの実行
     cargo test --test integration_test -- --nocapture --test-threads=1 || {
