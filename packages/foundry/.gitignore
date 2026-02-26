@@ -10,9 +10,6 @@ out/
 # Docs
 docs/
 
-# Generated Groth16 verifiers (multi-profile)
-/contracts/verifiers/generated/
-
 # Dotenv file
 .env
 localhost.json
