@@ -113,7 +113,15 @@ pub async fn proof_handler(
 ) -> impl IntoResponse {
     match zk_proof::batch_proof_handling(state, &room_id, &request).await {
         Ok(batch_id) => (StatusCode::OK, Json(batch_id)),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(e)),
+        Err(zk_proof::ProofHandlingError::Conflict(message)) => {
+            (StatusCode::CONFLICT, Json(message))
+        }
+        Err(zk_proof::ProofHandlingError::Unprocessable(message)) => {
+            (StatusCode::UNPROCESSABLE_ENTITY, Json(message))
+        }
+        Err(zk_proof::ProofHandlingError::Internal(message)) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(message))
+        }
     }
 }
 
@@ -265,6 +273,8 @@ async fn reset_game_handler(
         reset_game.result = GameResult::InProgress;
 
         reset_game.day_count = 1;
+        reset_game.batch_request = BatchRequest::new(0);
+        reset_game.active_batches.clear();
 
         // computation_results をリセット
         reset_game.computation_results = ComputationResults::default();
@@ -322,7 +332,8 @@ async fn reset_batch_request_handler(
 
     if let Some(game) = games.get_mut(&room_id) {
         // バッチリクエストを新しいものに置き換え
-        game.batch_request = BatchRequest::new();
+        game.batch_request = BatchRequest::new(0);
+        game.active_batches.clear();
 
         // システムメッセージを追加
         game.chat_log
