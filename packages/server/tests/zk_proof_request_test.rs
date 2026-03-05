@@ -197,6 +197,7 @@ fn setup_voting_dummy() -> ClientRequestType {
         user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&anon_voting_output).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     ClientRequestType::AnonymousVoting(prover_info)
@@ -285,6 +286,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[0]).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     let request1 = ClientRequestType::AnonymousVoting(prover_info_1);
@@ -295,6 +297,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         user_id: "1".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[1]).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     let request2 = ClientRequestType::AnonymousVoting(prover_info_2);
@@ -305,6 +308,7 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         user_id: "2".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[2]).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     let request3 = ClientRequestType::AnonymousVoting(prover_info_3);

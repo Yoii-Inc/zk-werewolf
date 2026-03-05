@@ -374,9 +374,7 @@ fn validate_phase_for_request(
     let is_valid = match request {
         ClientRequestType::RoleAssignment(_)
         | ClientRequestType::KeyPublicize(_) => matches!(phase, GamePhase::Night),
-        ClientRequestType::Divination(_) => {
-            matches!(phase, GamePhase::Night | GamePhase::DivinationProcessing)
-        }
+        ClientRequestType::Divination(_) => matches!(phase, GamePhase::DivinationProcessing),
         ClientRequestType::AnonymousVoting(_) => matches!(phase, GamePhase::Voting),
         ClientRequestType::WinningJudge(_) => {
             matches!(

@@ -142,6 +142,8 @@ pub struct ProverInfo {
     pub prover_count: usize,
     pub encrypted_data: String,
     #[serde(default)]
+    pub is_dummy: bool,
+    #[serde(default)]
     pub public_key: Option<String>, // Curve25519公開鍵（Base64エンコード）
 }
 
@@ -183,6 +185,13 @@ impl ClientRequestType {
             | ClientRequestType::WinningJudge(info)
             | ClientRequestType::RoleAssignment(info)
             | ClientRequestType::KeyPublicize(info) => info.public_key.as_deref(),
+        }
+    }
+
+    pub(crate) fn is_dummy(&self) -> bool {
+        match self {
+            ClientRequestType::Divination(info) => info.is_dummy,
+            _ => false,
         }
     }
 
@@ -644,11 +653,16 @@ impl Game {
             ));
         }
 
-        if !batch
+        if let Some(existing_index) = batch
             .requests
             .iter()
-            .any(|r| r.get_user_id() == request.get_user_id())
+            .position(|r| r.get_user_id() == request.get_user_id())
         {
+            let should_replace = batch.requests[existing_index].is_dummy() && !request.is_dummy();
+            if should_replace {
+                batch.requests[existing_index] = request;
+            }
+        } else {
             batch.requests.push(request);
         }
 
