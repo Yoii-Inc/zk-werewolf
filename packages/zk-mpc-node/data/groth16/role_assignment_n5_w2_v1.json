@@ -1,0 +1,7 @@
+{
+  "circuitId": "role_assignment_n5_w2_v1",
+  "maxPlayers": 5,
+  "publicInputLen": 81,
+  "pkPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../zk-mpc-node/data/groth16/role_assignment_n5_w2_v1.pk",
+  "verifierPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../foundry/contracts/verifiers/generated/RoleAssignmentN5W2Groth16Verifier.sol"
+}

@@ -35,11 +35,7 @@ ENVIRONMENT=""
 SERVICE="all"
 SKIP_BUILD=false
 
-ROLE_ASSIGNMENT_GROTH16_PK_PATH=${ROLE_ASSIGNMENT_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk}
-ANONYMOUS_VOTING_GROTH16_PK_PATH=${ANONYMOUS_VOTING_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk}
-DIVINATION_GROTH16_PK_PATH=${DIVINATION_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/divination_max5_v1.pk}
-WINNING_JUDGEMENT_GROTH16_PK_PATH=${WINNING_JUDGEMENT_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/winning_judgement_max5_v1.pk}
-KEY_PUBLICIZE_GROTH16_PK_PATH=${KEY_PUBLICIZE_GROTH16_PK_PATH:-packages/zk-mpc-node/data/groth16/key_publicize_max5_v1.pk}
+GROTH16_DATA_DIR=${GROTH16_DATA_DIR:-packages/zk-mpc-node/data/groth16}
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -171,22 +167,45 @@ resolve_path() {
 }
 
 verify_groth16_artifacts() {
-    local paths=(
-        "${ROLE_ASSIGNMENT_GROTH16_PK_PATH}"
-        "${ANONYMOUS_VOTING_GROTH16_PK_PATH}"
-        "${DIVINATION_GROTH16_PK_PATH}"
-        "${WINNING_JUDGEMENT_GROTH16_PK_PATH}"
-        "${KEY_PUBLICIZE_GROTH16_PK_PATH}"
+    local role_assignment_profiles=(
+        "4:1"
+        "5:1"
+        "5:2"
+        "6:1"
+        "6:2"
+        "7:2"
+        "7:3"
     )
+    local player_counts=(4 5 6 7 8 9)
+    local profile_circuits=("divination" "anonymous_voting" "winning_judgement" "key_publicize")
+    local missing=false
 
-    for p in "${paths[@]}"; do
+    for profile in "${role_assignment_profiles[@]}"; do
+        local n="${profile%%:*}"
+        local w="${profile##*:}"
         local abs_path
-        abs_path=$(resolve_path "${p}")
+        abs_path=$(resolve_path "${GROTH16_DATA_DIR}/role_assignment_n${n}_w${w}_v1.pk")
         if [ ! -f "${abs_path}" ]; then
             log_warn "Groth16 artifact not found: ${abs_path}"
-            return 1
+            missing=true
         fi
     done
+
+    for n in "${player_counts[@]}"; do
+        for circuit in "${profile_circuits[@]}"; do
+            local abs_path
+            abs_path=$(resolve_path "${GROTH16_DATA_DIR}/${circuit}_n${n}_v1.pk")
+            if [ ! -f "${abs_path}" ]; then
+                log_warn "Groth16 artifact not found: ${abs_path}"
+                missing=true
+            fi
+        done
+    done
+
+    if [ "${missing}" = true ]; then
+        return 1
+    fi
+
     log_info "Using pre-generated Groth16 artifacts."
     return 0
 }

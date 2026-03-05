@@ -14,7 +14,7 @@ pub enum ProofType {
     KeyPublicize,
 }
 
-const ROLE_ASSIGNMENT_VERIFY_PROOF_GAS_LIMIT: u64 = 1_500_000;
+const ROLE_ASSIGNMENT_VERIFY_PROOF_GAS_LIMIT: u64 = 5_000_000;
 
 impl ProofType {
     fn as_u8(self) -> u8 {
@@ -325,6 +325,8 @@ impl BlockchainClient {
         proof_id: [u8; 32],
         game_id: [u8; 32],
         proof_type: ProofType,
+        player_count: u8,
+        werewolf_count: u8,
         proof_data: &[u8],
         public_inputs: &[u8],
     ) -> Result<Option<bool>, String> {
@@ -333,10 +335,12 @@ impl BlockchainClient {
             Backend::Simulated(_) => {
                 let verified = true;
                 tracing::info!(
-                    "[simulated-chain] verify_proof proof_id={} game_id={} proof_type={:?} verified={} proof_bytes={} public_inputs_bytes={}",
+                    "[simulated-chain] verify_proof proof_id={} game_id={} proof_type={:?} player_count={} werewolf_count={} verified={} proof_bytes={} public_inputs_bytes={}",
                     state_hash::bytes32_to_hex(&proof_id),
                     state_hash::bytes32_to_hex(&game_id),
                     proof_type,
+                    player_count,
+                    werewolf_count,
                     verified,
                     proof_data.len(),
                     public_inputs.len()
@@ -356,10 +360,12 @@ impl BlockchainClient {
                 let call_args = vec![
                     "call".to_string(),
                     backend.addresses.verifier_contract.clone(),
-                    "verifyProof(bytes32,bytes32,uint8,bytes,bytes)(bool)".to_string(),
+                    "verifyProof(bytes32,bytes32,uint8,uint8,uint8,bytes,bytes)(bool)".to_string(),
                     state_hash::bytes32_to_hex(&proof_id),
                     state_hash::bytes32_to_hex(&game_id),
                     proof_type_u8.to_string(),
+                    player_count.to_string(),
+                    werewolf_count.to_string(),
                     proof_hex.clone(),
                     public_inputs_hex.clone(),
                     "--from".to_string(),
@@ -387,11 +393,13 @@ impl BlockchainClient {
                 let mut send_args = base_send_args(
                     backend,
                     &backend.addresses.verifier_contract,
-                    "verifyProof(bytes32,bytes32,uint8,bytes,bytes)",
+                    "verifyProof(bytes32,bytes32,uint8,uint8,uint8,bytes,bytes)",
                 );
                 send_args.push(state_hash::bytes32_to_hex(&proof_id));
                 send_args.push(state_hash::bytes32_to_hex(&game_id));
                 send_args.push(proof_type_u8.to_string());
+                send_args.push(player_count.to_string());
+                send_args.push(werewolf_count.to_string());
                 send_args.push(proof_hex);
                 send_args.push(public_inputs_hex);
                 if let Some(gas_limit) = verify_gas_limit {
@@ -401,10 +409,12 @@ impl BlockchainClient {
                 let tx = send_and_extract_tx_hash(&send_args).await?;
 
                 tracing::info!(
-                    "[real-chain] verify_proof proof_id={} game_id={} proof_type={:?} verified=true tx={}",
+                    "[real-chain] verify_proof proof_id={} game_id={} proof_type={:?} player_count={} werewolf_count={} verified=true tx={}",
                     state_hash::bytes32_to_hex(&proof_id),
                     state_hash::bytes32_to_hex(&game_id),
                     proof_type,
+                    player_count,
+                    werewolf_count,
                     tx
                 );
                 Ok(Some(true))

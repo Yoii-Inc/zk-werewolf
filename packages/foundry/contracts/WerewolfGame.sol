@@ -16,6 +16,8 @@ interface IWerewolfProofVerifier {
         bytes32 proofId,
         bytes32 gameId,
         ProofType proofType,
+        uint8 playerCount,
+        uint8 werewolfCount,
         bytes calldata proof,
         bytes calldata publicInputs
     ) external returns (bool);
@@ -177,11 +179,13 @@ contract WerewolfGame is Ownable {
         bytes32 proofId,
         bytes32 gameId,
         IWerewolfProofVerifier.ProofType proofType,
+        uint8 playerCount,
+        uint8 werewolfCount,
         bytes calldata proof,
         bytes calldata publicInputs
     ) external onlyGameMasterOrOwner returns (bool) {
         require(address(verifier) != address(0), "Verifier not set");
-        return verifier.verifyProof(proofId, gameId, proofType, proof, publicInputs);
+        return verifier.verifyProof(proofId, gameId, proofType, playerCount, werewolfCount, proof, publicInputs);
     }
 
     function distributeRewards(bytes32 gameId, address[] calldata winners) external onlyGameMasterOrOwner {

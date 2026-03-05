@@ -455,6 +455,16 @@ const deployedContracts = {
               internalType: "enum IWerewolfProofVerifier.ProofType",
             },
             {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
               name: "proof",
               type: "bytes",
               internalType: "bytes",
@@ -630,29 +640,32 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "anonymousVotingVerifierAdapter",
-          inputs: [],
+          name: "buildCircuitKey",
+          inputs: [
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [
             {
               name: "",
-              type: "address",
-              internalType: "address",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "divinationVerifierAdapter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -715,6 +728,35 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "getVerifierAdapter",
+          inputs: [
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "isProofVerified",
           inputs: [
             {
@@ -739,16 +781,32 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "keyPublicizeVerifierAdapter",
-          inputs: [],
+          name: "isSupportedProfile",
+          inputs: [
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [
             {
               name: "",
-              type: "address",
-              internalType: "address",
+              type: "bool",
+              internalType: "bool",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -811,45 +869,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "roleAssignmentVerifierAdapter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setAnonymousVotingVerifierAdapter",
-          inputs: [
-            {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setDivinationVerifierAdapter",
-          inputs: [
-            {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "setGameContract",
           inputs: [
             {
@@ -863,36 +882,25 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "setKeyPublicizeVerifierAdapter",
+          name: "setVerifierAdapter",
           inputs: [
             {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
             },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setRoleAssignmentVerifierAdapter",
-          inputs: [
             {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
             },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setWinningJudgementVerifierAdapter",
-          inputs: [
             {
-              name: "_adapter",
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "adapter",
               type: "address",
               internalType: "address",
             },
@@ -915,6 +923,25 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "verifierAdapterByCircuit",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "verifyProof",
           inputs: [
             {
@@ -931,6 +958,16 @@ const deployedContracts = {
               name: "proofType",
               type: "uint8",
               internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
             },
             {
               name: "proof",
@@ -951,19 +988,6 @@ const deployedContracts = {
             },
           ],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "winningJudgementVerifierAdapter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "event",
@@ -1042,6 +1066,43 @@ const deployedContracts = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "VerifierAdapterSet",
+          inputs: [
+            {
+              name: "circuitKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "proofType",
+              type: "uint8",
+              indexed: false,
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+            {
+              name: "adapter",
+              type: "address",
+              indexed: false,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -2137,7 +2198,7 @@ const deployedContracts = {
   },
   11155111: {
     WerewolfGame: {
-      address: "0x88ec7748058ee366036c26757f8789041437f170",
+      address: "0xc0857c99fa8e5fcdf68ca42a8f7672b7ce6ffdfc",
       abi: [
         {
           type: "constructor",
@@ -2585,6 +2646,16 @@ const deployedContracts = {
               internalType: "enum IWerewolfProofVerifier.ProofType",
             },
             {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
               name: "proof",
               type: "bytes",
               internalType: "bytes",
@@ -2747,11 +2818,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772090799021.json",
+      deploymentFile: "run-1772097891988.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WerewolfProofVerifier: {
-      address: "0x060f3a3261aec6a799f64ccb77bfc20bfb4cc1e1",
+      address: "0x81036393fe345f5e459496374161583027e02dad",
       abi: [
         {
           type: "constructor",
@@ -2760,29 +2831,32 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "anonymousVotingVerifierAdapter",
-          inputs: [],
+          name: "buildCircuitKey",
+          inputs: [
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [
             {
               name: "",
-              type: "address",
-              internalType: "address",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "divinationVerifierAdapter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -2845,6 +2919,35 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "getVerifierAdapter",
+          inputs: [
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "isProofVerified",
           inputs: [
             {
@@ -2869,16 +2972,32 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "keyPublicizeVerifierAdapter",
-          inputs: [],
+          name: "isSupportedProfile",
+          inputs: [
+            {
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [
             {
               name: "",
-              type: "address",
-              internalType: "address",
+              type: "bool",
+              internalType: "bool",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -2941,45 +3060,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "roleAssignmentVerifierAdapter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setAnonymousVotingVerifierAdapter",
-          inputs: [
-            {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setDivinationVerifierAdapter",
-          inputs: [
-            {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "setGameContract",
           inputs: [
             {
@@ -2993,36 +3073,25 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "setKeyPublicizeVerifierAdapter",
+          name: "setVerifierAdapter",
           inputs: [
             {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
+              name: "proofType",
+              type: "uint8",
+              internalType: "enum WerewolfProofVerifier.ProofType",
             },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setRoleAssignmentVerifierAdapter",
-          inputs: [
             {
-              name: "_adapter",
-              type: "address",
-              internalType: "address",
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
             },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setWinningJudgementVerifierAdapter",
-          inputs: [
             {
-              name: "_adapter",
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "adapter",
               type: "address",
               internalType: "address",
             },
@@ -3045,6 +3114,25 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "verifierAdapterByCircuit",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "verifyProof",
           inputs: [
             {
@@ -3061,6 +3149,16 @@ const deployedContracts = {
               name: "proofType",
               type: "uint8",
               internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              internalType: "uint8",
             },
             {
               name: "proof",
@@ -3081,19 +3179,6 @@ const deployedContracts = {
             },
           ],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "winningJudgementVerifierAdapter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "event",
@@ -3177,6 +3262,43 @@ const deployedContracts = {
           anonymous: false,
         },
         {
+          type: "event",
+          name: "VerifierAdapterSet",
+          inputs: [
+            {
+              name: "circuitKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "proofType",
+              type: "uint8",
+              indexed: false,
+              internalType: "enum WerewolfProofVerifier.ProofType",
+            },
+            {
+              name: "playerCount",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+            {
+              name: "werewolfCount",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+            {
+              name: "adapter",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
           name: "OwnableInvalidOwner",
           inputs: [
@@ -3200,11 +3322,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772090799021.json",
+      deploymentFile: "run-1772097891988.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WerewolfRewards: {
-      address: "0xf099196bc9f6412fcbf07a292fda9ebd0ae57c60",
+      address: "0x75056d3909a732fba49d778f222a455ffcd7c5aa",
       abi: [
         {
           type: "constructor",
@@ -3561,7 +3683,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772090799021.json",
+      deploymentFile: "run-1772097891988.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentGroth16Verifier: {
@@ -4262,6 +4384,3298 @@ const deployedContracts = {
       ],
       inheritedFunctions: {},
       deploymentFile: "run-1772090799021.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN4W1Groth16Verifier: {
+      address: "0xbd25996388e2e0b276415c40320cc21125959238",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN4W1Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN4W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN4W1Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN4W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[64]",
+              internalType: "uint256[64]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    Groth16VerifierAdapter: {
+      address: "0x2639630e4b5bf732a2d1245f10ae3b40525199ac",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "verifierAddress",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "selector",
+              type: "bytes4",
+              internalType: "bytes4",
+            },
+            {
+              name: "inputWordLength",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "publicInputWordLength",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verifier",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verify",
+          inputs: [
+            {
+              name: "proofBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "publicInputBytes",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verifySelector",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes4",
+              internalType: "bytes4",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN5W1Groth16Verifier: {
+      address: "0x1a0bfcb3dda8fcdd5a6fba7fcf113af19287d631",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN5W1Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN5W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN5W1Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN5W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[100]",
+              internalType: "uint256[100]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN5W2Groth16Verifier: {
+      address: "0x2705dad82c2e805fe7d1e6eb506f1e9c09bc3b64",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN5W2Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN5W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN5W2Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN5W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[81]",
+              internalType: "uint256[81]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN6W1Groth16Verifier: {
+      address: "0x6bdcc755f8f03bd3537e9d7973cf69d7bc844bd7",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN6W1Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN6W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN6W1Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN6W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[144]",
+              internalType: "uint256[144]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN6W2Groth16Verifier: {
+      address: "0x029cb4fe7ceb3be278aba4320622376d70b89bfa",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN6W2Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN6W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN6W2Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN6W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[121]",
+              internalType: "uint256[121]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN7W1Groth16Verifier: {
+      address: "0xa5e4368c151e4a67acb4e49ee3888add9c1004b3",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN7W1Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W1Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[196]",
+              internalType: "uint256[196]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772095550027.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN7W2Groth16Verifier: {
+      address: "0x8678cd2a890d3262ba17ac1eeb7b08636a7cf3fa",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN7W2Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W2Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[169]",
+              internalType: "uint256[169]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN7W3Groth16Verifier: {
+      address: "0xa4965ad6ea182c452c9bc9eb1baee34eaf35e9bc",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN7W3Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W3Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W3Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN7W3Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[144]",
+              internalType: "uint256[144]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN8W1Groth16Verifier: {
+      address: "0x85d4d5a109bf2b8890cb57c767e1f957606f6d2b",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN8W1Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W1Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[256]",
+              internalType: "uint256[256]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772095550027.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN8W2Groth16Verifier: {
+      address: "0xc9498b06b7fe1a2362503d7f7e47b65a0e2e6827",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN8W2Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W2Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[225]",
+              internalType: "uint256[225]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772095550027.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN8W3Groth16Verifier: {
+      address: "0xd9a33c7509f1f65761a03a1dc01760ba84ef364a",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN8W3Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W3Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W3Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN8W3Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[196]",
+              internalType: "uint256[196]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772095550027.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN9W1Groth16Verifier: {
+      address: "0x20a235baf300e68c268a65692c4c5f3423474654",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN9W1Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W1Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W1Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[324]",
+              internalType: "uint256[324]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772095550027.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN9W2Groth16Verifier: {
+      address: "0x24e797f6a866e4c15112fa43b6c584df33b77e58",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN9W2Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W2Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W2Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[289]",
+              internalType: "uint256[289]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772095550027.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    RoleAssignmentN9W3Groth16Verifier: {
+      address: "0x671ea8ccf9e2370cc9af82ad6b0faab01a09291e",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct RoleAssignmentN9W3Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W3Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W3Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct RoleAssignmentN9W3Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[256]",
+              internalType: "uint256[256]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772095550027.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationN4Groth16Verifier: {
+      address: "0xc6dbefcfa764c3d0608485b8270131490ff4f8ab",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationN4Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationN4Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingN4Groth16Verifier: {
+      address: "0xe2e85177702c67a7ea850cf93798b3c52050550c",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingN4Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN4Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementN4Groth16Verifier: {
+      address: "0x8a3276a4582e60728770eac8c35d98fe3989ba83",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementN4Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN4Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeN4Groth16Verifier: {
+      address: "0x9947b6a017e5d95a18b0aa6cf1530ff0588524fe",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeN4Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN4Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN4Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationN5Groth16Verifier: {
+      address: "0xbc936ac5246589f8c36e3ff6a03bcf5c30f21baa",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationN5Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationN5Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingN5Groth16Verifier: {
+      address: "0xd959fc1b2f4ee7f492d1081cba3fdf4f27bd346b",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingN5Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN5Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementN5Groth16Verifier: {
+      address: "0xfa84a4bd283e49824a3765e1556b52b749dfe9e2",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementN5Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN5Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeN5Groth16Verifier: {
+      address: "0x4feca641490ea9e9c73c83e78eed3c3f73fea1dd",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeN5Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN5Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN5Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationN6Groth16Verifier: {
+      address: "0x3437b4cb712e2f34de3ccc1469ef31a558facf6b",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationN6Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationN6Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingN6Groth16Verifier: {
+      address: "0xb67d1198027566e97bcbaf2a2022f6c81b86291a",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingN6Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN6Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementN6Groth16Verifier: {
+      address: "0x9b34708671bb32f7f94bfbd7a3ab95a416789986",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementN6Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN6Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeN6Groth16Verifier: {
+      address: "0xfecf57a4b3fdc30e5670eacbe0943082a21bc4cb",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeN6Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN6Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN6Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationN7Groth16Verifier: {
+      address: "0xd503a9e3c1ccf7352bbd7bbb8bf5488c5ba0b6f5",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationN7Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationN7Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingN7Groth16Verifier: {
+      address: "0xe9c0db81dcff1c55338b3233fd8903ca51701c5b",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingN7Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN7Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementN7Groth16Verifier: {
+      address: "0x9e9a53d9718920b3bca42f5370394bef4d1c36ed",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementN7Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN7Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeN7Groth16Verifier: {
+      address: "0x2b4240285f5b88e13ae2de54daa14652f12536b7",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeN7Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN7Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN7Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationN8Groth16Verifier: {
+      address: "0x7572967fe335a35d3bd0736c51b502d7b1ed3dc7",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationN8Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationN8Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingN8Groth16Verifier: {
+      address: "0x836e01c94d22bca9723c1a4d868ff043a4385092",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingN8Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN8Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementN8Groth16Verifier: {
+      address: "0x435a2611a6ab6d0bd212d009c7b095ce30f841c0",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementN8Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN8Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeN8Groth16Verifier: {
+      address: "0x7a9f90652271864564157b0040df3943752c7061",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeN8Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN8Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN8Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    DivinationN9Groth16Verifier: {
+      address: "0xe6dc22656ccc40e7066f9c7f4fc82aee06f781e9",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct DivinationN9Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct DivinationN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct DivinationN9Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct DivinationN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[8]",
+              internalType: "uint256[8]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    AnonymousVotingN9Groth16Verifier: {
+      address: "0x4224862bd19307c029ad413815dfbe14a6fe25a2",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct AnonymousVotingN9Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN9Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct AnonymousVotingN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[1]",
+              internalType: "uint256[1]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    WinningJudgementN9Groth16Verifier: {
+      address: "0xe8b0e2326ffa65fdae664a1a7b83d98d6e8f0b81",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct WinningJudgementN9Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN9Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct WinningJudgementN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: "input",
+              type: "uint256[2]",
+              internalType: "uint256[2]",
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
+      deploymentScript: "DeployWerewolf.s.sol",
+    },
+    KeyPublicizeN9Groth16Verifier: {
+      address: "0x2391d43140a5732a60fac212084192157f87965e",
+      abi: [
+        {
+          type: "function",
+          name: "verifyTx",
+          inputs: [
+            {
+              name: "proof",
+              type: "tuple",
+              internalType: "struct KeyPublicizeN9Groth16Verifier.Proof",
+              components: [
+                {
+                  name: "a",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+                {
+                  name: "b",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN9Groth16VerifierPairing.G2Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256[2]",
+                      internalType: "uint256[2]",
+                    },
+                  ],
+                },
+                {
+                  name: "c",
+                  type: "tuple",
+                  internalType: "struct KeyPublicizeN9Groth16VerifierPairing.G1Point",
+                  components: [
+                    {
+                      name: "X",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "Y",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "r",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+      ],
+      inheritedFunctions: {},
+      deploymentFile: "run-1772097891988.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
   },

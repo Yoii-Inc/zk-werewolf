@@ -3,7 +3,7 @@ set -ex
 trap "exit" INT TERM
 trap 'jobs -p | xargs -r kill' EXIT
 
-MAX_WAIT=60 # 最大待機時間（秒）
+MAX_WAIT=300 # 最大待機時間（秒）
 
 # ポートが開くのを待つ関数
 wait_for_port() {
@@ -36,6 +36,9 @@ run_crypto_tests() {
 }
 
 run_server_node_tests() {
+    # Groth16 proving key を事前生成（未生成だとノード起動時に panic する）
+    make groth16-setup
+
     # サーバーのビルドと起動（release mode）
     cd ./packages/server
     cargo build --release

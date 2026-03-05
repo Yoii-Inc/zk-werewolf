@@ -23,7 +23,7 @@ contract RoleAssignmentProofVerificationTest is Test {
 
         game.setVerifier(address(verifier));
         verifier.setGameContract(address(game));
-        verifier.setRoleAssignmentVerifierAdapter(address(roleAssignmentGroth16Adapter));
+        verifier.setVerifierAdapter(WerewolfProofVerifier.ProofType.RoleAssignment, 5, 1, address(roleAssignmentGroth16Adapter));
     }
 
     function testRoleAssignmentSingleProverProofCanBeVerifiedOnContract() public {
@@ -51,7 +51,7 @@ contract RoleAssignmentProofVerificationTest is Test {
         assertTrue(offchainVerified, "offchain Groth16 verification should be true");
 
         bool ok = game.verifyProofAndRecord(
-            proofId, gameId, IWerewolfProofVerifier.ProofType.RoleAssignment, proof, publicInputs
+            proofId, gameId, IWerewolfProofVerifier.ProofType.RoleAssignment, 5, 1, proof, publicInputs
         );
 
         assertTrue(ok, "verification call should return true");

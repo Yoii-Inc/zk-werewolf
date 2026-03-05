@@ -133,6 +133,14 @@ impl GroupingParameter {
             .expect("Error: No max value found")
     }
 
+    pub fn get_role_count(&self, role: Role) -> usize {
+        self.0.get(&role).map(|(count, _)| *count).unwrap_or(0)
+    }
+
+    pub fn get_werewolf_count(&self) -> usize {
+        self.get_role_count(Role::Werewolf)
+    }
+
     pub fn get_corresponding_role(&self, role_id: usize) -> Role {
         let mut count = self.get_num_players();
         for (role, (role_count, is_not_alone)) in self.0.iter() {

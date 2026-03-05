@@ -1,6 +1,7 @@
 .PHONY: build deploy generate-abis verify-keystore account chain compile deploy-verify flatten fork format lint test verify
 
 DEPLOY_SCRIPT ?= script/Deploy.s.sol
+ANVIL_GAS_LIMIT ?= 100000000
 
 # setup wallet for anvil
 setup-anvil-wallet:
@@ -10,11 +11,11 @@ setup-anvil-wallet:
 
 # Start local chain
 chain: setup-anvil-wallet
-	anvil --host 0.0.0.0
+	anvil --host 0.0.0.0 --gas-limit $(ANVIL_GAS_LIMIT)
 
 # Start a fork
 fork: setup-anvil-wallet
-	anvil --fork-url ${FORK_URL} --chain-id 31337
+	anvil --fork-url ${FORK_URL} --chain-id 31337 --gas-limit $(ANVIL_GAS_LIMIT)
 
 # Build the project
 build:
@@ -28,15 +29,15 @@ deploy:
 	fi
 	@if [ "$(RPC_URL)" = "localhost" ] || [ "$(RPC_URL)" = "docker" ]; then \
 		if [ "$(ETH_KEYSTORE_ACCOUNT)" = "scaffold-eth-default" ]; then \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --password localhost --broadcast --legacy --ffi; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --password localhost --broadcast --legacy --ffi --slow; \
 		else \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --slow; \
 		fi \
 	else \
 		if [ -n "$(DEPLOYER_PRIVATE_KEY)" ]; then \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --private-key $(DEPLOYER_PRIVATE_KEY); \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --private-key $(DEPLOYER_PRIVATE_KEY) --slow; \
 		else \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --slow; \
 		fi \
 	fi
 
@@ -79,15 +80,15 @@ deploy-verify:
 	fi
 	@if [ "$(RPC_URL)" = "localhost" ] || [ "$(RPC_URL)" = "docker" ]; then \
 		if [ "$(ETH_KEYSTORE_ACCOUNT)" = "scaffold-eth-default" ]; then \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --password localhost --broadcast --legacy --ffi --verify; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --password localhost --broadcast --legacy --ffi --verify --slow; \
 		else \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify --slow; \
 		fi \
 	else \
 		if [ -n "$(DEPLOYER_PRIVATE_KEY)" ]; then \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify --private-key $(DEPLOYER_PRIVATE_KEY); \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify --private-key $(DEPLOYER_PRIVATE_KEY) --slow; \
 		else \
-			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify; \
+			forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --broadcast --legacy --ffi --verify --slow; \
 		fi \
 	fi
 	node scripts-js/generateTsAbis.js

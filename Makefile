@@ -71,23 +71,10 @@ clean:
 	@echo "Cleanup complete!"
 
 groth16-setup:
-	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin role_assignment_groth16_setup
-	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin anonymous_voting_groth16_setup
-	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin divination_groth16_setup
-	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin winning_judgement_groth16_setup
-	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin key_publicize_groth16_setup
+	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin multi_profile_groth16_setup
 
 groth16-export-verifier:
-	ROLE_ASSIGNMENT_GROTH16_PK_PATH=$(ROLE_ASSIGNMENT_GROTH16_PK_PATH) \
-		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin role_assignment_groth16_verifier_export
-	ANONYMOUS_VOTING_GROTH16_PK_PATH=$(ANONYMOUS_VOTING_GROTH16_PK_PATH) \
-		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin anonymous_voting_groth16_verifier_export
-	DIVINATION_GROTH16_PK_PATH=$(DIVINATION_GROTH16_PK_PATH) \
-		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin divination_groth16_verifier_export
-	WINNING_JUDGEMENT_GROTH16_PK_PATH=$(WINNING_JUDGEMENT_GROTH16_PK_PATH) \
-		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin winning_judgement_groth16_verifier_export
-	KEY_PUBLICIZE_GROTH16_PK_PATH=$(KEY_PUBLICIZE_GROTH16_PK_PATH) \
-		cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin key_publicize_groth16_verifier_export
+	@echo "groth16-export-verifier is deprecated. verifiers are now emitted by multi_profile_groth16_setup."
 
 docker-up:
 	docker compose up --build
