@@ -37,7 +37,7 @@ run_crypto_tests() {
 
 run_server_node_tests() {
     # Groth16 proving key を事前生成（未生成だとノード起動時に panic する）
-    make groth16-setup
+    # make groth16-setup
 
     # サーバーのビルドと起動（release mode）
     cd ./packages/server
