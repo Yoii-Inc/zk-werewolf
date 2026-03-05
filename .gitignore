@@ -31,5 +31,3 @@ secrets.yaml
 !secrets.enc.yaml
 
 .env
-
-packages/zk-mpc-node/data
