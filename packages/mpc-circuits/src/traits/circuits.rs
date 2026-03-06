@@ -29,13 +29,18 @@ use mpc_algebra::{BitDecomposition, BooleanWire};
 use mpc_algebra::{EqualityZero, ModulusConversion};
 use mpc_algebra_wasm::{calc_shuffle_matrix, Role};
 use nalgebra as na;
+use std::collections::HashSet;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 use zk_mpc::field::*;
 
 impl AnonymousVotingCircuit<Fr> {
     pub fn calculate_output(&self) -> Fr {
-        let player_num = self.private_input.len(); // Assuming all players join generation
-        let alive_player_num = player_num; // Assuming all players are alive for simplicity
+        if self.private_input.is_empty() {
+            return Fr::zero();
+        }
+
+        let player_num = self.private_input[0].is_target_id.len();
+        let alive_player_num = self.private_input.len();
 
         let mut num_voted = vec![Fr::zero(); player_num];
 
@@ -60,8 +65,12 @@ impl AnonymousVotingCircuit<Fr> {
 
 impl AnonymousVotingCircuit<MpcField<Fr>> {
     pub fn calculate_output(&self) -> MpcField<Fr> {
-        let player_num = self.private_input.len(); // Assuming all players join generation
-        let alive_player_num = player_num; // Assuming all players are alive for simplicity
+        if self.private_input.is_empty() {
+            return MpcField::<Fr>::zero();
+        }
+
+        let player_num = self.private_input[0].is_target_id.len();
+        let alive_player_num = self.private_input.len();
 
         let mut num_voted = vec![MpcField::<Fr>::zero(); player_num];
 
@@ -395,7 +404,21 @@ impl ConstraintSynthesizer<Fr> for DivinationCircuit<Fr> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let is_target_sum_bit = (0..is_target_bit[0].len())
+        let player_num = is_target_bit[0].len();
+        let row_ids = self
+            .private_input
+            .iter()
+            .map(|input| input.id)
+            .collect::<Vec<_>>();
+
+        let mut seen_row_ids = HashSet::new();
+        for id in &row_ids {
+            if *id >= player_num || !seen_row_ids.insert(*id) {
+                return Err(SynthesisError::Unsatisfiable);
+            }
+        }
+
+        let is_target_sum_bit = (0..player_num)
             .map(|j| {
                 Boolean::kary_or(
                     &is_target_bit
@@ -408,8 +431,8 @@ impl ConstraintSynthesizer<Fr> for DivinationCircuit<Fr> {
 
         let is_wt = is_werewolf_bit
             .iter()
-            .zip(is_target_sum_bit.iter())
-            .map(|(x, y)| x.and(y))
+            .enumerate()
+            .map(|(row_index, x)| x.and(&is_target_sum_bit[row_ids[row_index]]))
             .collect::<Result<Vec<_>, _>>()?;
 
         let is_target_werewolf_bit = Boolean::kary_or(is_wt.as_slice())?;
@@ -481,7 +504,7 @@ impl ConstraintSynthesizer<Fr> for DivinationCircuit<Fr> {
         let enc_result_var2 = <Fr as ElGamalLocalOrMPC<Fr>>::ElGamalCiphertextVar::new_input(
             ark_relations::ns!(cs, "gadget_commitment"),
             || {
-                let sum_target = (0..self.private_input.len())
+                let sum_target = (0..player_num)
                     .map(|i| {
                         let mut tmp = Fr::from(0);
                         for j in 0..self.private_input.len() {
@@ -493,9 +516,8 @@ impl ConstraintSynthesizer<Fr> for DivinationCircuit<Fr> {
                 let is_werewolf: Fr = self
                     .private_input
                     .iter()
-                    .map(|input| input.is_werewolf)
-                    .zip(sum_target.iter())
-                    .map(|(x, y)| x * y)
+                    .zip(row_ids.iter())
+                    .map(|(input, id)| input.is_werewolf * sum_target[*id])
                     .sum();
 
                 let message = match is_werewolf.is_one() {
@@ -559,7 +581,21 @@ impl ConstraintSynthesizer<MpcField<Fr>> for DivinationCircuit<MpcField<Fr>> {
             .map(|input| MpcBoolean::new_witness_vec(cs.clone(), &input.is_target))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let is_target_sum_bit = (0..is_target_bit[0].len())
+        let player_num = is_target_bit[0].len();
+        let row_ids = self
+            .private_input
+            .iter()
+            .map(|input| input.id)
+            .collect::<Vec<_>>();
+
+        let mut seen_row_ids = HashSet::new();
+        for id in &row_ids {
+            if *id >= player_num || !seen_row_ids.insert(*id) {
+                return Err(SynthesisError::Unsatisfiable);
+            }
+        }
+
+        let is_target_sum_bit = (0..player_num)
             .map(|j| {
                 MpcBoolean::kary_or(
                     &is_target_bit
@@ -572,8 +608,8 @@ impl ConstraintSynthesizer<MpcField<Fr>> for DivinationCircuit<MpcField<Fr>> {
 
         let is_wt = is_werewolf_bit
             .iter()
-            .zip(is_target_sum_bit.iter())
-            .map(|(x, y)| x.and(y))
+            .enumerate()
+            .map(|(row_index, x)| x.and(&is_target_sum_bit[row_ids[row_index]]))
             .collect::<Result<Vec<_>, _>>()?;
 
         let is_target_werewolf_bit = MpcBoolean::kary_or(is_wt.as_slice())?;
@@ -650,7 +686,7 @@ impl ConstraintSynthesizer<MpcField<Fr>> for DivinationCircuit<MpcField<Fr>> {
             <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalCiphertextVar::new_input(
                 ark_relations::ns!(cs, "gadget_commitment"),
                 || {
-                    let sum_target = (0..self.private_input.len())
+                    let sum_target = (0..player_num)
                         .map(|i| {
                             let mut tmp = MpcField::<Fr>::from(0u32);
                             for j in 0..self.private_input.len() {
@@ -659,20 +695,18 @@ impl ConstraintSynthesizer<MpcField<Fr>> for DivinationCircuit<MpcField<Fr>> {
                             tmp
                         })
                         .collect::<Vec<_>>();
-                    let is_werewolf: MpcField<Fr> = self
+                    let mut is_werewolf: MpcField<Fr> = self
                         .private_input
                         .iter()
-                        .map(|input| input.is_werewolf)
-                        .zip(sum_target.iter())
-                        .map(|(x, y)| x * y)
+                        .zip(row_ids.iter())
+                        .map(|(input, id)| input.is_werewolf * sum_target[*id])
                         .sum();
 
-                    let message = match is_werewolf.is_one() {
-                    true => {
-                        <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalPlaintext::prime_subgroup_generator()
-                    }
-                    false => <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalPlaintext::default(),
-                };
+                    // Assumes is_werewolf is binary (0/1). If it is not, this becomes k*G (k != 0/1).
+                    let is_werewolf_scalar = is_werewolf.sync_modulus_conversion();
+                    let base =
+                        <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalPlaintext::prime_subgroup_generator();
+                    let message = base.scalar_mul(is_werewolf_scalar).into();
                     let enc_result =
                         <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalScheme::encrypt(
                             &self.public_input.elgamal_param,
@@ -1080,37 +1114,40 @@ impl DivinationCircuit<MpcField<Fr>> {
     pub fn calculate_output(
         &self,
     ) -> <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalCiphertext {
-        let _is_target_vec = self
-            .private_input
-            .iter()
-            .map(|input| input.is_target.clone())
-            .collect::<Vec<_>>();
-        let _is_werewolf_vec = self
-            .private_input
-            .iter()
-            .map(|input| input.is_werewolf)
-            .collect::<Vec<_>>();
+        let player_num = self.private_input[0].is_target.len();
+        let mut seen_row_ids = HashSet::new();
+        for input in &self.private_input {
+            assert!(
+                input.id < player_num,
+                "Divination input id {} out of range {}",
+                input.id,
+                player_num
+            );
+            assert!(
+                seen_row_ids.insert(input.id),
+                "Duplicate divination input id {} detected",
+                input.id
+            );
+        }
+
+        let mut sum_target = vec![MpcField::<Fr>::zero(); player_num];
+        for i in 0..player_num {
+            for j in 0..self.private_input.len() {
+                sum_target[i] += self.private_input[j].is_target[i];
+            }
+        }
 
         let mut sum = MpcField::<Fr>::default();
-
-        for i in 0..self.private_input.len() {
-            let mut tmp = MpcField::<Fr>::default();
-            for j in 0..self.private_input.len() {
-                tmp += self.private_input[j].is_target[i];
-            }
-            sum += tmp * self.private_input[i].is_werewolf;
+        for input in &self.private_input {
+            sum += sum_target[input.id] * input.is_werewolf;
         }
 
         let pub_key = self.public_input.pub_key;
 
+        // Assumes sum is binary (0/1). If it is not, this becomes k*G (k != 0/1).
+        let sum_scalar = sum.sync_modulus_conversion();
         let base = <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalPlaintext::prime_subgroup_generator();
-
-        // TODO: implement correctly. (without reveal)
-        let message = if sum.sync_reveal().is_one() {
-            base
-        } else {
-            <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalPlaintext::default()
-        };
+        let message = base.scalar_mul(sum_scalar).into();
 
         let ciphertext = <MpcField<Fr> as ElGamalLocalOrMPC<MpcField<Fr>>>::ElGamalScheme::encrypt(
             &self.public_input.elgamal_param,
