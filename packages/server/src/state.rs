@@ -6,6 +6,7 @@ use crate::blockchain::BlockchainClient;
 use crate::models::config::DebugConfig;
 use crate::models::{game::Game, room::Room};
 use crate::services::node_key::NodeKeyService;
+use crate::services::proof_job_service::ProofJobService;
 use crate::services::user_service::UserService;
 use crate::utils::config::CONFIG;
 
@@ -17,6 +18,7 @@ pub struct AppState {
     pub user_service: UserService,
     pub debug_config: Arc<DebugConfig>,
     pub node_key_service: Arc<NodeKeyService>,
+    pub proof_job_service: Arc<ProofJobService>,
     pub blockchain_client: Arc<BlockchainClient>,
 }
 
@@ -29,6 +31,7 @@ impl AppState {
             user_service: UserService::new(),
             debug_config: Arc::new(DebugConfig::default()),
             node_key_service: Arc::new(NodeKeyService::new()),
+            proof_job_service: Arc::new(ProofJobService::new()),
             blockchain_client: Arc::new(BlockchainClient::new(&CONFIG)),
         }
     }

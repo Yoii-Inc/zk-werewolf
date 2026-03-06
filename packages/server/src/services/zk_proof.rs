@@ -15,6 +15,7 @@ use crate::{
         try_convert_to_identifier, BatchEnqueueError, BatchRequest, ClientRequestType, GamePhase,
         GameResult,
     },
+    services::proof_job_service::ProofJob,
     state::AppState,
 };
 
@@ -267,7 +268,7 @@ pub async fn batch_proof_handling(
     room_id: &str,
     request: &ClientRequestType,
 ) -> Result<String, ProofHandlingError> {
-    let (batch_id, should_process) = {
+    let (batch_id, proof_job) = {
         let mut games = state.games.lock().await;
         let game = match games.get_mut(room_id) {
             Some(game) => game,
@@ -326,40 +327,29 @@ pub async fn batch_proof_handling(
             .add_system_message(format!("{} has sent a proof request.", user_id));
 
         // バッチリクエストに追加
-        let enqueue_result = game.add_request(request.clone()).map_err(|error| match error {
-            BatchEnqueueError::Conflict(message) => ProofHandlingError::Conflict(message),
-        })?;
-        (enqueue_result.batch_id, enqueue_result.should_process)
+        let enqueue_result = game
+            .add_request(request.clone())
+            .map_err(|error| match error {
+                BatchEnqueueError::Conflict(message) => ProofHandlingError::Conflict(message),
+            })?;
+        let job = if enqueue_result.should_process {
+            Some(ProofJob {
+                room_id: room_id.to_string(),
+                batch_key: game.build_batch_key(request),
+                batch_request: game.batch_request.clone(),
+            })
+        } else {
+            None
+        };
+        (enqueue_result.batch_id, job)
     };
 
-    if should_process {
-        let state_for_worker = state.clone();
-        let room_id_for_worker = room_id.to_string();
-        tokio::spawn(async move {
-            let batch_snapshot = {
-                let mut games = state_for_worker.games.lock().await;
-                let Some(game) = games.get_mut(&room_id_for_worker) else {
-                    return;
-                };
-                if game.batch_request.requests.is_empty() {
-                    return;
-                }
-                game.batch_request.status = crate::models::game::BatchStatus::Processing;
-                game.batch_request.clone()
-            };
-
-            let batch_id = batch_snapshot.batch_id.clone();
-            let execution_result = execute_batch_request(&batch_snapshot).await;
-            store_precomputed_batch_result(batch_id.clone(), execution_result).await;
-
-            let mut games = state_for_worker.games.lock().await;
-            if let Some(game) = games.get_mut(&room_id_for_worker) {
-                if game.batch_request.batch_id != batch_id {
-                    return;
-                }
-                game.apply_proof_result(&state_for_worker).await;
-            }
-        });
+    if let Some(job) = proof_job {
+        state
+            .proof_job_service
+            .enqueue_job(state.clone(), job)
+            .await
+            .map_err(ProofHandlingError::Internal)?;
     }
 
     Ok(batch_id)
@@ -370,8 +360,9 @@ fn validate_phase_for_request(
     request: &ClientRequestType,
 ) -> Result<(), ProofHandlingError> {
     let is_valid = match request {
-        ClientRequestType::RoleAssignment(_)
-        | ClientRequestType::KeyPublicize(_) => matches!(phase, GamePhase::Night),
+        ClientRequestType::RoleAssignment(_) | ClientRequestType::KeyPublicize(_) => {
+            matches!(phase, GamePhase::Night)
+        }
         ClientRequestType::Divination(_) => matches!(phase, GamePhase::DivinationProcessing),
         ClientRequestType::AnonymousVoting(_) => matches!(phase, GamePhase::Voting),
         ClientRequestType::WinningJudge(_) => {

@@ -47,6 +47,7 @@ pub fn routes(state: AppState) -> Router {
                     Router::new().route("/night-action", post(night_action_handler)),
                 )
                 .route("/proof", post(proof_handler))
+                .route("/proof/:batch_id/status", get(get_proof_job_status))
                 // 暗号パラメータとコミットメント管理
                 .route("/crypto-params", get(get_crypto_params))
                 .route("/commitment", post(submit_commitment))
@@ -122,6 +123,23 @@ pub async fn proof_handler(
         Err(zk_proof::ProofHandlingError::Internal(message)) => {
             (StatusCode::INTERNAL_SERVER_ERROR, Json(message))
         }
+    }
+}
+
+pub async fn get_proof_job_status(
+    State(state): State<AppState>,
+    Path((room_id, batch_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match state.proof_job_service.get_status(&batch_id).await {
+        Some(status) if status.room_id == room_id => (StatusCode::OK, Json(json!(status))),
+        Some(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Proof job not found for this room" })),
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Proof job not found" })),
+        ),
     }
 }
 

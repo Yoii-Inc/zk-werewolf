@@ -136,7 +136,7 @@ pub struct ChangeRoleRequest {
     pub new_role: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProverInfo {
     pub user_id: String,
     pub prover_count: usize,
@@ -147,7 +147,7 @@ pub struct ProverInfo {
     pub public_key: Option<String>, // Curve25519公開鍵（Base64エンコード）
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "proof_type", content = "data")]
 pub enum ClientRequestType {
     Divination(ProverInfo),
@@ -230,7 +230,7 @@ pub struct BatchKey {
     pub circuit_profile: CircuitProfileKey,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchRequest {
     pub batch_id: String,
     pub requests: Vec<ClientRequestType>,
@@ -691,6 +691,16 @@ impl Game {
     }
 
     pub async fn apply_proof_result(&mut self, app_state: &crate::state::AppState) {
+        self.process_current_batch(app_state).await;
+    }
+
+    pub async fn apply_proof_result_for_batch(
+        &mut self,
+        app_state: &crate::state::AppState,
+        _batch_key: &BatchKey,
+        batch_request: BatchRequest,
+    ) {
+        self.batch_request = batch_request;
         self.process_current_batch(app_state).await;
     }
 
