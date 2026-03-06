@@ -352,6 +352,7 @@ pub struct BatchEnqueueResult {
     pub should_process: bool,
 }
 
+#[derive(Debug)]
 pub enum BatchEnqueueError {
     Conflict(String),
 }
@@ -682,20 +683,15 @@ impl Game {
         })
     }
 
-    pub async fn add_request(
+    pub fn add_request(
         &mut self,
         request: ClientRequestType,
-        app_state: &crate::state::AppState,
-    ) -> String {
-        match self.add_request_to_batch(request) {
-            Ok(result) => {
-                if result.should_process {
-                    self.process_current_batch(app_state).await;
-                }
-                result.batch_id
-            }
-            Err(BatchEnqueueError::Conflict(_)) => self.batch_request.batch_id.clone(),
-        }
+    ) -> Result<BatchEnqueueResult, BatchEnqueueError> {
+        self.add_request_to_batch(request)
+    }
+
+    pub async fn apply_proof_result(&mut self, app_state: &crate::state::AppState) {
+        self.process_current_batch(app_state).await;
     }
 
     pub async fn process_current_batch(&mut self, app_state: &crate::state::AppState) {

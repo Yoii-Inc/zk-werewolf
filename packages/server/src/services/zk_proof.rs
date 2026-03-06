@@ -326,11 +326,9 @@ pub async fn batch_proof_handling(
             .add_system_message(format!("{} has sent a proof request.", user_id));
 
         // バッチリクエストに追加
-        let enqueue_result =
-            game.add_request_to_batch(request.clone())
-                .map_err(|error| match error {
-                    BatchEnqueueError::Conflict(message) => ProofHandlingError::Conflict(message),
-                })?;
+        let enqueue_result = game.add_request(request.clone()).map_err(|error| match error {
+            BatchEnqueueError::Conflict(message) => ProofHandlingError::Conflict(message),
+        })?;
         (enqueue_result.batch_id, enqueue_result.should_process)
     };
 
@@ -359,7 +357,7 @@ pub async fn batch_proof_handling(
                 if game.batch_request.batch_id != batch_id {
                     return;
                 }
-                game.process_current_batch(&state_for_worker).await;
+                game.apply_proof_result(&state_for_worker).await;
             }
         });
     }
