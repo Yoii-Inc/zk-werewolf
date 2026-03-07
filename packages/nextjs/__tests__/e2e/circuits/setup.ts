@@ -120,7 +120,8 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
             try {
               // Node.js 'ws' の場合は event.data が Buffer なので文字列に変換
               const dataStr = typeof event === "string" ? event : event.data?.toString() || event.toString();
-              const data = JSON.parse(dataStr);
+              const rawData = JSON.parse(dataStr);
+              const data = rawData?.payload && rawData?.event_id ? rawData.payload : rawData;
 
               console.log(`   📩 [${player.name}] WebSocket message:`, data.message_type);
 

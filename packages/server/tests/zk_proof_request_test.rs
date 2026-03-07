@@ -197,6 +197,7 @@ fn setup_voting_dummy() -> ClientRequestType {
         user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&anon_voting_output).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     ClientRequestType::AnonymousVoting(prover_info)
@@ -285,30 +286,45 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
         user_id: "0".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[0]).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     let request1 = ClientRequestType::AnonymousVoting(prover_info_1);
-    let batch_id1 = game.add_request(request1, &state).await;
+    let enqueue1 = game
+        .add_request(request1)
+        .expect("Failed to enqueue first request");
+    let batch_id1 = enqueue1.batch_id.clone();
 
     // 2つ目のリクエストを追加
     let prover_info_2 = ProverInfo {
         user_id: "1".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[1]).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     let request2 = ClientRequestType::AnonymousVoting(prover_info_2);
-    let batch_id2 = game.add_request(request2, &state).await;
+    let enqueue2 = game
+        .add_request(request2)
+        .expect("Failed to enqueue second request");
+    let batch_id2 = enqueue2.batch_id.clone();
 
     // 3つ目のリクエストを追加（これでバッチサイズに達する）
     let prover_info_3 = ProverInfo {
         user_id: "2".to_string(),
         prover_count: USER_NUM,
         encrypted_data: serde_json::to_string(&input_vec[2]).unwrap(),
+        is_dummy: false,
         public_key: None,
     };
     let request3 = ClientRequestType::AnonymousVoting(prover_info_3);
-    let batch_id3 = game.add_request(request3, &state).await;
+    let enqueue3 = game
+        .add_request(request3)
+        .expect("Failed to enqueue third request");
+    let batch_id3 = enqueue3.batch_id.clone();
+    if enqueue3.should_process {
+        game.apply_proof_result(&state).await;
+    }
 
     // 同じバッチIDであることを確認
     assert_eq!(batch_id1, batch_id2);
@@ -319,7 +335,10 @@ async fn test_batch_request() -> Result<(), anyhow::Error> {
 
     // 新しいリクエストは新しいバッチIDを取得することを確認
     let request4 = setup_voting_dummy();
-    let batch_id4 = game.add_request(request4, &state).await;
+    let enqueue4 = game
+        .add_request(request4)
+        .expect("Failed to enqueue fourth request");
+    let batch_id4 = enqueue4.batch_id;
     assert_ne!(batch_id1, batch_id4);
 
     sleep(Duration::from_secs(30)).await; // バッチ処理が完了するのを待つ

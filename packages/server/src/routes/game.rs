@@ -47,6 +47,7 @@ pub fn routes(state: AppState) -> Router {
                     Router::new().route("/night-action", post(night_action_handler)),
                 )
                 .route("/proof", post(proof_handler))
+                .route("/proof/:batch_id/status", get(get_proof_job_status))
                 // 暗号パラメータとコミットメント管理
                 .route("/crypto-params", get(get_crypto_params))
                 .route("/commitment", post(submit_commitment))
@@ -66,8 +67,19 @@ pub async fn start_game(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
-    match game_service::start_game(state, &room_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match game_service::start_game(state.clone(), &room_id).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "game_started")
+                .await
+            {
+                tracing::warn!(
+                    "Failed to broadcast room_state_changed on game start: {}",
+                    e
+                );
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(message) => (StatusCode::NOT_FOUND, Json(message)),
     }
 }
@@ -89,8 +101,16 @@ async fn end_game_handler(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
-    match game_service::end_game(state, room_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match game_service::end_game(state.clone(), room_id.clone()).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "game_ended")
+                .await
+            {
+                tracing::warn!("Failed to broadcast room_state_changed on game end: {}", e);
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(message) => (StatusCode::NOT_FOUND, Json(message)),
     }
 }
@@ -113,7 +133,32 @@ pub async fn proof_handler(
 ) -> impl IntoResponse {
     match zk_proof::batch_proof_handling(state, &room_id, &request).await {
         Ok(batch_id) => (StatusCode::OK, Json(batch_id)),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(e)),
+        Err(zk_proof::ProofHandlingError::Conflict(message)) => {
+            (StatusCode::CONFLICT, Json(message))
+        }
+        Err(zk_proof::ProofHandlingError::Unprocessable(message)) => {
+            (StatusCode::UNPROCESSABLE_ENTITY, Json(message))
+        }
+        Err(zk_proof::ProofHandlingError::Internal(message)) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(message))
+        }
+    }
+}
+
+pub async fn get_proof_job_status(
+    State(state): State<AppState>,
+    Path((room_id, batch_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match state.proof_job_service.get_status(&batch_id).await {
+        Some(status) if status.room_id == room_id => (StatusCode::OK, Json(json!(status))),
+        Some(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Proof job not found for this room" })),
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Proof job not found" })),
+        ),
     }
 }
 
@@ -121,8 +166,19 @@ async fn advance_phase_handler(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
-    match game_service::advance_game_phase(state, &room_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match game_service::advance_game_phase(state.clone(), &room_id).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "phase_advanced")
+                .await
+            {
+                tracing::warn!(
+                    "Failed to broadcast room_state_changed on phase advance: {}",
+                    e
+                );
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
     }
 }
@@ -265,6 +321,8 @@ async fn reset_game_handler(
         reset_game.result = GameResult::InProgress;
 
         reset_game.day_count = 1;
+        reset_game.batch_request = BatchRequest::new(0);
+        reset_game.active_batches.clear();
 
         // computation_results をリセット
         reset_game.computation_results = ComputationResults::default();
@@ -322,7 +380,8 @@ async fn reset_batch_request_handler(
 
     if let Some(game) = games.get_mut(&room_id) {
         // バッチリクエストを新しいものに置き換え
-        game.batch_request = BatchRequest::new();
+        game.batch_request = BatchRequest::new(0);
+        game.active_batches.clear();
 
         // システムメッセージを追加
         game.chat_log

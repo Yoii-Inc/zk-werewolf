@@ -406,7 +406,13 @@ export class CircuitTestClient {
    * Divinationリクエストを送信
    * 本番環境では useDivination フックが行う処理
    */
-  async submitDivination(roomId: string, divinationInput: any, playerCount: number, authToken?: string): Promise<any> {
+  async submitDivination(
+    roomId: string,
+    divinationInput: any,
+    playerCount: number,
+    authToken?: string,
+    isDummy = false,
+  ): Promise<any> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -424,6 +430,7 @@ export class CircuitTestClient {
         user_id: String(divinationInput.privateInput.id),
         prover_count: playerCount,
         encrypted_data: encryptedDivination,
+        is_dummy: isDummy,
       },
     };
 

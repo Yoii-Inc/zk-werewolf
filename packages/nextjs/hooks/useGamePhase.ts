@@ -208,7 +208,7 @@ export const useGamePhase = (
         handleRoleAssignment();
       }
 
-      // Step 1: ダミーリクエスト送信
+      // Step 1: Divinationリクエスト送信（全員同時送信）
       if (
         requiresDummyRequest &&
         fromPhase === "Night" &&
@@ -216,7 +216,7 @@ export const useGamePhase = (
         !currentPlayer.is_dead
       ) {
         processingSteps.push(async () => {
-          console.log(`Step 1: Player ${username} sending dummy request.`);
+          console.log(`Step 1: Player ${username} sending synchronized divination request.`);
 
           try {
             await handleBackgroundNightAction(
@@ -227,14 +227,14 @@ export const useGamePhase = (
               latestGameInfo,
             );
 
-            console.log("Step 1: Dummy request completed");
+            console.log("Step 1: Synchronized divination request completed");
           } catch (error) {
-            console.error("Step 1: Dummy request error:", error);
+            console.error("Step 1: Synchronized divination request error:", error);
             // TODO: サーバー側でエラーメッセージを送るようになったら削除
             addMessage({
               id: Date.now().toString(),
               sender: "System",
-              message: "Failed to send dummy request",
+              message: "Failed to send synchronized divination request",
               timestamp: new Date().toISOString(),
               type: "system",
             });

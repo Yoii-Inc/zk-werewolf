@@ -1,7 +1,7 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket},
-        Path, State, WebSocketUpgrade,
+        Path, Query, State, WebSocketUpgrade,
     },
     response::IntoResponse,
 };
@@ -45,6 +45,12 @@ struct ComputationResultNotification {
     batch_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct WebSocketConnectQuery {
+    #[serde(default)]
+    last_event_id: Option<u64>,
+}
+
 impl WebSocketMessage {
     fn to_chat_message(&self) -> ChatMessage {
         let message_type = match self.message_type.as_str() {
@@ -66,12 +72,20 @@ impl WebSocketMessage {
 pub async fn handler(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
+    Query(query): Query<WebSocketConnectQuery>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state.clone(), room_id))
+    ws.on_upgrade(move |socket| {
+        handle_socket(
+            socket,
+            state.clone(),
+            room_id,
+            query.last_event_id.unwrap_or(0),
+        )
+    })
 }
 
-pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String) {
+pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String, last_event_id: u64) {
     info!("New WebSocket connection established for room: {}", room_id);
     let tx = state.get_or_create_room_channel(&room_id).await;
 
@@ -82,6 +96,25 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String) {
     let room_id_for_send = room_id.clone();
     let room_id_for_receive = room_id.clone();
 
+    let replay_events = state
+        .replay_room_events_since(&room_id, last_event_id)
+        .await;
+    for event in replay_events {
+        match serde_json::to_string(&event) {
+            Ok(message_text) => {
+                if sender
+                    .send(Message::Text(message_text.into()))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            Err(e) => eprintln!("Error serializing replay event: {}", e),
+        }
+    }
+
+    let state_for_receive = state.clone();
     let receive_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(text) = msg {
@@ -96,19 +129,28 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String) {
 
                         // チャットメッセージに変換して保存
                         let chat_message = ws_message.to_chat_message();
-                        if let Err(e) = state
+                        if let Err(e) = state_for_receive
                             .save_chat_message(&room_id_for_receive, chat_message)
                             .await
                         {
                             eprintln!("Error saving chat message: {}", e);
                         }
 
-                        let response = serde_json::to_string(&ws_message).unwrap();
+                        let payload = match serde_json::to_value(&ws_message) {
+                            Ok(payload) => payload,
+                            Err(e) => {
+                                eprintln!("Error converting websocket message to json: {}", e);
+                                continue;
+                            }
+                        };
                         info!(
                             "Received valid message in room {}: {:?}",
-                            room_id_for_receive, response
+                            room_id_for_receive, ws_message
                         );
-                        if let Err(e) = tx.send(Message::Text(response)) {
+                        if let Err(e) = state_for_receive
+                            .publish_room_event(&room_id_for_receive, payload)
+                            .await
+                        {
                             eprintln!("Error sending message: {}", e);
                             break;
                         }
@@ -124,11 +166,19 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String) {
                             room_id: room_id_for_receive.clone(),
                         };
 
-                        if let Ok(error_response) = serde_json::to_string(&error_message) {
-                            info!("Sending error message: {}", error_response);
-                            if let Err(e) = tx.send(Message::Text(error_response)) {
-                                eprintln!("Error sending error message: {}", e);
+                        info!("Sending error message: {:?}", error_message);
+                        let error_payload = match serde_json::to_value(&error_message) {
+                            Ok(payload) => payload,
+                            Err(err) => {
+                                eprintln!("Error converting error message to json: {}", err);
+                                continue;
                             }
+                        };
+                        if let Err(err) = state_for_receive
+                            .publish_room_event(&room_id_for_receive, error_payload)
+                            .await
+                        {
+                            eprintln!("Error sending error message: {}", err);
                         }
                     }
                 }
@@ -139,15 +189,6 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String) {
     let room_id_for_send = room_id_for_send.clone();
     let send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
-            if let Message::Text(text) = msg.clone() {
-                // メッセージがこのルームのものかを確認
-                if let Ok(ws_message) = serde_json::from_str::<WebSocketMessage>(&text) {
-                    if ws_message.room_id != room_id_for_send {
-                        continue; // 他のルームのメッセージはスキップ
-                    }
-                }
-            }
-
             info!("Sending message in room {}: {:?}", room_id_for_send, msg);
             if let Err(e) = sender.send(msg).await {
                 eprintln!("Error sending message: {}", e);
