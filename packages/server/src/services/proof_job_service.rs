@@ -88,9 +88,9 @@ impl ProofJobService {
     }
 
     pub async fn enqueue_job(&self, app_state: AppState, job: ProofJob) -> Result<(), String> {
-        self.ensure_worker_started(app_state).await;
+        self.ensure_worker_started(app_state.clone()).await;
 
-        {
+        let initial_status_for_broadcast = {
             let mut statuses = self.statuses.lock().await;
             if let Some(existing) = statuses.get(&job.batch_request.batch_id) {
                 if matches!(existing.state.as_str(), "pending" | "running") {
@@ -100,9 +100,19 @@ impl ProofJobService {
                     ));
                 }
             }
-            statuses.insert(
-                job.batch_request.batch_id.clone(),
-                ProofJobStatus::new(&job),
+            let initial_status = ProofJobStatus::new(&job);
+            statuses.insert(job.batch_request.batch_id.clone(), initial_status.clone());
+            initial_status
+        };
+
+        if let Err(e) = app_state
+            .broadcast_proof_job_status(&job.room_id, &initial_status_for_broadcast)
+            .await
+        {
+            tracing::warn!(
+                "Failed to broadcast pending proof job status for room {}: {}",
+                job.room_id,
+                e
             );
         }
 
@@ -141,6 +151,8 @@ async fn process_job(
     job: ProofJob,
 ) {
     let batch_id = job.batch_request.batch_id.clone();
+    let room_id = job.room_id.clone();
+    let mut running_status_for_broadcast = None;
 
     {
         let mut status_map = statuses.lock().await;
@@ -152,6 +164,20 @@ async fn process_job(
                 node_status.state = "running".to_string();
                 node_status.attempt_count += 1;
             }
+            running_status_for_broadcast = Some(status.clone());
+        }
+    }
+
+    if let Some(status) = running_status_for_broadcast {
+        if let Err(e) = app_state
+            .broadcast_proof_job_status(&room_id, &status)
+            .await
+        {
+            tracing::warn!(
+                "Failed to broadcast running proof job status for room {}: {}",
+                room_id,
+                e
+            );
         }
     }
 
@@ -162,6 +188,7 @@ async fn process_job(
     crate::services::zk_proof::store_precomputed_batch_result(batch_id.clone(), execution_result)
         .await;
 
+    let mut final_status_for_broadcast = None;
     {
         let mut status_map = statuses.lock().await;
         if let Some(status) = status_map.get_mut(&batch_id) {
@@ -179,11 +206,25 @@ async fn process_job(
                 node_status.state = next_state.to_string();
                 node_status.last_error = execution_error.clone();
             }
+            final_status_for_broadcast = Some(status.clone());
+        }
+    }
+
+    if let Some(status) = final_status_for_broadcast {
+        if let Err(e) = app_state
+            .broadcast_proof_job_status(&room_id, &status)
+            .await
+        {
+            tracing::warn!(
+                "Failed to broadcast finalized proof job status for room {}: {}",
+                room_id,
+                e
+            );
         }
     }
 
     let mut games = app_state.games.lock().await;
-    let Some(game) = games.get_mut(&job.room_id) else {
+    let Some(game) = games.get_mut(&room_id) else {
         return;
     };
 

@@ -67,8 +67,19 @@ pub async fn start_game(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
-    match game_service::start_game(state, &room_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match game_service::start_game(state.clone(), &room_id).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "game_started")
+                .await
+            {
+                tracing::warn!(
+                    "Failed to broadcast room_state_changed on game start: {}",
+                    e
+                );
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(message) => (StatusCode::NOT_FOUND, Json(message)),
     }
 }
@@ -90,8 +101,16 @@ async fn end_game_handler(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
-    match game_service::end_game(state, room_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match game_service::end_game(state.clone(), room_id.clone()).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "game_ended")
+                .await
+            {
+                tracing::warn!("Failed to broadcast room_state_changed on game end: {}", e);
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(message) => (StatusCode::NOT_FOUND, Json(message)),
     }
 }
@@ -147,8 +166,19 @@ async fn advance_phase_handler(
     State(state): State<AppState>,
     Path(room_id): Path<String>,
 ) -> impl IntoResponse {
-    match game_service::advance_game_phase(state, &room_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match game_service::advance_game_phase(state.clone(), &room_id).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "phase_advanced")
+                .await
+            {
+                tracing::warn!(
+                    "Failed to broadcast room_state_changed on phase advance: {}",
+                    e
+                );
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
     }
 }

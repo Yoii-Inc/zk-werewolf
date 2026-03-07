@@ -1,4 +1,7 @@
 use axum::extract::ws::Message;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{broadcast, Mutex};
 
@@ -6,15 +9,32 @@ use crate::blockchain::BlockchainClient;
 use crate::models::config::DebugConfig;
 use crate::models::{game::Game, room::Room};
 use crate::services::node_key::NodeKeyService;
-use crate::services::proof_job_service::ProofJobService;
+use crate::services::proof_job_service::{ProofJobService, ProofJobStatus};
 use crate::services::user_service::UserService;
 use crate::utils::config::CONFIG;
+
+const ROOM_EVENT_HISTORY_LIMIT: usize = 512;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomEventEnvelope {
+    pub event_id: u64,
+    pub room_id: String,
+    pub timestamp: String,
+    pub payload: Value,
+}
+
+#[derive(Default)]
+struct RoomEventStore {
+    next_event_id: u64,
+    events: Vec<RoomEventEnvelope>,
+}
 
 #[derive(Clone)]
 pub struct AppState {
     pub rooms: Arc<Mutex<HashMap<String, Room>>>,
     pub games: Arc<Mutex<HashMap<String, Game>>>,
     pub channel: Arc<Mutex<HashMap<String, broadcast::Sender<Message>>>>,
+    room_event_store: Arc<Mutex<HashMap<String, RoomEventStore>>>,
     pub user_service: UserService,
     pub debug_config: Arc<DebugConfig>,
     pub node_key_service: Arc<NodeKeyService>,
@@ -28,6 +48,7 @@ impl AppState {
             rooms: Arc::new(Mutex::new(HashMap::new())),
             games: Arc::new(Mutex::new(HashMap::new())),
             channel: Arc::new(Mutex::new(HashMap::new())),
+            room_event_store: Arc::new(Mutex::new(HashMap::new())),
             user_service: UserService::new(),
             debug_config: Arc::new(DebugConfig::default()),
             node_key_service: Arc::new(NodeKeyService::new()),
@@ -47,30 +68,75 @@ impl AppState {
         }
     }
 
+    async fn create_room_event(&self, room_id: &str, payload: Value) -> RoomEventEnvelope {
+        let mut stores = self.room_event_store.lock().await;
+        let store = stores.entry(room_id.to_string()).or_default();
+        store.next_event_id += 1;
+
+        let event = RoomEventEnvelope {
+            event_id: store.next_event_id,
+            room_id: room_id.to_string(),
+            timestamp: Utc::now().to_rfc3339(),
+            payload,
+        };
+
+        store.events.push(event.clone());
+        if store.events.len() > ROOM_EVENT_HISTORY_LIMIT {
+            let drop_count = store.events.len() - ROOM_EVENT_HISTORY_LIMIT;
+            store.events.drain(0..drop_count);
+        }
+
+        event
+    }
+
+    pub async fn publish_room_event(&self, room_id: &str, payload: Value) -> Result<u64, String> {
+        let event = self.create_room_event(room_id, payload).await;
+        let message_text = serde_json::to_string(&event)
+            .map_err(|e| format!("Failed to serialize room event: {}", e))?;
+
+        let tx = self.get_or_create_room_channel(room_id).await;
+        tx.send(Message::Text(message_text.into()))
+            .map_err(|e| format!("Failed to broadcast room event: {}", e))?;
+
+        Ok(event.event_id)
+    }
+
+    pub async fn replay_room_events_since(
+        &self,
+        room_id: &str,
+        last_event_id: u64,
+    ) -> Vec<RoomEventEnvelope> {
+        let stores = self.room_event_store.lock().await;
+        let Some(store) = stores.get(room_id) else {
+            return Vec::new();
+        };
+
+        store
+            .events
+            .iter()
+            .filter(|event| event.event_id > last_event_id)
+            .cloned()
+            .collect()
+    }
+
     pub async fn broadcast_phase_change(
         &self,
         room_id: &str,
         from_phase: &str,
         to_phase: &str,
     ) -> Result<(), String> {
-        let tx = self.get_or_create_room_channel(room_id).await;
-
         let phase_notification = serde_json::json!({
             "message_type": "phase_change",
             "from_phase": from_phase,
             "to_phase": to_phase,
             "room_id": room_id,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": Utc::now().to_rfc3339(),
             "requires_dummy_request": from_phase == "Night" && to_phase == "DivinationProcessing"
         });
 
-        if let Ok(message_text) = serde_json::to_string(&phase_notification) {
-            if let Err(e) = tx.send(Message::Text(message_text)) {
-                return Err(format!("Failed to broadcast phase change: {}", e));
-            }
-        }
-
-        Ok(())
+        self.publish_room_event(room_id, phase_notification)
+            .await
+            .map(|_| ())
     }
 
     pub async fn broadcast_commitments_ready(
@@ -79,23 +145,17 @@ impl AppState {
         commitments_count: usize,
         total_players: usize,
     ) -> Result<(), String> {
-        let tx = self.get_or_create_room_channel(room_id).await;
-
         let commitments_ready_notification = serde_json::json!({
             "message_type": "commitments_ready",
             "room_id": room_id,
             "commitments_count": commitments_count,
             "total_players": total_players,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": Utc::now().to_rfc3339(),
         });
 
-        if let Ok(message_text) = serde_json::to_string(&commitments_ready_notification) {
-            if let Err(e) = tx.send(Message::Text(message_text)) {
-                return Err(format!("Failed to broadcast commitments ready: {}", e));
-            }
-        }
-
-        Ok(())
+        self.publish_room_event(room_id, commitments_ready_notification)
+            .await
+            .map(|_| ())
     }
 
     pub async fn broadcast_computation_result(
@@ -112,42 +172,57 @@ impl AppState {
             "result_data": result_data,
             "room_id": room_id,
             "target_player_id": target_player_id.clone(),
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": Utc::now().to_rfc3339(),
             "batch_id": batch_id
         });
 
-        if let Ok(message_text) = serde_json::to_string(&computation_notification) {
-            // broadcast channelを使用して全員に送信
-            // クライアント側でtarget_player_idをチェックしてフィルタリング
-            let tx = self.get_or_create_room_channel(room_id).await;
-            if let Err(e) = tx.send(Message::Text(message_text)) {
-                return Err(format!("Failed to broadcast computation result: {}", e));
-            }
-        }
-
-        Ok(())
+        self.publish_room_event(room_id, computation_notification)
+            .await
+            .map(|_| ())
     }
 
     pub async fn broadcast_game_reset(&self, room_id: &str) -> Result<(), String> {
-        println!("🔄 Broadcasting game reset for room: {}", room_id);
-        let tx = self.get_or_create_room_channel(room_id).await;
-
         let reset_notification = serde_json::json!({
             "message_type": "game_reset",
             "room_id": room_id,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": Utc::now().to_rfc3339(),
         });
 
-        if let Ok(message_text) = serde_json::to_string(&reset_notification) {
-            println!("📤 Sending game reset notification: {}", message_text);
-            if let Err(e) = tx.send(Message::Text(message_text)) {
-                println!("❌ Failed to send game reset notification: {}", e);
-                return Err(format!("Failed to broadcast game reset: {}", e));
-            }
-            println!("✅ Game reset notification sent successfully");
-        }
+        self.publish_room_event(room_id, reset_notification)
+            .await
+            .map(|_| ())
+    }
 
-        Ok(())
+    pub async fn broadcast_room_state_changed(
+        &self,
+        room_id: &str,
+        reason: &str,
+    ) -> Result<(), String> {
+        let payload = serde_json::json!({
+            "message_type": "room_state_changed",
+            "room_id": room_id,
+            "reason": reason,
+            "timestamp": Utc::now().to_rfc3339(),
+        });
+        self.publish_room_event(room_id, payload).await.map(|_| ())
+    }
+
+    pub async fn broadcast_proof_job_status(
+        &self,
+        room_id: &str,
+        status: &ProofJobStatus,
+    ) -> Result<(), String> {
+        let payload = serde_json::json!({
+            "message_type": "proof_job_status",
+            "room_id": room_id,
+            "batch_id": status.batch_id,
+            "state": status.state,
+            "attempt_count": status.attempt_count,
+            "last_error": status.last_error,
+            "job_node_status": status.job_node_status,
+            "updated_at": status.updated_at.to_rfc3339(),
+        });
+        self.publish_room_event(room_id, payload).await.map(|_| ())
     }
 
     pub async fn save_chat_message(

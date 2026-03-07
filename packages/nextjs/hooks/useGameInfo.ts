@@ -134,22 +134,34 @@ export const useGameInfo = (
   }, [fetchGameInfo, fetchRoomInfo, roomInfo?.status]);
 
   useEffect(() => {
-    fetchRoomInfo();
-    const roomInterval = setInterval(fetchRoomInfo, 5000);
+    void refetchRoomAndGame();
+  }, [refetchRoomAndGame]);
 
-    let gameInterval: NodeJS.Timeout | null = null;
-    if (roomInfo?.status === "InProgress") {
-      fetchGameInfo();
-      gameInterval = setInterval(fetchGameInfo, 5000);
-    }
+  useEffect(() => {
+    const handleServerDrivenRefresh = () => {
+      void refetchRoomAndGame();
+    };
+
+    const events = [
+      "phaseChangeNotification",
+      "commitmentsReadyNotification",
+      "computationResultNotification",
+      "proofJobStatusNotification",
+      "roomStateChangedNotification",
+      "gameResetNotification",
+      "wsEventGapDetected",
+    ];
+
+    events.forEach(eventName => {
+      window.addEventListener(eventName, handleServerDrivenRefresh);
+    });
 
     return () => {
-      clearInterval(roomInterval);
-      if (gameInterval) {
-        clearInterval(gameInterval);
-      }
+      events.forEach(eventName => {
+        window.removeEventListener(eventName, handleServerDrivenRefresh);
+      });
     };
-  }, [fetchGameInfo, fetchRoomInfo, roomInfo?.status]);
+  }, [refetchRoomAndGame]);
 
   return { roomInfo, gameInfo, privateGameInfo, isLoading, setGameInfo, refetchRoomAndGame };
 };
