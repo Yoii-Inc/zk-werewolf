@@ -417,17 +417,14 @@ impl CircuitFactory {
                 inputs
             }
             BuiltinCircuit::RoleAssignment(circuit) => {
-                let mut inputs = Vec::new();
-
-                let tau_matrix = &circuit.public_input.tau_matrix;
-
-                for i in 0..tau_matrix.nrows() {
-                    for j in 0..tau_matrix.ncols() {
-                        inputs.push(tau_matrix[(i, j)].sync_reveal());
-                    }
-                }
-
-                inputs
+                // IMPORTANT: keep the same ordering as matrix allocation in the circuit
+                // (nalgebra iterator order = column-major).
+                circuit
+                    .public_input
+                    .tau_matrix
+                    .iter()
+                    .map(|v| v.sync_reveal())
+                    .collect::<Vec<_>>()
             }
             BuiltinCircuit::KeyPublicize(circuit) => {
                 let (_pub_key_x, _pub_key_y) = circuit.calculate_output();
