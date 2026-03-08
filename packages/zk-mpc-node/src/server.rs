@@ -8,9 +8,12 @@ use axum::http::{self, HeaderValue, Method};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use futures::FutureExt;
 use mpc_net::MpcMultiNet as Net;
 use serde_json::json;
+use std::any::Any;
 use std::net::SocketAddr;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::spawn;
@@ -61,7 +64,11 @@ async fn handle_proof_request(
         .register_proof_request(payload.clone())
         .await;
 
-    println!("Proof request registered: {}", payload.proof_id);
+    println!(
+        "Proof request registered: {} (profile: {:?})",
+        payload.proof_id,
+        payload.circuit_type.circuit_profile()
+    );
 
     let payload_clone = payload.clone();
 
@@ -75,17 +82,25 @@ async fn handle_proof_request(
                 let proof_manager = state.proof_manager.clone();
                 async move {
                     println!(
-                        "Node {} is generating proof for request: {}",
-                        node_clone.id, request.proof_id
+                        "Node {} is generating proof for request: {} (profile: {:?})",
+                        node_clone.id,
+                        request.proof_id,
+                        request.circuit_type.circuit_profile()
                     );
-                    match node_clone.generate_proof(request.clone()).await {
-                        Ok(_) => {
+
+                    let proof_result =
+                        AssertUnwindSafe(node_clone.generate_proof(request.clone()))
+                            .catch_unwind()
+                            .await;
+
+                    match proof_result {
+                        Ok(Ok(_)) => {
                             println!(
                                 "Proof generation completed successfully for {}",
                                 request.proof_id
                             );
                         }
-                        Err(e) => {
+                        Ok(Err(e)) => {
                             eprintln!(
                                 "Error during proof generation for {}: {:?}",
                                 request.proof_id, e
@@ -95,6 +110,20 @@ async fn handle_proof_request(
                                     &request.proof_id,
                                     "failed",
                                     Some(format!("Error: {:?}", e)),
+                                )
+                                .await;
+                        }
+                        Err(panic_payload) => {
+                            let panic_message = panic_payload_to_string(panic_payload);
+                            eprintln!(
+                                "Panic during proof generation for {}: {}",
+                                request.proof_id, panic_message
+                            );
+                            proof_manager
+                                .update_proof_status(
+                                    &request.proof_id,
+                                    "failed",
+                                    Some(format!("Panic: {}", panic_message)),
                                 )
                                 .await;
                         }
@@ -158,4 +187,14 @@ async fn get_proof_status(
         };
         (http::StatusCode::NOT_FOUND, axum::Json(proof_status))
     }
+}
+
+fn panic_payload_to_string(payload: Box<dyn Any + Send>) -> String {
+    if let Some(msg) = payload.downcast_ref::<&str>() {
+        return (*msg).to_string();
+    }
+    if let Some(msg) = payload.downcast_ref::<String>() {
+        return msg.clone();
+    }
+    "unknown panic payload".to_string()
 }

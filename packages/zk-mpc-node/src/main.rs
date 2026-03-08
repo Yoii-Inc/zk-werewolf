@@ -7,13 +7,10 @@ use zk_mpc_node::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Set up panic hook to ensure process termination on critical errors
+    // Log panic details; individual panics are handled per-request in server code.
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("Fatal panic occurred: {}", panic_info);
         eprintln!("Location: {:?}", panic_info.location());
-
-        // Ensure process termination
-        std::process::exit(1);
     }));
 
     let command = Command::from_args();
