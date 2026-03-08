@@ -12,6 +12,11 @@ export interface TestPlayer {
   token: string;
 }
 
+export interface RoomSetupOptions {
+  werewolfCount?: number;
+  roomNamePrefix?: string;
+}
+
 export class GameSetupHelper {
   private static extractBatchId(response: unknown): string | null {
     if (typeof response === "string" && response.length > 0) {
@@ -52,7 +57,10 @@ export class GameSetupHelper {
    * @param numPlayers プレイヤー数
    * @returns ルームIDとプレイヤー情報の配列
    */
-  static async setupPlayersAndRoom(numPlayers: number): Promise<{ roomId: string; players: TestPlayer[] }> {
+  static async setupPlayersAndRoom(
+    numPlayers: number,
+    options?: RoomSetupOptions,
+  ): Promise<{ roomId: string; players: TestPlayer[] }> {
     const apiClient = new CircuitTestClient();
     const players: TestPlayer[] = [];
     const timestamp = Date.now();
@@ -83,14 +91,21 @@ export class GameSetupHelper {
 
     // ルーム作成（最初のプレイヤーが作成）
     console.log(`🏠 Creating test room...`);
-    const roomName = `E2E Test Room ${timestamp}`;
-    const werewolfCount = numPlayers <= 5 ? 1 : 2;
+    const roomPrefix = options?.roomNamePrefix ?? "E2E Test Room";
+    const roomName = `${roomPrefix} ${timestamp}`;
+    const werewolfCount = options?.werewolfCount ?? (numPlayers <= 5 ? 1 : 2);
+    const villagerCount = numPlayers - 1 - werewolfCount;
+    if (villagerCount < 1) {
+      throw new Error(
+        `Invalid role config for numPlayers=${numPlayers}, werewolfCount=${werewolfCount}. Villager count must be >= 1`,
+      );
+    }
     const roomId = await apiClient.createRoom(roomName, players[0].token, {
       maxPlayers: numPlayers,
       roleConfig: {
         seer: 1,
         werewolf: werewolfCount,
-        villager: Math.max(0, numPlayers - 1 - werewolfCount),
+        villager: villagerCount,
       },
     });
     console.log(`   ✅ Room created: ${roomId} (${roomName})`);

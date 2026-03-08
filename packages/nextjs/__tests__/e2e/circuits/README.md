@@ -14,7 +14,10 @@ docker compose -f docker-compose.test.yml up
 cd packages/nextjs
 npm run test:e2e:circuits
 
-# 3. サービス停止
+# 3. Fullシナリオ（5人/人狼2を含む）
+npm run test:e2e:circuits:full
+
+# 4. サービス停止
 docker compose down
 ```
 
@@ -25,7 +28,8 @@ docker compose down
 
 ## テスト構成
 
-- `integration.test.ts` - メインの統合テスト（ゲーム全フロー）
+- `integration.test.ts` - smoke統合テスト（4人固定、通常フロー）
+- `integration.full.test.ts` - full統合テスト（人数/人狼数/展開パターン）
 - `setup.ts` - 共通セットアップ（ルーム作成、プレイヤー参加、ゲーム開始）
   - **localStorage/sessionStorageモック**: Node.js環境でブラウザAPIを模擬
   - **WebSocket接続管理**: 各プレイヤーのリアルタイム通信

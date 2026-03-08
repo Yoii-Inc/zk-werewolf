@@ -16,9 +16,11 @@
     "pretest:e2e:circuits": "node scripts/ensure-node-wasm.js",
     "pretest:e2e:circuits:watch": "node scripts/ensure-node-wasm.js",
     "pretest:e2e:circuits:single": "node scripts/ensure-node-wasm.js",
+    "pretest:e2e:circuits:full": "node scripts/ensure-node-wasm.js",
     "test:e2e:circuits": "jest __tests__/e2e/circuits --runInBand --testTimeout=300000",
     "test:e2e:circuits:watch": "jest __tests__/e2e/circuits --watch --runInBand --testTimeout=300000",
-    "test:e2e:circuits:single": "jest __tests__/e2e/circuits --runInBand --testTimeout=300000 --testNamePattern"
+    "test:e2e:circuits:single": "jest __tests__/e2e/circuits --runInBand --testTimeout=300000 --testNamePattern",
+    "test:e2e:circuits:full": "E2E_SCENARIO_SET=full jest __tests__/e2e/circuits/integration.full.test.ts --runInBand --testTimeout=600000"
   },
   "dependencies": {
     "@heroicons/react": "~2.1.5",
