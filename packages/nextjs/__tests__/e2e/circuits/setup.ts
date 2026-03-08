@@ -5,6 +5,16 @@
 import { CircuitTestClient } from "./helpers/api";
 import { GameSetupHelper, type TestPlayer } from "./helpers/game-setup";
 import type { CryptoParameters } from "~~/types/game";
+import { CryptoManager } from "~~/utils/crypto/encryption";
+import { getPrivateGameInfo, setPrivateGameInfo, updatePrivateGameInfo } from "~~/utils/privateGameInfoUtils";
+
+let isTearingDown = false;
+
+export interface TestSetupOptions {
+  numPlayers?: number;
+  werewolfCount?: number;
+  roomNamePrefix?: string;
+}
 
 // ============================================================================
 // localStorage / sessionStorage モック（Node.js環境用）
@@ -65,6 +75,83 @@ declare global {
 
 export { GameSetupHelper };
 
+function getMpcNodePublicKeys(): string[] {
+  return [
+    process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
+    process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
+    process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
+  ];
+}
+
+function decodeRoleName(roleHex: string): "Villager" | "Seer" | "Werewolf" {
+  const roleId = (BigInt("0x" + roleHex) % BigInt(3)).toString();
+  if (roleId === "1") return "Seer";
+  if (roleId === "2") return "Werewolf";
+  return "Villager";
+}
+
+function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payload: any): void {
+  const targetPlayerId = payload?.target_player_id as string | undefined;
+  if (targetPlayerId && targetPlayerId !== playerId) {
+    return;
+  }
+
+  const encryptedRole = payload?.result_data?.encrypted_role;
+  if (!encryptedRole) {
+    return;
+  }
+
+  const encrypted = encryptedRole.encrypted as string | undefined;
+  const nonce = encryptedRole.nonce as string | undefined;
+  const nodeIdRaw = encryptedRole.node_id as number | string | undefined;
+  const nodeId = typeof nodeIdRaw === "string" ? Number(nodeIdRaw) : nodeIdRaw;
+
+  if (!encrypted || !nonce || typeof nodeId !== "number") {
+    return;
+  }
+
+  const senderPublicKey = getMpcNodePublicKeys()[nodeId];
+  if (!senderPublicKey) {
+    console.warn(`   ⚠️  Missing MPC node public key for node_id=${nodeId}`);
+    return;
+  }
+
+  const cryptoManager = new CryptoManager(playerId);
+  if (!cryptoManager.hasKeyPair()) {
+    console.warn(`   ⚠️  Missing keypair for player ${playerId}; cannot decrypt role assignment yet`);
+    return;
+  }
+
+  try {
+    const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, senderPublicKey);
+    const decryptedString = new TextDecoder("utf-8").decode(decryptedBinary);
+    const roleData = JSON.parse(decryptedString) as string[];
+    if (!Array.isArray(roleData) || roleData.length === 0 || typeof roleData[0] !== "string") {
+      throw new Error("Invalid role payload");
+    }
+
+    const roleName = decodeRoleName(roleData[0]);
+    const existingInfo = getPrivateGameInfo(roomId, playerId);
+
+    if (!existingInfo) {
+      setPrivateGameInfo(roomId, {
+        playerId,
+        playerRole: roleName as any,
+        hasActed: false,
+      });
+    } else if (existingInfo.playerRole !== roleName) {
+      updatePrivateGameInfo(roomId, playerId, { playerRole: roleName as any });
+    }
+
+    console.log(`   🔐 [${playerId}] Role reflected from encrypted assignment: ${roleName}`);
+  } catch (error) {
+    console.warn(
+      `   ⚠️  Failed to reflect role assignment for player ${playerId}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 /**
  * テスト用のWebSocket接続を開く
  * 本番環境と同じように、メッセージハンドラを設定して通知を受け取れるようにする
@@ -117,10 +204,12 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
 
           // メッセージハンドラ - 本番環境と同じようにフェーズ変更などの通知を処理
           const onMessage = (event: any) => {
+            if (isTearingDown) return;
             try {
               // Node.js 'ws' の場合は event.data が Buffer なので文字列に変換
               const dataStr = typeof event === "string" ? event : event.data?.toString() || event.toString();
-              const data = JSON.parse(dataStr);
+              const rawData = JSON.parse(dataStr);
+              const data = rawData?.payload && rawData?.event_id ? rawData.payload : rawData;
 
               console.log(`   📩 [${player.name}] WebSocket message:`, data.message_type);
 
@@ -151,6 +240,10 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
                     `   ℹ️  Note: Role decryption will be handled by useComputationResults hook with sessionStorage mock`,
                   );
                 }
+
+                if (data.computation_type === "role_assignment") {
+                  reflectRoleAssignmentForPlayer(roomId, player.id, data);
+                }
               }
 
               // ゲームリセット通知の場合
@@ -167,13 +260,21 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
             socket.addEventListener("open", onOpen);
             socket.addEventListener("error", onError);
             socket.addEventListener("message", onMessage);
-            socket.addEventListener("close", () => console.log(`   🔌 WebSocket closed for ${player.name}`));
+            socket.addEventListener("close", () => {
+              if (!isTearingDown) {
+                console.log(`   🔌 WebSocket closed for ${player.name}`);
+              }
+            });
           } else {
             // Node.js 'ws' パッケージ
             socket.on("open", onOpen);
             socket.on("error", onError);
             socket.on("message", onMessage);
-            socket.on("close", () => console.log(`   🔌 WebSocket closed for ${player.name}`));
+            socket.on("close", () => {
+              if (!isTearingDown) {
+                console.log(`   🔌 WebSocket closed for ${player.name}`);
+              }
+            });
           }
 
           sockets.push(socket);
@@ -267,101 +368,116 @@ async function checkServicesHealth(): Promise<void> {
 /**
  * テスト共通セットアップ
  */
-export const testSetup = {
-  /**
-   * 全テストの前に1回だけ実行
-   */
-  beforeAll: async (): Promise<void> => {
-    console.log("\n🚀 Starting E2E Circuit Tests Setup...\n");
+export function createTestSetup(options?: TestSetupOptions) {
+  const numPlayers = options?.numPlayers ?? 4;
+  const roomNamePrefix = options?.roomNamePrefix ?? "E2E Test Room";
 
-    // サービス起動確認
-    await checkServicesHealth();
+  return {
+    /**
+     * 全テストの前に1回だけ実行
+     */
+    beforeAll: async (): Promise<void> => {
+      isTearingDown = false;
+      console.log("\n🚀 Starting E2E Circuit Tests Setup...\n");
+      console.log(
+        `🧩 Scenario config: players=${numPlayers}, werewolf=${options?.werewolfCount ?? "auto"}, room="${roomNamePrefix}"`,
+      );
 
-    // テスト用プレイヤー・ルームのセットアップ
-    console.log("👥 Setting up test players and room...");
-    const { roomId, players } = await GameSetupHelper.setupPlayersAndRoom(4);
-    global.testRoomId = roomId;
-    global.testPlayers = players;
-    console.log(`✅ Room created: ${roomId}, Players: ${players.length}\n`);
+      // サービス起動確認
+      await checkServicesHealth();
 
-    // APIクライアント初期化
-    global.apiClient = new CircuitTestClient(roomId);
-    console.log("✅ API client initialized\n");
+      // テスト用プレイヤー・ルームのセットアップ
+      console.log("👥 Setting up test players and room...");
+      const { roomId, players } = await GameSetupHelper.setupPlayersAndRoom(numPlayers, {
+        werewolfCount: options?.werewolfCount,
+        roomNamePrefix,
+      });
+      global.testRoomId = roomId;
+      global.testPlayers = players;
+      console.log(`✅ Room created: ${roomId}, Players: ${players.length}\n`);
 
-    // WebSocket接続（ゲーム開始前に確立する必要がある）
-    global.testSockets = await openTestWebSockets(roomId, players);
+      // APIクライアント初期化
+      global.apiClient = new CircuitTestClient(roomId);
+      console.log("✅ API client initialized\n");
 
-    // ゲーム開始
-    console.log("🎮 Starting game...");
-    await GameSetupHelper.startGameWithPlayers(players, roomId);
-    console.log("✅ Game started successfully!\n");
+      // WebSocket接続（ゲーム開始前に確立する必要がある）
+      global.testSockets = await openTestWebSockets(roomId, players);
 
-    // 暗号パラメータをサーバーから取得（本番環境と同じ）
-    console.log("📦 Loading crypto parameters from server...");
-    const gameState = await global.apiClient.getGameState(roomId);
-    const GameInputGenerator = await import("~~/services/gameInputGenerator");
-    global.cryptoParams = await GameInputGenerator.loadCryptoParams(gameState);
+      // ゲーム開始
+      console.log("🎮 Starting game...");
+      await GameSetupHelper.startGameWithPlayers(players, roomId);
+      console.log("✅ Game started successfully!\n");
 
-    // プレイヤーごとのランダムネスを生成
-    console.log("🎲 Generating player randomness...");
-    const MPCEncryption = (await import("~~/utils/crypto/InputEncryption")).MPCEncryption;
-    global.cryptoParams.playerRandomness = await Promise.all(
-      players.map(async () => {
-        const rand = await MPCEncryption.frRand();
-        return rand;
-      }),
-    );
-    console.log("✅ Player randomness generated");
+      // 暗号パラメータをサーバーから取得（本番環境と同じ）
+      console.log("📦 Loading crypto parameters from server...");
+      const gameState = await global.apiClient.getGameState(roomId);
+      const GameInputGenerator = await import("~~/services/gameInputGenerator");
+      global.cryptoParams = await GameInputGenerator.loadCryptoParams(gameState);
 
-    console.log("✅ Crypto parameters loaded from server\n");
+      // プレイヤーごとのランダムネスを生成
+      console.log("🎲 Generating player randomness...");
+      const MPCEncryption = (await import("~~/utils/crypto/InputEncryption")).MPCEncryption;
+      global.cryptoParams.playerRandomness = await Promise.all(
+        players.map(async () => {
+          const rand = await MPCEncryption.frRand();
+          return rand;
+        }),
+      );
+      console.log("✅ Player randomness generated");
 
-    console.log("✅ Setup completed!\n");
-  },
+      console.log("✅ Crypto parameters loaded from server\n");
 
-  /**
-   * 各テストの前に実行
-   */
-  beforeEach: async (): Promise<void> => {
-    // バッチリセット（エラーが出ても続行）
-    try {
-      await global.apiClient.resetBatch();
-    } catch (error) {
-      console.warn("⚠️  Failed to reset batch (continuing anyway):", error);
-    }
-  },
+      console.log("✅ Setup completed!\n");
+    },
 
-  /**
-   * 全テストの後にクリーンアップ
-   */
-  afterAll: async (): Promise<void> => {
-    console.log("\n🧹 Cleaning up test environment...");
-    // Close any test WebSocket connections opened in beforeAll
-    try {
-      if (global.testSockets && Array.isArray(global.testSockets)) {
-        console.log(`🔌 Closing ${global.testSockets.length} test WebSocket(s)...`);
-        for (const s of global.testSockets) {
-          try {
-            if (!s) continue;
-            // ws (Node) has terminate/close; browser WebSocket has close()
-            if (typeof s.terminate === "function") {
-              s.terminate();
-            } else if (typeof s.close === "function") {
-              s.close();
-            }
-          } catch (e) {
-            console.warn("⚠️ Error while closing socket:", e);
-          }
-        }
-        global.testSockets = [];
+    /**
+     * 各テストの前に実行
+     */
+    beforeEach: async (): Promise<void> => {
+      // バッチリセット（エラーが出ても続行）
+      try {
+        await global.apiClient.resetBatch();
+      } catch (error) {
+        console.warn("⚠️  Failed to reset batch (continuing anyway):", error);
       }
-    } catch (e) {
-      console.warn("⚠️ Error during test sockets cleanup:", e);
-    }
+    },
 
-    // 必要に応じてルームの削除などを実装
-    console.log("✅ Cleanup completed\n");
-  },
-};
+    /**
+     * 全テストの後にクリーンアップ
+     */
+    afterAll: async (): Promise<void> => {
+      isTearingDown = true;
+      console.log("\n🧹 Cleaning up test environment...");
+      // Close any test WebSocket connections opened in beforeAll
+      try {
+        if (global.testSockets && Array.isArray(global.testSockets)) {
+          console.log(`🔌 Closing ${global.testSockets.length} test WebSocket(s)...`);
+          for (const s of global.testSockets) {
+            try {
+              if (!s) continue;
+              // ws (Node) has terminate/close; browser WebSocket has close()
+              if (typeof s.terminate === "function") {
+                s.terminate();
+              } else if (typeof s.close === "function") {
+                s.close();
+              }
+            } catch (e) {
+              console.warn("⚠️ Error while closing socket:", e);
+            }
+          }
+          global.testSockets = [];
+        }
+      } catch (e) {
+        console.warn("⚠️ Error during test sockets cleanup:", e);
+      }
+
+      // 必要に応じてルームの削除などを実装
+      console.log("✅ Cleanup completed\n");
+    },
+  };
+}
+
+export const testSetup = createTestSetup({ numPlayers: 4, werewolfCount: 1, roomNamePrefix: "E2E Smoke Room" });
 
 /**
  * ヘルパー関数をエクスポート

@@ -1,7 +1,7 @@
 "use client";
 
 // Browser用のWASMインポート（default export）
-import init, {
+import wasmInit, {
   init as RustInit,
   divination,
   elgamal_decrypt,
@@ -44,8 +44,13 @@ export class MPCEncryption {
    */
   private static async initializeWasm(): Promise<void> {
     if (!this.isInitialized) {
-      await init();
-      RustInit();
+      // pkg-web has async default init, but pkg-node (used in Jest) does not.
+      if (typeof wasmInit === "function") {
+        await wasmInit();
+      }
+      if (typeof RustInit === "function") {
+        RustInit();
+      }
       this.isInitialized = true;
     }
   }

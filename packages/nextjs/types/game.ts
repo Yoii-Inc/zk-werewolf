@@ -31,6 +31,7 @@ export interface CryptoParameters {
 export interface GameInfo {
   room_id: string;
   phase: "Waiting" | "Night" | "DivinationProcessing" | "Discussion" | "Voting" | "Result" | "Finished";
+  day_count?: number;
   phase_started_at?: string;
   players: Player[];
   playerRole: Role;

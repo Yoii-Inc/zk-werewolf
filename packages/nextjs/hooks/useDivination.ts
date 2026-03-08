@@ -41,6 +41,7 @@ export const useDivination = () => {
                 user_id: String(divinationData.privateInput.id),
                 prover_count: alivePlayerCount,
                 encrypted_data: encryptedDivination,
+                is_dummy: false,
               },
             }),
           },

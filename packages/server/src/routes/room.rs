@@ -109,8 +109,15 @@ pub async fn join_room(
         Err(_) => return (StatusCode::BAD_REQUEST, Json("User not found")),
     };
 
-    let success = room_service::join_room(state, &room_id, &player_id, &user.username).await;
+    let success =
+        room_service::join_room(state.clone(), &room_id, &player_id, &user.username).await;
     if success {
+        if let Err(e) = state
+            .broadcast_room_state_changed(&room_id, "player_joined")
+            .await
+        {
+            tracing::warn!("Failed to broadcast room_state_changed on join: {}", e);
+        }
         (StatusCode::OK, Json("Successfully joined room"))
     } else {
         (StatusCode::BAD_REQUEST, Json("Failed to join room"))
@@ -121,8 +128,16 @@ pub async fn leave_room(
     State(state): State<AppState>,
     Path((room_id, player_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match room_service::leave_room(state, &room_id, &player_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match room_service::leave_room(state.clone(), &room_id, &player_id).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "player_left")
+                .await
+            {
+                tracing::warn!("Failed to broadcast room_state_changed on leave: {}", e);
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(message) => (StatusCode::BAD_REQUEST, Json(message)),
     }
 }
@@ -141,8 +156,19 @@ pub async fn toggle_ready(
     State(state): State<AppState>,
     Path((room_id, player_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match room_service::toggle_ready(state, &room_id, &player_id).await {
-        Ok(message) => (StatusCode::OK, Json(message)),
+    match room_service::toggle_ready(state.clone(), &room_id, &player_id).await {
+        Ok(message) => {
+            if let Err(e) = state
+                .broadcast_room_state_changed(&room_id, "ready_toggled")
+                .await
+            {
+                tracing::warn!(
+                    "Failed to broadcast room_state_changed on ready toggle: {}",
+                    e
+                );
+            }
+            (StatusCode::OK, Json(message))
+        }
         Err(e) => (StatusCode::BAD_REQUEST, Json(e)),
     }
 }

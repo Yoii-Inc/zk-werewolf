@@ -89,8 +89,8 @@ describe("ZK Werewolf Integration E2E Tests", () => {
     await GameSetupHelper.submitRoleAssignmentRequests(roomId, players, gameState);
 
     // Step 4: 役職配布完了を確認
+    // submitRoleAssignmentRequests 内で proof job completed まで待機済み
     console.log("4️⃣  Verifying role assignment completion...");
-    await new Promise(resolve => setTimeout(resolve, 5000)); // 証明生成を待つ
 
     const updatedGameState = await global.apiClient.getGameState(roomId);
     console.log(`✅ Updated game state (Phase: ${updatedGameState.phase})`);
@@ -140,8 +140,8 @@ describe("ZK Werewolf Integration E2E Tests", () => {
     await GameSetupHelper.submitKeyPublicizeRequests(roomId, players, gameState);
 
     // KeyPublicize完了を確認
+    // submitKeyPublicizeRequests 内で proof job completed まで待機済み
     console.log("2️⃣  Verifying KeyPublicize completion...");
-    await new Promise(resolve => setTimeout(resolve, 5000)); // 証明生成を待つ
 
     const updatedGameState = await global.apiClient.getGameState(roomId);
     console.log(`✅ Updated game state (Phase: ${updatedGameState.phase})`);
@@ -164,7 +164,9 @@ describe("ZK Werewolf Integration E2E Tests", () => {
       players: global.testPlayers,
     };
 
-    const gameState = await global.apiClient.getGameState(roomId);
+    // Divination は DivinationProcessing フェーズでのみ受け付けられる
+    console.log("0️⃣  Ensuring phase is DivinationProcessing...");
+    const gameState = await GameSetupHelper.ensureGamePhase(roomId, "DivinationProcessing");
 
     // ElGamal公開鍵が存在しない場合、テストファイルから補完する
     if (!gameState.crypto_parameters?.fortune_teller_public_key) {
@@ -189,8 +191,8 @@ describe("ZK Werewolf Integration E2E Tests", () => {
     await GameSetupHelper.submitDivinationRequests(roomId, players, gameState, targetIds, isDummyFlags);
 
     // Divination完了を確認
+    // submitDivinationRequests 内で proof job completed まで待機済み
     console.log("2️⃣  Verifying Divination completion...");
-    await new Promise(resolve => setTimeout(resolve, 5000)); // 証明生成を待つ
 
     const updatedGameState = await global.apiClient.getGameState(roomId);
     console.log(`✅ Updated game state (Phase: ${updatedGameState.phase})`);
@@ -235,7 +237,9 @@ describe("ZK Werewolf Integration E2E Tests", () => {
       players: global.testPlayers,
     };
 
-    const gameState = await global.apiClient.getGameState(roomId);
+    // AnonymousVoting は Voting フェーズでのみ受け付けられる
+    console.log("0️⃣  Ensuring phase is Voting...");
+    const gameState = await GameSetupHelper.ensureGamePhase(roomId, "Voting");
 
     console.log("1️⃣  All players submitting votes...");
 
@@ -247,8 +251,8 @@ describe("ZK Werewolf Integration E2E Tests", () => {
     await GameSetupHelper.submitVotingRequests(roomId, players, gameState, targetIds);
 
     // Voting完了を確認
+    // submitVotingRequests 内で proof job completed まで待機済み
     console.log("2️⃣  Verifying Voting completion...");
-    await new Promise(resolve => setTimeout(resolve, 5000)); // 証明生成を待つ
 
     const updatedGameState = await global.apiClient.getGameState(roomId);
     console.log(`✅ Updated game state (Phase: ${updatedGameState.phase})`);
@@ -264,7 +268,9 @@ describe("ZK Werewolf Integration E2E Tests", () => {
       players: global.testPlayers,
     };
 
-    const gameState = await global.apiClient.getGameState(roomId);
+    // WinningJudge は Result (または DivinationProcessing/Discussion) で受け付けられる
+    console.log("0️⃣  Ensuring phase is Result...");
+    const gameState = await GameSetupHelper.ensureGamePhase(roomId, "Result");
 
     console.log("1️⃣  All players submitting WinningJudgement requests...");
 
@@ -272,8 +278,8 @@ describe("ZK Werewolf Integration E2E Tests", () => {
     await GameSetupHelper.submitWinningJudgementRequests(roomId, players, gameState);
 
     // WinningJudgement完了を確認
+    // submitWinningJudgementRequests 内で proof job completed まで待機済み
     console.log("2️⃣  Verifying WinningJudgement completion...");
-    await new Promise(resolve => setTimeout(resolve, 5000)); // 証明生成を待つ
 
     const updatedGameState = await global.apiClient.getGameState(roomId);
     console.log(`✅ Updated game state (Phase: ${updatedGameState.phase})`);

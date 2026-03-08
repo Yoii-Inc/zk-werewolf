@@ -8,7 +8,7 @@ import { RoleAssignmentInput } from "~~/utils/crypto/type";
  */
 
 export interface ProofStatus {
-  state: "pending" | "processing" | "completed" | "failed";
+  state: "pending" | "running" | "completed" | "failed" | "timeout";
   proofId: string;
   message?: string;
   output?: any;
@@ -17,6 +17,23 @@ export interface ProofStatus {
 export interface ProofOutput {
   isValid: boolean;
   output: any;
+}
+
+export interface ProofJobNodeStatus {
+  state: "pending" | "running" | "completed" | "failed" | "timeout";
+  attempt_count: number;
+  last_error: string | null;
+}
+
+export interface ProofJobStatus {
+  state: "pending" | "running" | "completed" | "failed" | "timeout";
+  batch_id: string;
+  room_id: string;
+  attempt_count: number;
+  last_error: string | null;
+  job_node_status: Record<string, ProofJobNodeStatus>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AuthResponse {
@@ -32,6 +49,15 @@ export interface AuthResponse {
 export interface RoomResponse {
   room_id?: string;
   message?: string;
+}
+
+export interface CreateRoomOptions {
+  maxPlayers?: number;
+  roleConfig?: {
+    seer: number;
+    werewolf: number;
+    villager: number;
+  };
 }
 
 export class CircuitTestClient {
@@ -103,14 +129,35 @@ export class CircuitTestClient {
   /**
    * ルーム作成
    */
-  async createRoom(name: string, token: string): Promise<string> {
+  async createRoom(name: string, token: string, options?: CreateRoomOptions): Promise<string> {
+    const payload: {
+      name: string;
+      max_players?: number;
+      role_config?: {
+        Seer: number;
+        Werewolf: number;
+        Villager: number;
+      };
+    } = { name };
+
+    if (typeof options?.maxPlayers === "number") {
+      payload.max_players = options.maxPlayers;
+    }
+    if (options?.roleConfig) {
+      payload.role_config = {
+        Seer: options.roleConfig.seer,
+        Werewolf: options.roleConfig.werewolf,
+        Villager: options.roleConfig.villager,
+      };
+    }
+
     const response = await fetch(`${this.baseUrl}/api/room/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -222,49 +269,81 @@ export class CircuitTestClient {
      証明ステータスを取得
    */
   async getProofStatus(proofId: string): Promise<ProofStatus> {
-    const response = await fetch(`${this.baseUrl}/api/game/${this.roomId}/state`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to get proof status: ${response.status}`);
+    if (!this.roomId) {
+      throw new Error("Room ID not set. Call setRoomId() first.");
     }
 
-    const gameState = await response.json();
+    const status = await this.getProofJobStatus(this.roomId, proofId);
+    if (!status) {
+      return { state: "pending", proofId };
+    }
 
-    // ゲーム状態から証明ステータスを抽出
-    // TODO: 実際のAPIレスポンス形式に合わせて調整
     return {
-      state: "completed",
+      state: status.state,
       proofId,
-      output: gameState,
+      message: status.last_error ?? undefined,
+      output: status,
     };
+  }
+
+  async getProofJobStatus(roomId: string, batchId: string): Promise<ProofJobStatus | null> {
+    const response = await fetch(`${this.baseUrl}/api/game/${roomId}/proof/${batchId}/status`);
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get proof job status (${response.status}): ${errorText}`);
+    }
+
+    return (await response.json()) as ProofJobStatus;
+  }
+
+  async waitForProofJobCompletion(roomId: string, batchId: string, timeout = 180000): Promise<ProofJobStatus> {
+    const startTime = Date.now();
+    const pollInterval = 1000;
+
+    while (Date.now() - startTime < timeout) {
+      const status = await this.getProofJobStatus(roomId, batchId);
+      if (!status) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        continue;
+      }
+
+      if (status.state === "completed") {
+        return status;
+      }
+
+      if (status.state === "failed" || status.state === "timeout") {
+        const nodeStates = Object.entries(status.job_node_status)
+          .map(([nodeUrl, nodeStatus]) => `${nodeUrl}:${nodeStatus.state}`)
+          .join(", ");
+        throw new Error(
+          `Proof job ${batchId} ${status.state}. last_error=${status.last_error ?? "none"} node_states=[${nodeStates}]`,
+        );
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error(`Timeout waiting for proof job completion (${timeout}ms): ${batchId}`);
   }
 
   /**
    * 証明生成完了を待機
    */
   async waitForCompletion(proofId: string, timeout = 180000): Promise<ProofOutput> {
-    const startTime = Date.now();
-    const pollInterval = 2000; // 2秒ごとにポーリング
-
-    while (Date.now() - startTime < timeout) {
-      const status = await this.getProofStatus(proofId);
-
-      if (status.state === "completed") {
-        return {
-          isValid: true,
-          output: status.output,
-        };
-      }
-
-      if (status.state === "failed") {
-        throw new Error(`Proof generation failed: ${status.message}`);
-      }
-
-      // 待機
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    if (!this.roomId) {
+      throw new Error("Room ID not set. Call setRoomId() first.");
     }
 
-    throw new Error(`Timeout waiting for proof completion (${timeout}ms)`);
+    const status = await this.waitForProofJobCompletion(this.roomId, proofId, timeout);
+    return {
+      isValid: status.state === "completed",
+      output: status,
+    };
   }
 
   /**
@@ -406,7 +485,13 @@ export class CircuitTestClient {
    * Divinationリクエストを送信
    * 本番環境では useDivination フックが行う処理
    */
-  async submitDivination(roomId: string, divinationInput: any, playerCount: number, authToken?: string): Promise<any> {
+  async submitDivination(
+    roomId: string,
+    divinationInput: any,
+    playerCount: number,
+    authToken?: string,
+    isDummy = false,
+  ): Promise<any> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -424,6 +509,7 @@ export class CircuitTestClient {
         user_id: String(divinationInput.privateInput.id),
         prover_count: playerCount,
         encrypted_data: encryptedDivination,
+        is_dummy: isDummy,
       },
     };
 
@@ -535,5 +621,22 @@ export class CircuitTestClient {
     }
 
     return await response.json();
+  }
+
+  /**
+   * フェーズを次に進める（デバッグ用エンドポイント）
+   */
+  async advancePhase(roomId: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/game/${roomId}/phase/next`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to advance phase (${response.status}): ${errorText}`);
+    }
   }
 }

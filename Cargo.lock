@@ -2007,6 +2007,7 @@ dependencies = [
  "ark-crypto-primitives",
  "ark-ec",
  "ark-ff",
+ "ark-groth16",
  "ark-r1cs-std",
  "ark-relations",
  "ark-serialize",

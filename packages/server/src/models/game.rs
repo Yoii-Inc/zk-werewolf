@@ -7,8 +7,6 @@ use crate::{
         chat::{ChatMessage, ChatMessageType},
         role::Role,
     },
-    services::zk_proof::check_status_with_retry,
-    utils::config::CONFIG,
 };
 
 use super::player::Player;
@@ -20,11 +18,9 @@ use base64;
 use chrono::{DateTime, Utc};
 use derivative::Derivative;
 use mpc_algebra_wasm::*;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
-use zk_mpc_node::{ProofOutputType, ProofRequest, UserPublicKey};
 
 #[derive(Serialize, Deserialize, Derivative, Clone)]
 #[derivative(Debug)]
@@ -42,6 +38,9 @@ pub struct Game {
     pub chat_log: super::chat::ChatLog,
     #[derivative(Debug = "ignore")]
     pub batch_request: BatchRequest,
+    #[derivative(Debug = "ignore")]
+    #[serde(skip)]
+    pub active_batches: HashMap<BatchKey, BatchRequest>,
     pub computation_results: ComputationResults,
     pub started_at: Option<DateTime<Utc>>,
     pub phase_started_at: DateTime<Utc>,
@@ -91,7 +90,7 @@ pub struct DivinationComputationResult {
         <<Fr as ElGamalLocalOrMPC<Fr>>::ElGamalScheme as AsymmetricEncryptionScheme>::Ciphertext,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum GamePhase {
     Waiting,              // ゲーム開始前
     Night,                // 夜フェーズ
@@ -137,16 +136,18 @@ pub struct ChangeRoleRequest {
     pub new_role: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProverInfo {
     pub user_id: String,
     pub prover_count: usize,
     pub encrypted_data: String,
     #[serde(default)]
+    pub is_dummy: bool,
+    #[serde(default)]
     pub public_key: Option<String>, // Curve25519公開鍵（Base64エンコード）
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "proof_type", content = "data")]
 pub enum ClientRequestType {
     Divination(ProverInfo),
@@ -157,7 +158,7 @@ pub enum ClientRequestType {
 }
 
 impl ClientRequestType {
-    fn get_prover_count(&self) -> usize {
+    pub(crate) fn get_prover_count(&self) -> usize {
         match self {
             ClientRequestType::Divination(info)
             | ClientRequestType::AnonymousVoting(info)
@@ -167,7 +168,7 @@ impl ClientRequestType {
         }
     }
 
-    fn get_user_id(&self) -> &str {
+    pub(crate) fn get_user_id(&self) -> &str {
         match self {
             ClientRequestType::Divination(info)
             | ClientRequestType::AnonymousVoting(info)
@@ -177,7 +178,7 @@ impl ClientRequestType {
         }
     }
 
-    fn get_public_key(&self) -> Option<&str> {
+    pub(crate) fn get_public_key(&self) -> Option<&str> {
         match self {
             ClientRequestType::Divination(info)
             | ClientRequestType::AnonymousVoting(info)
@@ -186,28 +187,72 @@ impl ClientRequestType {
             | ClientRequestType::KeyPublicize(info) => info.public_key.as_deref(),
         }
     }
+
+    pub(crate) fn is_dummy(&self) -> bool {
+        match self {
+            ClientRequestType::Divination(info) => info.is_dummy,
+            _ => false,
+        }
+    }
+
+    pub fn get_proof_type(&self) -> ProofTypeKey {
+        match self {
+            ClientRequestType::Divination(_) => ProofTypeKey::Divination,
+            ClientRequestType::AnonymousVoting(_) => ProofTypeKey::AnonymousVoting,
+            ClientRequestType::WinningJudge(_) => ProofTypeKey::WinningJudge,
+            ClientRequestType::RoleAssignment(_) => ProofTypeKey::RoleAssignment,
+            ClientRequestType::KeyPublicize(_) => ProofTypeKey::KeyPublicize,
+        }
+    }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ProofTypeKey {
+    RoleAssignment,
+    Divination,
+    AnonymousVoting,
+    WinningJudge,
+    KeyPublicize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct CircuitProfileKey {
+    pub player_count: usize,
+    pub werewolf_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct BatchKey {
+    pub room_id: String,
+    pub phase: GamePhase,
+    pub day_count: u32,
+    pub proof_type: ProofTypeKey,
+    pub circuit_profile: CircuitProfileKey,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchRequest {
     pub batch_id: String,
     pub requests: Vec<ClientRequestType>,
+    #[serde(default)]
+    pub expected_prover_count: usize,
     pub status: BatchStatus,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl BatchRequest {
-    pub fn new() -> Self {
+    pub fn new(expected_prover_count: usize) -> Self {
         BatchRequest {
             batch_id: uuid::Uuid::new_v4().to_string(),
             requests: Vec::new(),
+            expected_prover_count,
             status: BatchStatus::Collecting,
             created_at: chrono::Utc::now(),
         }
     }
 }
 
-fn try_convert_to_identifier(
+pub(crate) fn try_convert_to_identifier(
     requests: Vec<ClientRequestType>,
 ) -> Result<CircuitEncryptedInputIdentifier, String> {
     use ClientRequestType::*;
@@ -218,13 +263,14 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let Divination(d) = r {
-                            serde_json::from_str(&d.encrypted_data)
-                                .expect("Failed to deserialize DivinationOutput")
+                            serde_json::from_str(&d.encrypted_data).map_err(|e| {
+                                format!("Failed to deserialize DivinationOutput: {}", e)
+                            })
                         } else {
-                            unreachable!()
+                            Err("Unexpected request type in Divination batch".to_string())
                         }
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(CircuitEncryptedInputIdentifier::Divination(items))
             }
             AnonymousVoting(_) if rest.iter().all(|r| matches!(r, AnonymousVoting(_))) => {
@@ -232,13 +278,14 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let AnonymousVoting(d) = r {
-                            serde_json::from_str(&d.encrypted_data)
-                                .expect("Failed to deserialize AnonymousVotingOutput")
+                            serde_json::from_str(&d.encrypted_data).map_err(|e| {
+                                format!("Failed to deserialize AnonymousVotingOutput: {}", e)
+                            })
                         } else {
-                            unreachable!()
+                            Err("Unexpected request type in AnonymousVoting batch".to_string())
                         }
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(CircuitEncryptedInputIdentifier::AnonymousVoting(items))
             }
             WinningJudge(_) if rest.iter().all(|r| matches!(r, WinningJudge(_))) => {
@@ -246,13 +293,14 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let WinningJudge(d) = r {
-                            serde_json::from_str(&d.encrypted_data)
-                                .expect("Failed to deserialize WinningJudgeOutput")
+                            serde_json::from_str(&d.encrypted_data).map_err(|e| {
+                                format!("Failed to deserialize WinningJudgeOutput: {}", e)
+                            })
                         } else {
-                            unreachable!()
+                            Err("Unexpected request type in WinningJudge batch".to_string())
                         }
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(CircuitEncryptedInputIdentifier::WinningJudge(items))
             }
             RoleAssignment(_) if rest.iter().all(|r| matches!(r, RoleAssignment(_))) => {
@@ -260,13 +308,14 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let RoleAssignment(d) = r {
-                            serde_json::from_str(&d.encrypted_data)
-                                .expect("Failed to deserialize RoleAssignmentOutput")
+                            serde_json::from_str(&d.encrypted_data).map_err(|e| {
+                                format!("Failed to deserialize RoleAssignmentOutput: {}", e)
+                            })
                         } else {
-                            unreachable!()
+                            Err("Unexpected request type in RoleAssignment batch".to_string())
                         }
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(CircuitEncryptedInputIdentifier::RoleAssignment(items))
             }
             KeyPublicize(_) if rest.iter().all(|r| matches!(r, KeyPublicize(_))) => {
@@ -274,13 +323,14 @@ fn try_convert_to_identifier(
                     .into_iter()
                     .map(|r| {
                         if let KeyPublicize(d) = r {
-                            serde_json::from_str(&d.encrypted_data)
-                                .expect("Failed to deserialize KeyPublicizeOutput")
+                            serde_json::from_str(&d.encrypted_data).map_err(|e| {
+                                format!("Failed to deserialize KeyPublicizeOutput: {}", e)
+                            })
                         } else {
-                            unreachable!()
+                            Err("Unexpected request type in KeyPublicize batch".to_string())
                         }
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(CircuitEncryptedInputIdentifier::KeyPublicize(items))
             }
             _ => Err("ClientRequestType variants are mixed; cannot convert".to_string()),
@@ -295,6 +345,16 @@ pub enum BatchStatus {
     Processing,
     Completed,
     Failed,
+}
+
+pub struct BatchEnqueueResult {
+    pub batch_id: String,
+    pub should_process: bool,
+}
+
+#[derive(Debug)]
+pub enum BatchEnqueueError {
+    Conflict(String),
 }
 
 impl Game {
@@ -316,7 +376,8 @@ impl Game {
             vote_results: HashMap::new(),
             crypto_parameters: None,
             chat_log: super::chat::ChatLog::new(room_id),
-            batch_request: BatchRequest::new(),
+            batch_request: BatchRequest::new(0),
+            active_batches: HashMap::new(),
             computation_results: ComputationResults::default(),
             started_at: Some(Utc::now()),
             phase_started_at: Utc::now(),
@@ -367,6 +428,12 @@ impl Game {
     // より厳密な占い可能性チェック
     pub fn can_perform_divination(&self) -> bool {
         self.phase == GamePhase::Night && !self.has_divination_for_current_phase()
+    }
+
+    pub fn has_pending_or_processing_batches(&self) -> bool {
+        self.batch_request.status == BatchStatus::Processing
+            || !self.batch_request.requests.is_empty()
+            || !self.active_batches.is_empty()
     }
 
     // DivinationProcessing フェーズから Discussion フェーズへの遷移を管理
@@ -541,167 +608,125 @@ impl Game {
         ));
     }
 
-    pub async fn add_request(
+    pub fn build_batch_key(&self, request: &ClientRequestType) -> BatchKey {
+        BatchKey {
+            room_id: self.room_id.clone(),
+            phase: self.phase.clone(),
+            day_count: self.day_count,
+            proof_type: request.get_proof_type(),
+            circuit_profile: CircuitProfileKey {
+                player_count: self.grouping_parameter.get_num_players(),
+                werewolf_count: self.grouping_parameter.get_werewolf_count(),
+            },
+        }
+    }
+
+    pub fn add_request_to_batch(
         &mut self,
         request: ClientRequestType,
-        app_state: &crate::state::AppState,
-    ) -> String {
-        // let mut batch_request = &self.batch_request;
-        let size_limit = request.get_prover_count();
+    ) -> Result<BatchEnqueueResult, BatchEnqueueError> {
+        let expected_prover_count = request.get_prover_count();
+        if expected_prover_count == 0 {
+            return Err(BatchEnqueueError::Conflict(
+                "prover_count must be greater than zero".to_string(),
+            ));
+        }
 
-        if !self
-            .batch_request
+        let batch_key = self.build_batch_key(&request);
+        let batch = self
+            .active_batches
+            .entry(batch_key.clone())
+            .or_insert_with(|| BatchRequest::new(expected_prover_count));
+
+        if batch.expected_prover_count != expected_prover_count {
+            return Err(BatchEnqueueError::Conflict(
+                "conflicting prover_count for the same batch key".to_string(),
+            ));
+        }
+
+        if batch
             .requests
             .iter()
-            .any(|r| r.get_user_id() == request.get_user_id())
+            .any(|r| r.get_proof_type() != request.get_proof_type())
         {
-            self.batch_request.requests.push(request);
+            return Err(BatchEnqueueError::Conflict(
+                "proof type mismatch in existing batch".to_string(),
+            ));
+        }
 
-            // バッチが満杯になったら処理を開始
-            if self.batch_request.requests.len() >= size_limit {
-                let batch_id = self.batch_request.batch_id.clone();
-
-                // let mut service = self.clone();
-
-                // TODO: 非同期でバッチ処理を開始
-                // tokio::spawn(async move {
-                // let mut games = game.lock().await;
-                // if let Some(game) = games.get_mut(room_id) {
-                //     // ゲームの状態を更新する処理
-                //     // ...
-                // }
-
-                self.process_batch(app_state).await;
-                // });
-
-                // 新しいバッチを作成
-                self.batch_request = BatchRequest::new();
-
-                batch_id
-            } else {
-                self.batch_request.batch_id.clone()
+        if let Some(existing_index) = batch
+            .requests
+            .iter()
+            .position(|r| r.get_user_id() == request.get_user_id())
+        {
+            let should_replace = batch.requests[existing_index].is_dummy() && !request.is_dummy();
+            if should_replace {
+                batch.requests[existing_index] = request;
             }
         } else {
-            self.batch_request.batch_id.clone()
+            batch.requests.push(request);
         }
+
+        let batch_id = batch.batch_id.clone();
+        let should_process = batch.requests.len() >= batch.expected_prover_count;
+
+        if should_process {
+            if let Some(mut ready_batch) = self.active_batches.remove(&batch_key) {
+                ready_batch.status = BatchStatus::Collecting;
+                self.batch_request = ready_batch;
+            }
+        }
+
+        Ok(BatchEnqueueResult {
+            batch_id,
+            should_process,
+        })
+    }
+
+    pub fn add_request(
+        &mut self,
+        request: ClientRequestType,
+    ) -> Result<BatchEnqueueResult, BatchEnqueueError> {
+        self.add_request_to_batch(request)
+    }
+
+    pub async fn apply_proof_result(&mut self, app_state: &crate::state::AppState) {
+        self.process_current_batch(app_state).await;
+    }
+
+    pub async fn apply_proof_result_for_batch(
+        &mut self,
+        app_state: &crate::state::AppState,
+        _batch_key: &BatchKey,
+        batch_request: BatchRequest,
+    ) {
+        self.batch_request = batch_request;
+        self.process_current_batch(app_state).await;
+    }
+
+    pub async fn process_current_batch(&mut self, app_state: &crate::state::AppState) {
+        if self.batch_request.requests.is_empty() {
+            return;
+        }
+
+        self.process_batch(app_state).await;
+        self.batch_request = BatchRequest::new(0);
     }
 
     async fn process_batch(&mut self, app_state: &crate::state::AppState) {
         self.batch_request.status = BatchStatus::Processing;
 
-        // batch_request.requestsをuser_idでソート（数値文字列として）
-        self.batch_request.requests.sort_by(|a, b| {
-            let a_user_id = a.get_user_id().parse::<u32>().unwrap_or(u32::MAX);
-            let b_user_id = b.get_user_id().parse::<u32>().unwrap_or(u32::MAX);
-            a_user_id.cmp(&b_user_id)
-        });
-
-        // requsets: Vec<ClientRequestType>をCircuitEncryptedInputIdentifierに変換
-        let identifier = try_convert_to_identifier(self.batch_request.requests.clone())
-            .map_err(|e| {
-                self.batch_request.status = BatchStatus::Failed;
-                e
-            })
-            .unwrap();
-
-        let client = Client::new();
-
-        let mut responses = Vec::new();
-
-        // RoleAssignmentの場合、プレイヤー公開鍵を収集
-        let output_type = match &identifier {
-            CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
-                let mut player_pubkeys = Vec::new();
-                for request in &self.batch_request.requests {
-                    if let Some(pubkey) = request.get_public_key() {
-                        player_pubkeys.push(UserPublicKey {
-                            user_id: request.get_user_id().to_string(),
-                            public_key: pubkey.to_string(),
-                        });
-                    } else {
-                        println!(
-                            "Warning: Request from user {} missing public_key",
-                            request.get_user_id()
-                        );
-                    }
-                }
-
-                if player_pubkeys.is_empty() {
-                    println!("ERROR: No player public keys found for RoleAssignment");
-                    self.batch_request.status = BatchStatus::Failed;
-                    self.chat_log.add_system_message(
-                        "Failed to process role assignment: No player public keys".to_string(),
-                    );
-                    return;
-                }
-
-                println!(
-                    "Collected {} player public keys for RoleAssignment",
-                    player_pubkeys.len()
-                );
-                ProofOutputType::PrivateToPublic(player_pubkeys)
-            }
-            _ => ProofOutputType::Public,
+        let proof_execution = match crate::services::zk_proof::take_precomputed_batch_result(
+            &self.batch_request.batch_id,
+        )
+        .await
+        {
+            Some(result) => result,
+            None => crate::services::zk_proof::execute_batch_request(&self.batch_request).await,
         };
 
-        let req_to_node = ProofRequest {
-            proof_id: self.batch_request.batch_id.clone(),
-            circuit_type: identifier.clone(),
-            output_type,
-        };
-
-        // identifierをzk-mpc-nodeに送信するなどの処理を行う
-        let node_urls = CONFIG.zk_mpc_node_urls();
-        println!("Sending proof request to ZK-MPC nodes: {:?}", node_urls);
-
-        for url in &node_urls {
-            println!("Sending request to {}", url);
-            let response = client
-                .post(url)
-                .json(&req_to_node)
-                .send()
-                .await
-                .map_err(|e| {
-                    let error_msg = format!("Failed to send request to {}: {}", url, e);
-                    println!("ERROR: {}", error_msg);
-                    error_msg
-                });
-            responses.push(response);
-        }
-
-        // レスポンスを処理
-        for (url, response) in node_urls.iter().zip(responses) {
-            match response {
-                Ok(resp) => match resp.json::<serde_json::Value>().await {
-                    Ok(response_body) => {
-                        println!("Response from {}: {:?}", url, response_body);
-                    }
-                    Err(e) => {
-                        println!("ERROR: Failed to parse JSON response from {}: {}", url, e);
-                        self.batch_request.status = BatchStatus::Failed;
-                        self.chat_log.add_system_message(format!(
-                            "Failed to process proof: Invalid response from ZK node at {}",
-                            url
-                        ));
-                        return;
-                    }
-                },
-                Err(e) => {
-                    println!("ERROR: Failed to get response from {}: {}", url, e);
-                    self.batch_request.status = BatchStatus::Failed;
-                    self.chat_log.add_system_message(format!(
-                        "Failed to connect to ZK node at {}: {}",
-                        url, e
-                    ));
-                    return;
-                }
-            }
-        }
-
-        // 3. 結果の確認（非同期で実行）
-        // tokio::spawn(async move {
-        match check_status_with_retry(&self.batch_request.batch_id).await {
-            Ok((true, Some(output))) => {
+        match proof_execution {
+            Ok((identifier, output)) => {
                 println!(
                     "Proof ID {:?} is ready with output: {:?}",
                     self.batch_request.batch_id, output
@@ -892,7 +917,14 @@ impl Game {
                         }
 
                         // 全プレイヤーに占い結果を通知
-                        let latest_divination = self.computation_results.divination.last().unwrap();
+                        let Some(latest_divination) = self.computation_results.divination.last()
+                        else {
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(
+                                "Divination result was not persisted correctly.".to_string(),
+                            );
+                            return;
+                        };
                         let result_data = serde_json::json!({
                             "ciphertext": serde_json::to_value(&latest_divination.result.ciphertext).unwrap_or_default(),
                             "phase": latest_divination.phase,
@@ -1293,9 +1325,14 @@ impl Game {
                             }
                         };
 
+                        let pub_key_x_json = serde_json::to_string(&pub_key_x)
+                            .unwrap_or_else(|_| "\"serialization_error\"".to_string());
+                        let pub_key_y_json = serde_json::to_string(&pub_key_y)
+                            .unwrap_or_else(|_| "\"serialization_error\"".to_string());
+
                         println!("Fortune teller public key received from KeyPublicize MPC:");
-                        println!("  X: {}", serde_json::to_string(&pub_key_x).unwrap());
-                        println!("  Y: {}", serde_json::to_string(&pub_key_y).unwrap());
+                        println!("  X: {}", pub_key_x_json);
+                        println!("  Y: {}", pub_key_y_json);
 
                         // EdwardsProjectiveに変換してcrypto_parametersに保存
 
@@ -1315,8 +1352,8 @@ impl Game {
                         // 全プレイヤーに占い公開鍵を配信（フロントエンド互換形式）
                         let key_data = serde_json::json!({
                             "divination_public_key": {
-                                "x": serde_json::to_string(&pub_key_x).unwrap(),
-                                "y": serde_json::to_string(&pub_key_y).unwrap(),
+                                "x": pub_key_x_json,
+                                "y": pub_key_y_json,
                                 "_params": null
                             },
                             "status": "completed"
@@ -1343,13 +1380,17 @@ impl Game {
 
                 self.batch_request.status = BatchStatus::Completed;
             }
-            _ => {
+            Err(error) => {
                 // 失敗時の処理
-                println!("Proof ID {:?} is failed", self.batch_request.batch_id);
+                println!(
+                    "Proof ID {:?} is failed: {}",
+                    self.batch_request.batch_id, error
+                );
                 self.batch_request.status = BatchStatus::Failed;
+                self.chat_log
+                    .add_system_message(format!("Failed to process proof: {}", error));
             }
         }
-        // });
     }
 }
 
