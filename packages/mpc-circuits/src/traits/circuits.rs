@@ -11,10 +11,9 @@ use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
 use ark_r1cs_std::prelude::Boolean;
 use ark_r1cs_std::select::CondSelectGadget;
-use ark_r1cs_std::{R1CSVar, ToBitsGadget};
+use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSynthesizer;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
-use ark_std::test_rng;
 use ark_std::{One, Zero};
 use mpc_algebra::groups::MpcCurveVar;
 use mpc_algebra::mpc_fields::MpcFieldVar;
@@ -23,7 +22,6 @@ use mpc_algebra::MpcBoolean;
 use mpc_algebra::MpcCondSelectGadget;
 use mpc_algebra::MpcEqGadget;
 use mpc_algebra::MpcFpVar;
-use mpc_algebra::MpcToBitsGadget;
 use mpc_algebra::Reveal;
 use mpc_algebra::{BitDecomposition, BooleanWire};
 use mpc_algebra::{EqualityZero, ModulusConversion};
@@ -84,11 +82,15 @@ impl AnonymousVotingCircuit<MpcField<Fr>> {
         let mut max_votes = MpcField::<Fr>::zero();
 
         for i in 0..player_num {
-            max_votes +=
-                (num_voted[i] - max_votes) * max_votes.sync_is_smaller_than(&num_voted[i]).field();
-
+            // NOTE:
+            // `sync_is_smaller_than` in mpc-algebra currently behaves as `<=` in tie cases.
+            // Guard with equality to recover strict `<` semantics for deterministic tie-breaking.
+            let le_like = max_votes.sync_is_smaller_than(&num_voted[i]).field();
+            let is_equal = (max_votes - num_voted[i]).sync_is_zero_shared().field();
+            let is_new_max = le_like * (MpcField::<Fr>::one() - is_equal);
+            max_votes += (num_voted[i] - max_votes) * is_new_max;
             most_voted_id += (MpcField::<Fr>::from(i as u32) - most_voted_id)
-                * max_votes.sync_is_smaller_than(&num_voted[i]).field();
+                * is_new_max;
         }
         most_voted_id
     }
@@ -142,30 +144,26 @@ impl ConstraintSynthesizer<Fr> for AnonymousVotingCircuit<Fr> {
             num_voted_var.push(each_num_voted);
         }
 
-        let constant = (0..4)
-            .map(|i| FpVar::Constant(Fr::from(i as i32)))
-            .collect::<Vec<_>>();
-
-        let mut calced_is_most_voted_id = FpVar::new_witness(cs.clone(), || Ok(Fr::zero()))?;
+        let mut calced_is_most_voted_id = FpVar::Constant(Fr::zero());
+        let mut current_max_votes = FpVar::Constant(Fr::zero());
 
         for i in 0..player_num {
-            let a_now = FpVar::conditionally_select_power_of_two_vector(
-                &calced_is_most_voted_id.to_bits_le().unwrap()[..2],
-                &constant,
-            )?;
-
-            let res = FpVar::is_cmp(
-                //&num_voted_var[calced_is_most_voted_id],
-                &a_now,
+            // keep current winner when current_max_votes >= num_voted[i]
+            let keep_current = FpVar::is_cmp(
+                &current_max_votes,
                 &num_voted_var[i],
                 std::cmp::Ordering::Greater,
                 true,
             )?;
 
-            let false_value = FpVar::new_witness(cs.clone(), || Ok(Fr::from(i as i32)))?;
-
+            let candidate_id = FpVar::Constant(Fr::from(i as u32));
+            current_max_votes = FpVar::conditionally_select(
+                &keep_current,
+                &current_max_votes,
+                &num_voted_var[i],
+            )?;
             calced_is_most_voted_id =
-                FpVar::conditionally_select(&res, &calced_is_most_voted_id, &false_value)?;
+                FpVar::conditionally_select(&keep_current, &calced_is_most_voted_id, &candidate_id)?;
         }
 
         // enforce equal
@@ -237,42 +235,25 @@ impl ConstraintSynthesizer<MpcField<Fr>> for AnonymousVotingCircuit<MpcField<Fr>
             num_voted_var.push(each_num_voted);
         }
 
-        let constant = (0..4)
-            .map(|i| {
-                MpcFpVar::Constant(MpcField::<Fr>::king_share(
-                    Fr::from(i as i32),
-                    &mut test_rng(),
-                ))
-            })
-            .collect::<Vec<_>>();
-
-        let mut calced_is_most_voted_id = MpcFpVar::new_witness(cs.clone(), || {
-            Ok(MpcField::<Fr>::king_share(Fr::zero(), &mut test_rng()))
-        })?;
+        let mut current_max_votes = MpcFpVar::new_constant(cs.clone(), MpcField::<Fr>::zero())?;
+        let mut calced_is_most_voted_id = MpcFpVar::new_constant(cs.clone(), MpcField::<Fr>::zero())?;
 
         for i in 0..player_num {
-            let a_now = MpcFpVar::conditionally_select_power_of_two_vector(
-                &calced_is_most_voted_id.to_bits_le().unwrap()[..2],
-                &constant,
-            )?;
-
-            let res = MpcFpVar::is_cmp(
-                //&num_voted_var[calced_is_most_voted_id],
-                &a_now,
+            // keep current winner when current_max_votes >= num_voted[i]
+            let keep_current = MpcFpVar::is_cmp(
+                &current_max_votes,
                 &num_voted_var[i],
                 std::cmp::Ordering::Greater,
                 true,
             )?;
 
-            let false_value = MpcFpVar::new_witness(cs.clone(), || {
-                Ok(MpcField::<Fr>::king_share(
-                    Fr::from(i as i32),
-                    &mut test_rng(),
-                ))
-            })?;
+            let candidate_id =
+                MpcFpVar::new_constant(cs.clone(), MpcField::<Fr>::from(i as u32))?;
 
+            current_max_votes =
+                MpcFpVar::conditionally_select(&keep_current, &current_max_votes, &num_voted_var[i])?;
             calced_is_most_voted_id =
-                MpcFpVar::conditionally_select(&res, &calced_is_most_voted_id, &false_value)?;
+                MpcFpVar::conditionally_select(&keep_current, &calced_is_most_voted_id, &candidate_id)?;
         }
 
         // enforce equal
