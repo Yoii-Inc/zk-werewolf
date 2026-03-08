@@ -10,7 +10,7 @@ ZK Werewolfのゲーム全体フローをテストする統合E2Eテスト。
 # 1. サービス起動
 docker compose -f docker-compose.test.yml up
 
-# 2. テスト実行
+# 2. テスト実行（初回は pkg-node が自動ビルドされます）
 cd packages/nextjs
 npm run test:e2e:circuits
 
@@ -237,7 +237,7 @@ make node  # フォアグラウンドで実行してログ確認
 **症状**: WASM関数でエラー
 
 **解決策**:
-1. WASMビルドを確認
+1. `pkg-node` WASMビルドを確認
 ```bash
 cd packages/mpc-algebra-wasm
 wasm-pack build --target nodejs --out-dir pkg-node

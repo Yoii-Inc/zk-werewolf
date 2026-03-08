@@ -13,6 +13,9 @@
     "vercel": "vercel --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env VERCEL_TELEMETRY_DISABLED=1",
     "vercel:yolo": "vercel --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env NEXT_PUBLIC_IGNORE_BUILD_ERROR=true --build-env VERCEL_TELEMETRY_DISABLED=1",
     "test": "jest --config jest.config.js",
+    "pretest:e2e:circuits": "node scripts/ensure-node-wasm.js",
+    "pretest:e2e:circuits:watch": "node scripts/ensure-node-wasm.js",
+    "pretest:e2e:circuits:single": "node scripts/ensure-node-wasm.js",
     "test:e2e:circuits": "jest __tests__/e2e/circuits --runInBand --testTimeout=300000",
     "test:e2e:circuits:watch": "jest __tests__/e2e/circuits --watch --runInBand --testTimeout=300000",
     "test:e2e:circuits:single": "jest __tests__/e2e/circuits --runInBand --testTimeout=300000 --testNamePattern"

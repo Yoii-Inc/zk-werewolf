@@ -14,6 +14,8 @@ module.exports = {
     ],
     moduleDirectories: ['node_modules', '<rootDir>'],
     moduleNameMapper: {
-        '^~~/(.*)$': '<rootDir>/$1'
+        '^~~/(.*)$': '<rootDir>/$1',
+        '^\\.\\.\\/\\.\\.\\/\\.\\.\\/mpc-algebra-wasm\\/pkg-web\\/mpc_algebra_wasm$':
+            '<rootDir>/../mpc-algebra-wasm/pkg-node/mpc_algebra_wasm'
     },
 }
