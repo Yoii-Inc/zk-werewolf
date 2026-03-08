@@ -13,6 +13,40 @@ export interface TestPlayer {
 }
 
 export class GameSetupHelper {
+  private static extractBatchId(response: unknown): string | null {
+    if (typeof response === "string" && response.length > 0) {
+      return response;
+    }
+
+    if (
+      response &&
+      typeof response === "object" &&
+      "batch_id" in response &&
+      typeof (response as { batch_id: unknown }).batch_id === "string"
+    ) {
+      return (response as { batch_id: string }).batch_id;
+    }
+
+    return null;
+  }
+
+  private static async waitForProofJobs(
+    apiClient: CircuitTestClient,
+    roomId: string,
+    batchIds: Set<string>,
+    proofLabel: string,
+  ): Promise<void> {
+    if (batchIds.size === 0) {
+      throw new Error(`No ${proofLabel} batch_id was returned from proof submission`);
+    }
+
+    for (const batchId of batchIds) {
+      console.log(`   ⏳ Waiting for ${proofLabel} proof job completion (batch_id: ${batchId})...`);
+      const status = await apiClient.waitForProofJobCompletion(roomId, batchId);
+      console.log(`   ✅ ${proofLabel} proof job completed (batch_id: ${batchId}, state: ${status.state})`);
+    }
+  }
+
   /**
    * テスト用プレイヤー登録とルーム作成
    * @param numPlayers プレイヤー数
@@ -50,7 +84,15 @@ export class GameSetupHelper {
     // ルーム作成（最初のプレイヤーが作成）
     console.log(`🏠 Creating test room...`);
     const roomName = `E2E Test Room ${timestamp}`;
-    const roomId = await apiClient.createRoom(roomName, players[0].token);
+    const werewolfCount = numPlayers <= 5 ? 1 : 2;
+    const roomId = await apiClient.createRoom(roomName, players[0].token, {
+      maxPlayers: numPlayers,
+      roleConfig: {
+        seer: 1,
+        werewolf: werewolfCount,
+        villager: Math.max(0, numPlayers - 1 - werewolfCount),
+      },
+    });
     console.log(`   ✅ Room created: ${roomId} (${roomName})`);
 
     // 全プレイヤーがルームに参加
@@ -137,6 +179,7 @@ export class GameSetupHelper {
 
     const GameInputGenerator = await import("~~/services/gameInputGenerator");
     const apiClient = new CircuitTestClient(roomId);
+    const batchIds = new Set<string>();
 
     for (const player of players) {
       try {
@@ -144,7 +187,16 @@ export class GameSetupHelper {
         const roleAssignmentInput = await GameInputGenerator.generateRoleAssignmentInput(roomId, player.name, gameInfo);
 
         console.log(`   📤 Submitting role assignment request for ${player.name}...`);
-        await apiClient.submitRoleAssignment(roomId, roleAssignmentInput, players.length, player.token);
+        const response = await apiClient.submitRoleAssignment(
+          roomId,
+          roleAssignmentInput,
+          players.length,
+          player.token,
+        );
+        const batchId = this.extractBatchId(response);
+        if (batchId) {
+          batchIds.add(batchId);
+        }
         console.log(`   ✅ ${player.name} role assignment request sent`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -159,6 +211,7 @@ export class GameSetupHelper {
       }
     }
 
+    await this.waitForProofJobs(apiClient, roomId, batchIds, "RoleAssignment");
     console.log(`✅ All role assignment requests submitted\n`);
   }
 
@@ -171,6 +224,7 @@ export class GameSetupHelper {
 
     const GameInputGenerator = await import("~~/services/gameInputGenerator");
     const apiClient = new CircuitTestClient(roomId);
+    const batchIds = new Set<string>();
 
     for (const player of players) {
       try {
@@ -178,7 +232,11 @@ export class GameSetupHelper {
         const keyPublicizeInput = await GameInputGenerator.generateKeyPublicizeInput(roomId, player.name, gameInfo);
 
         console.log(`   📤 Submitting KeyPublicize request for ${player.name}...`);
-        await apiClient.submitKeyPublicize(roomId, keyPublicizeInput, players.length, player.token);
+        const response = await apiClient.submitKeyPublicize(roomId, keyPublicizeInput, players.length, player.token);
+        const batchId = this.extractBatchId(response);
+        if (batchId) {
+          batchIds.add(batchId);
+        }
         console.log(`   ✅ ${player.name} KeyPublicize request sent`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -193,6 +251,7 @@ export class GameSetupHelper {
       }
     }
 
+    await this.waitForProofJobs(apiClient, roomId, batchIds, "KeyPublicize");
     console.log(`✅ All KeyPublicize requests submitted\n`);
   }
 
@@ -211,6 +270,7 @@ export class GameSetupHelper {
 
     const GameInputGenerator = await import("~~/services/gameInputGenerator");
     const apiClient = new CircuitTestClient(roomId);
+    const batchIds = new Set<string>();
 
     for (let i = 0; i < players.length; i++) {
       const player = players[i];
@@ -228,7 +288,17 @@ export class GameSetupHelper {
         );
 
         console.log(`   📤 Submitting Divination request for ${player.name}...`);
-        await apiClient.submitDivination(roomId, divinationInput, players.length, player.token, isDummy);
+        const response = await apiClient.submitDivination(
+          roomId,
+          divinationInput,
+          players.length,
+          player.token,
+          isDummy,
+        );
+        const batchId = this.extractBatchId(response);
+        if (batchId) {
+          batchIds.add(batchId);
+        }
         console.log(`   ✅ ${player.name} Divination request sent`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -243,6 +313,7 @@ export class GameSetupHelper {
       }
     }
 
+    await this.waitForProofJobs(apiClient, roomId, batchIds, "Divination");
     console.log(`✅ All Divination requests submitted\n`);
   }
 
@@ -260,6 +331,7 @@ export class GameSetupHelper {
 
     const GameInputGenerator = await import("~~/services/gameInputGenerator");
     const apiClient = new CircuitTestClient(roomId);
+    const batchIds = new Set<string>();
 
     for (let i = 0; i < players.length; i++) {
       const player = players[i];
@@ -270,7 +342,11 @@ export class GameSetupHelper {
         const votingInput = await GameInputGenerator.generateVotingInput(roomId, player.name, gameInfo, targetId);
 
         console.log(`   📤 Submitting Voting request for ${player.name}...`);
-        await apiClient.submitVoting(roomId, votingInput, players.length, player.token);
+        const response = await apiClient.submitVoting(roomId, votingInput, players.length, player.token);
+        const batchId = this.extractBatchId(response);
+        if (batchId) {
+          batchIds.add(batchId);
+        }
         console.log(`   ✅ ${player.name} Voting request sent`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -285,6 +361,7 @@ export class GameSetupHelper {
       }
     }
 
+    await this.waitForProofJobs(apiClient, roomId, batchIds, "AnonymousVoting");
     console.log(`✅ All Voting requests submitted\n`);
   }
 
@@ -297,6 +374,7 @@ export class GameSetupHelper {
 
     const GameInputGenerator = await import("~~/services/gameInputGenerator");
     const apiClient = new CircuitTestClient(roomId);
+    const batchIds = new Set<string>();
 
     for (const player of players) {
       try {
@@ -308,7 +386,16 @@ export class GameSetupHelper {
         );
 
         console.log(`   📤 Submitting WinningJudgement request for ${player.name}...`);
-        await apiClient.submitWinningJudgement(roomId, winningJudgementInput, players.length, player.token);
+        const response = await apiClient.submitWinningJudgement(
+          roomId,
+          winningJudgementInput,
+          players.length,
+          player.token,
+        );
+        const batchId = this.extractBatchId(response);
+        if (batchId) {
+          batchIds.add(batchId);
+        }
         console.log(`   ✅ ${player.name} WinningJudgement request sent`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -323,6 +410,7 @@ export class GameSetupHelper {
       }
     }
 
+    await this.waitForProofJobs(apiClient, roomId, batchIds, "WinningJudgement");
     console.log(`✅ All WinningJudgement requests submitted\n`);
   }
 
@@ -351,5 +439,34 @@ export class GameSetupHelper {
     }
 
     throw new Error(`Timeout waiting for room status "${expectedStatus}"`);
+  }
+
+  /**
+   * 指定フェーズに到達するまで /phase/next を進める
+   */
+  static async ensureGamePhase(roomId: string, targetPhase: string, maxTransitions = 6): Promise<GameInfo> {
+    const apiClient = new CircuitTestClient(roomId);
+    let latest = await apiClient.getGameState(roomId);
+
+    for (let i = 0; i <= maxTransitions; i++) {
+      const current = String(latest.phase);
+      if (current === targetPhase) {
+        console.log(`   ✅ Game phase reached: ${targetPhase}`);
+        return latest;
+      }
+
+      if (i === maxTransitions) {
+        break;
+      }
+
+      console.log(`   ⏭ Advancing phase ${current} -> ... (target: ${targetPhase})`);
+      await apiClient.advancePhase(roomId);
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      latest = await apiClient.getGameState(roomId);
+    }
+
+    throw new Error(
+      `Failed to reach phase "${targetPhase}" within ${maxTransitions} transitions (current: ${latest.phase})`,
+    );
   }
 }

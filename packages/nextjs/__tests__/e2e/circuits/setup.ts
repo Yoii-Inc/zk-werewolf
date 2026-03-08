@@ -6,6 +6,8 @@ import { CircuitTestClient } from "./helpers/api";
 import { GameSetupHelper, type TestPlayer } from "./helpers/game-setup";
 import type { CryptoParameters } from "~~/types/game";
 
+let isTearingDown = false;
+
 // ============================================================================
 // localStorage / sessionStorage モック（Node.js環境用）
 // ============================================================================
@@ -117,6 +119,7 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
 
           // メッセージハンドラ - 本番環境と同じようにフェーズ変更などの通知を処理
           const onMessage = (event: any) => {
+            if (isTearingDown) return;
             try {
               // Node.js 'ws' の場合は event.data が Buffer なので文字列に変換
               const dataStr = typeof event === "string" ? event : event.data?.toString() || event.toString();
@@ -168,13 +171,21 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
             socket.addEventListener("open", onOpen);
             socket.addEventListener("error", onError);
             socket.addEventListener("message", onMessage);
-            socket.addEventListener("close", () => console.log(`   🔌 WebSocket closed for ${player.name}`));
+            socket.addEventListener("close", () => {
+              if (!isTearingDown) {
+                console.log(`   🔌 WebSocket closed for ${player.name}`);
+              }
+            });
           } else {
             // Node.js 'ws' パッケージ
             socket.on("open", onOpen);
             socket.on("error", onError);
             socket.on("message", onMessage);
-            socket.on("close", () => console.log(`   🔌 WebSocket closed for ${player.name}`));
+            socket.on("close", () => {
+              if (!isTearingDown) {
+                console.log(`   🔌 WebSocket closed for ${player.name}`);
+              }
+            });
           }
 
           sockets.push(socket);
@@ -273,6 +284,7 @@ export const testSetup = {
    * 全テストの前に1回だけ実行
    */
   beforeAll: async (): Promise<void> => {
+    isTearingDown = false;
     console.log("\n🚀 Starting E2E Circuit Tests Setup...\n");
 
     // サービス起動確認
@@ -335,6 +347,7 @@ export const testSetup = {
    * 全テストの後にクリーンアップ
    */
   afterAll: async (): Promise<void> => {
+    isTearingDown = true;
     console.log("\n🧹 Cleaning up test environment...");
     // Close any test WebSocket connections opened in beforeAll
     try {
