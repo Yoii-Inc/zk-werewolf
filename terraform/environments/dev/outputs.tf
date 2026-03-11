@@ -140,3 +140,22 @@ output "ws_url" {
   description = "WebSocket URL"
   value       = "ws://${module.alb.alb_dns_name}/ws"
 }
+
+# Frontend build-time public keys (from SOPS secrets)
+output "mpc_node_0_public_key" {
+  description = "MPC node 0 public key for frontend build-time env"
+  value       = local.secrets.mpc_nodes.node_0.public_key
+  sensitive   = true
+}
+
+output "mpc_node_1_public_key" {
+  description = "MPC node 1 public key for frontend build-time env"
+  value       = local.secrets.mpc_nodes.node_1.public_key
+  sensitive   = true
+}
+
+output "mpc_node_2_public_key" {
+  description = "MPC node 2 public key for frontend build-time env"
+  value       = local.secrets.mpc_nodes.node_2.public_key
+  sensitive   = true
+}
