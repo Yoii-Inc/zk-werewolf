@@ -78,11 +78,14 @@ pub async fn request_proof_with_output(
 
 pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOutput>), String> {
     let client = Client::new();
+    let mut last_state_snapshots: Vec<String> = Vec::new();
 
     for _ in 0..MAX_RETRY_ATTEMPTS {
         let mut completed_count = 0;
         let mut failed_count = 0;
         let mut all_completed_statuses: Vec<ProofStatus> = Vec::new();
+        let mut failed_details: Vec<String> = Vec::new();
+        let mut state_snapshots: Vec<String> = Vec::new();
 
         // 全ノードのステータスをチェック
         for node_url in CONFIG.zk_mpc_node_urls() {
@@ -93,16 +96,25 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
                 .map_err(|e| e.to_string())?;
 
             let status: ProofStatus = response.json().await.map_err(|e| e.to_string())?;
+            state_snapshots.push(format!("{}:{}", node_url, status.state));
 
             match status.state.as_str() {
                 "completed" => {
                     completed_count += 1;
                     all_completed_statuses.push(status);
                 }
-                "failed" => failed_count += 1,
+                "failed" => {
+                    failed_count += 1;
+                    failed_details.push(format!(
+                        "{}:{}",
+                        node_url,
+                        status.message.unwrap_or_else(|| "no error message".to_string())
+                    ));
+                }
                 _ => continue,
             }
         }
+        last_state_snapshots = state_snapshots;
 
         // 全ノードが完了していたら成功
         if completed_count == CONFIG.zk_mpc_node_urls().len() {
@@ -112,13 +124,22 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
 
         // 1つでも失敗していたら失敗
         if failed_count > 0 {
-            return Ok((false, None));
+            return Err(format!(
+                "Proof failed on {} node(s): {}",
+                failed_count,
+                failed_details.join(" | ")
+            ));
         }
         // まだ完了していないノードがある場合は待機
         sleep(Duration::from_secs(RETRY_DELAY_SECS)).await;
     }
 
-    Ok((false, None))
+    Err(format!(
+        "Proof status polling timed out after {} attempts for proof_id={} (states: {})",
+        MAX_RETRY_ATTEMPTS,
+        proof_id,
+        last_state_snapshots.join(", ")
+    ))
 }
 
 /// 全ノードからのProofOutputをマージする

@@ -1,5 +1,5 @@
 import { box, randomBytes } from "tweetnacl";
-import { decodeBase64, decodeUTF8, encodeBase64, encodeUTF8 } from "tweetnacl-util";
+import { decodeBase64, decodeUTF8, encodeBase64 } from "tweetnacl-util";
 
 export interface KeyPair {
   publicKey: string;
@@ -14,6 +14,19 @@ export interface EncryptedMessage {
 export class CryptoManager {
   private keyPair: KeyPair | null = null;
   private userId: string | null = null;
+
+  private getStorage(): Storage | null {
+    const storage = (globalThis as any).localStorage;
+    if (
+      storage &&
+      typeof storage.getItem === "function" &&
+      typeof storage.setItem === "function" &&
+      typeof storage.removeItem === "function"
+    ) {
+      return storage as Storage;
+    }
+    return null;
+  }
 
   constructor(userId?: string) {
     this.userId = userId || null;
@@ -33,8 +46,9 @@ export class CryptoManager {
     };
 
     // userIdが指定されている場合、localStorageに保存
-    if (userId || this.userId) {
-      this.saveKeyPairToStorage(userId || this.userId!);
+    const storageUserId = userId || this.userId;
+    if (storageUserId) {
+      this.saveKeyPairToStorage(storageUserId);
     }
 
     return this.keyPair;
@@ -44,11 +58,12 @@ export class CryptoManager {
    * localStorageからキーペアを読み込む
    */
   loadKeyPairFromStorage(userId: string): KeyPair | null {
-    if (typeof window === "undefined") return null;
+    const storage = this.getStorage();
+    if (!storage) return null;
 
     try {
-      const publicKey = localStorage.getItem(`user_public_key_${userId}`);
-      const privateKey = localStorage.getItem(`user_secret_key_${userId}`);
+      const publicKey = storage.getItem(`user_public_key_${userId}`);
+      const privateKey = storage.getItem(`user_secret_key_${userId}`);
 
       if (publicKey && privateKey) {
         this.keyPair = { publicKey, privateKey };
@@ -66,11 +81,12 @@ export class CryptoManager {
    * localStorageにキーペアを保存
    */
   saveKeyPairToStorage(userId: string): void {
-    if (typeof window === "undefined" || !this.keyPair) return;
+    const storage = this.getStorage();
+    if (!storage || !this.keyPair) return;
 
     try {
-      localStorage.setItem(`user_public_key_${userId}`, this.keyPair.publicKey);
-      localStorage.setItem(`user_secret_key_${userId}`, this.keyPair.privateKey);
+      storage.setItem(`user_public_key_${userId}`, this.keyPair.publicKey);
+      storage.setItem(`user_secret_key_${userId}`, this.keyPair.privateKey);
       this.userId = userId;
     } catch (error) {
       console.error("Failed to save keypair to storage:", error);
@@ -82,11 +98,12 @@ export class CryptoManager {
    * localStorageからキーペアを削除
    */
   clearKeyPairFromStorage(userId: string): void {
-    if (typeof window === "undefined") return;
+    const storage = this.getStorage();
+    if (!storage) return;
 
     try {
-      localStorage.removeItem(`user_public_key_${userId}`);
-      localStorage.removeItem(`user_secret_key_${userId}`);
+      storage.removeItem(`user_public_key_${userId}`);
+      storage.removeItem(`user_secret_key_${userId}`);
       if (this.userId === userId) {
         this.keyPair = null;
         this.userId = null;
