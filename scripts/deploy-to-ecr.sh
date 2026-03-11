@@ -92,6 +92,9 @@ MPC_NODE_REPO=$(get_terraform_output "mpc_node_repository_url")
 
 # Get ALB DNS name for frontend build args
 ALB_DNS=$(get_terraform_output "alb_dns_name")
+MPC_NODE0_PUBLIC_KEY=$(get_terraform_output "mpc_node_0_public_key")
+MPC_NODE1_PUBLIC_KEY=$(get_terraform_output "mpc_node_1_public_key")
+MPC_NODE2_PUBLIC_KEY=$(get_terraform_output "mpc_node_2_public_key")
 
 # Validate ECR URLs based on service
 validate_repo() {
@@ -210,15 +213,26 @@ verify_groth16_artifacts() {
     return 0
 }
 
+build_frontend_image() {
+    if [ -z "${MPC_NODE0_PUBLIC_KEY}" ] || [ -z "${MPC_NODE1_PUBLIC_KEY}" ] || [ -z "${MPC_NODE2_PUBLIC_KEY}" ]; then
+        log_error "Frontend requires MPC node public keys. Ensure terraform outputs mpc_node_{0,1,2}_public_key are available (sourced from secrets.enc.yaml)."
+    fi
+
+    build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
+        "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
+        "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api" \
+        "NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY=${MPC_NODE0_PUBLIC_KEY}" \
+        "NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY=${MPC_NODE1_PUBLIC_KEY}" \
+        "NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY=${MPC_NODE2_PUBLIC_KEY}"
+}
+
 # Deploy services based on selection
 case $SERVICE in
     backend)
         build_and_push "backend" "packages/server/Dockerfile" "${BACKEND_REPO}" "latest"
         ;;
     frontend)
-        build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
-            "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
-            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
+        build_frontend_image
         ;;
     mpc-node)
         if [ "$SKIP_BUILD" = false ]; then
@@ -230,9 +244,7 @@ case $SERVICE in
         ;;
     all)
         build_and_push "backend" "packages/server/Dockerfile" "${BACKEND_REPO}" "latest"
-        build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
-            "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
-            "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api"
+        build_frontend_image
         if [ "$SKIP_BUILD" = false ] && ! verify_groth16_artifacts; then
             log_warn "Skipping mpc-node deployment: Groth16 artifacts not found."
         else

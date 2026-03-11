@@ -1,4 +1,4 @@
-.PHONY: help install frontend server node stop clean groth16-setup groth16-export-verifier docker-up docker-up-detached docker-down
+.PHONY: help install frontend server node stop clean groth16-setup docker-up docker-up-detached docker-down
 
 ROLE_ASSIGNMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
 ANONYMOUS_VOTING_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk
@@ -15,7 +15,6 @@ help:
 	@echo "  make stop     - Stop all running services (requires pkill)"
 	@echo "  make clean    - Remove build artifacts and node_modules"
 	@echo "  make groth16-setup - Generate Groth16 setup artifacts for all circuits"
-	@echo "  make groth16-export-verifier - Export verifier contracts for all circuits from proving keys"
 	@echo "  make docker-up - Build and start local stack with docker compose (foreground)"
 	@echo "  make docker-up-detached - Build and start local stack with docker compose (background)"
 	@echo "  make docker-down - Stop docker compose stack"
@@ -72,9 +71,6 @@ clean:
 
 groth16-setup:
 	cargo run --manifest-path packages/arkworks-solidity-verifier/Cargo.toml --release --bin multi_profile_groth16_setup
-
-groth16-export-verifier:
-	@echo "groth16-export-verifier is deprecated. verifiers are now emitted by multi_profile_groth16_setup."
 
 docker-up:
 	docker compose up --build
