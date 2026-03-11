@@ -46,6 +46,16 @@ interface PersistedDivinationLog {
   message: string;
 }
 
+const divinationTargetIdByDayKey = (roomId: string, dayCount: number): string =>
+  `divination_target_${roomId}_${dayCount}`;
+
+const divinationTargetNameByDayKey = (roomId: string, dayCount: number): string =>
+  `divination_target_name_${roomId}_${dayCount}`;
+
+const latestDivinationTargetIdKey = (roomId: string): string => `divination_target_${roomId}`;
+
+const latestDivinationTargetNameKey = (roomId: string): string => `divination_target_name_${roomId}`;
+
 const getDivinationLogsKey = (roomId: string, playerId: string) => `divination_logs_${roomId}_${playerId}`;
 
 const parseTimestamp = (timestamp: string) => {
@@ -252,12 +262,27 @@ export const useComputationResults = (
                 }
 
                 // 占い対象のプレイヤー名を取得
-                const targetPlayerId = localStorage.getItem(`divination_target_${roomId}`);
-                const targetPlayerName = localStorage.getItem(`divination_target_name_${roomId}`);
+                const resultDayCountRaw = result.resultData?.day_count;
+                const resultDayCount =
+                  typeof resultDayCountRaw === "number"
+                    ? resultDayCountRaw
+                    : Number.parseInt(String(resultDayCountRaw ?? ""), 10);
+
+                const targetPlayerIdByDay = Number.isFinite(resultDayCount)
+                  ? localStorage.getItem(divinationTargetIdByDayKey(roomId, resultDayCount))
+                  : null;
+                const targetPlayerNameByDay = Number.isFinite(resultDayCount)
+                  ? localStorage.getItem(divinationTargetNameByDayKey(roomId, resultDayCount))
+                  : null;
+
+                const targetPlayerId = targetPlayerIdByDay || localStorage.getItem(latestDivinationTargetIdKey(roomId));
+                const targetPlayerName =
+                  targetPlayerNameByDay || localStorage.getItem(latestDivinationTargetNameKey(roomId));
+
                 let targetName = targetPlayerName || "Unknown";
                 // gameInfoから最新の名前も確認
                 if (targetPlayerId && gameInfo?.players) {
-                  const targetPlayer = gameInfo.players.find((p: any) => p.id === targetPlayerId);
+                  const targetPlayer = gameInfo.players.find((p: any) => String(p.id) === String(targetPlayerId));
                   if (targetPlayer) {
                     targetName = targetPlayer.name;
                   }

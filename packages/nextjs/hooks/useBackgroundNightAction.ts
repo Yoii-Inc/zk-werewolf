@@ -8,6 +8,16 @@ import { getPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 const pendingDivinationTargetKey = (roomId: string, dayCount: number): string =>
   `pending_divination_target_${roomId}_${dayCount}`;
 
+const divinationTargetIdByDayKey = (roomId: string, dayCount: number): string =>
+  `divination_target_${roomId}_${dayCount}`;
+
+const divinationTargetNameByDayKey = (roomId: string, dayCount: number): string =>
+  `divination_target_name_${roomId}_${dayCount}`;
+
+const latestDivinationTargetIdKey = (roomId: string): string => `divination_target_${roomId}`;
+
+const latestDivinationTargetNameKey = (roomId: string): string => `divination_target_name_${roomId}`;
+
 export const useBackgroundNightAction = () => {
   const handleBackgroundNightAction = useCallback(
     async (roomId: string, myId: string, players: Player[], username: string, gameInfo: GameInfo) => {
@@ -25,16 +35,22 @@ export const useBackgroundNightAction = () => {
         const isDummy = !hasSeerSelection;
 
         if (hasSeerSelection) {
-          const targetPlayerName = players.find(p => p.id === selectedTargetId)?.name || "Unknown";
-          localStorage.setItem(`divination_target_${roomId}`, selectedTargetId);
-          localStorage.setItem(`divination_target_name_${roomId}`, targetPlayerName);
+          const targetPlayerName = players.find(p => String(p.id) === String(selectedTargetId))?.name || "Unknown";
+
+          localStorage.setItem(divinationTargetIdByDayKey(roomId, dayCount), selectedTargetId);
+          localStorage.setItem(divinationTargetNameByDayKey(roomId, dayCount), targetPlayerName);
+
+          // 最新キーは既存参照との後方互換のために維持
+          localStorage.setItem(latestDivinationTargetIdKey(roomId), selectedTargetId);
+          localStorage.setItem(latestDivinationTargetNameKey(roomId), targetPlayerName);
+
           localStorage.removeItem(pendingDivinationTargetKey(roomId, dayCount));
           console.log(
             `Submitting synchronized divination for Seer ${myId}, day=${dayCount}, target=${selectedTargetId}`,
           );
         } else {
-          localStorage.removeItem(`divination_target_${roomId}`);
-          localStorage.removeItem(`divination_target_name_${roomId}`);
+          // ダミー送信時に最新キーを消すと、結果受信前に対象名が失われるケースがある。
+          // day単位キー/最新キーは保持して結果表示で参照する。
           console.log(`Submitting dummy divination for player ${myId}, day=${dayCount}`);
         }
 
