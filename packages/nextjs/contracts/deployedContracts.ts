@@ -2198,7 +2198,7 @@ const deployedContracts = {
   },
   11155111: {
     WerewolfGame: {
-      address: "0xc0857c99fa8e5fcdf68ca42a8f7672b7ce6ffdfc",
+      address: "0xbbe154cc623277c16f2f1ffe5a707bc35abd9016",
       abi: [
         {
           type: "constructor",
@@ -2818,11 +2818,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WerewolfProofVerifier: {
-      address: "0x81036393fe345f5e459496374161583027e02dad",
+      address: "0x1a24f6f56a854140de6eed48e6e09bee27075987",
       abi: [
         {
           type: "constructor",
@@ -3322,11 +3322,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WerewolfRewards: {
-      address: "0x75056d3909a732fba49d778f222a455ffcd7c5aa",
+      address: "0x9a7d487f03dfade23b911a8c91d6325c4e087c28",
       abi: [
         {
           type: "constructor",
@@ -3683,7 +3683,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentGroth16Verifier: {
@@ -4387,7 +4387,7 @@ const deployedContracts = {
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN4W1Groth16Verifier: {
-      address: "0xbd25996388e2e0b276415c40320cc21125959238",
+      address: "0x133edb1ba63f85ee507aa2797caf70a74ec2c64c",
       abi: [
         {
           type: "function",
@@ -4468,11 +4468,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     Groth16VerifierAdapter: {
-      address: "0x2639630e4b5bf732a2d1245f10ae3b40525199ac",
+      address: "0x25e49075a94377f6219a8e6742efc9ce235c8e0e",
       abi: [
         {
           type: "constructor",
@@ -4560,11 +4560,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN5W1Groth16Verifier: {
-      address: "0x1a0bfcb3dda8fcdd5a6fba7fcf113af19287d631",
+      address: "0x39ad123ec5980da7b694f8b1d15063a482ab2b0a",
       abi: [
         {
           type: "function",
@@ -4645,11 +4645,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN5W2Groth16Verifier: {
-      address: "0x2705dad82c2e805fe7d1e6eb506f1e9c09bc3b64",
+      address: "0x68bf3a39f540a3438adb87a18159b0c038136edc",
       abi: [
         {
           type: "function",
@@ -4730,11 +4730,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN6W1Groth16Verifier: {
-      address: "0x6bdcc755f8f03bd3537e9d7973cf69d7bc844bd7",
+      address: "0x8556a7f99bb450a82662ab666f59059b24bcabf2",
       abi: [
         {
           type: "function",
@@ -4815,11 +4815,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN6W2Groth16Verifier: {
-      address: "0x029cb4fe7ceb3be278aba4320622376d70b89bfa",
+      address: "0x01bfbf6a3cd85d474b9ac0c94604a305af8c798f",
       abi: [
         {
           type: "function",
@@ -4900,7 +4900,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN7W1Groth16Verifier: {
@@ -4989,7 +4989,7 @@ const deployedContracts = {
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN7W2Groth16Verifier: {
-      address: "0x8678cd2a890d3262ba17ac1eeb7b08636a7cf3fa",
+      address: "0x2afac8c1c688f75d30c461e80c322c8d89011672",
       abi: [
         {
           type: "function",
@@ -5070,11 +5070,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN7W3Groth16Verifier: {
-      address: "0xa4965ad6ea182c452c9bc9eb1baee34eaf35e9bc",
+      address: "0x5b042885d11238cee5c0c8164cc2d2625e13f0de",
       abi: [
         {
           type: "function",
@@ -5155,7 +5155,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     RoleAssignmentN8W1Groth16Verifier: {
@@ -5669,7 +5669,7 @@ const deployedContracts = {
       deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationN4Groth16Verifier: {
-      address: "0xc6dbefcfa764c3d0608485b8270131490ff4f8ab",
+      address: "0x213f9e9a6eb883950076661c6098619f6c4175e7",
       abi: [
         {
           type: "function",
@@ -5750,11 +5750,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingN4Groth16Verifier: {
-      address: "0xe2e85177702c67a7ea850cf93798b3c52050550c",
+      address: "0x43dc8cb707f43e5b00f0a32ad66b152a5cf0f97a",
       abi: [
         {
           type: "function",
@@ -5835,11 +5835,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementN4Groth16Verifier: {
-      address: "0x8a3276a4582e60728770eac8c35d98fe3989ba83",
+      address: "0x6e23f00200f56039fe46c84e1d8437032b9b5355",
       abi: [
         {
           type: "function",
@@ -5920,11 +5920,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeN4Groth16Verifier: {
-      address: "0x9947b6a017e5d95a18b0aa6cf1530ff0588524fe",
+      address: "0xe6e1d746e1dd923445243ee1096e96cce01e075e",
       abi: [
         {
           type: "function",
@@ -6000,11 +6000,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationN5Groth16Verifier: {
-      address: "0xbc936ac5246589f8c36e3ff6a03bcf5c30f21baa",
+      address: "0x6fe94a338a3b13f0ca2220f0fd10215b2a0f561f",
       abi: [
         {
           type: "function",
@@ -6085,11 +6085,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingN5Groth16Verifier: {
-      address: "0xd959fc1b2f4ee7f492d1081cba3fdf4f27bd346b",
+      address: "0x3318aaa63d539ce3f5a8ea83ba6a69e099fd5748",
       abi: [
         {
           type: "function",
@@ -6170,11 +6170,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementN5Groth16Verifier: {
-      address: "0xfa84a4bd283e49824a3765e1556b52b749dfe9e2",
+      address: "0x05486508472d6dd55535d359a42e9e6e0fd8bfdd",
       abi: [
         {
           type: "function",
@@ -6255,11 +6255,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeN5Groth16Verifier: {
-      address: "0x4feca641490ea9e9c73c83e78eed3c3f73fea1dd",
+      address: "0x126ccd66894c34430cab52de1f270443a9f29e22",
       abi: [
         {
           type: "function",
@@ -6335,11 +6335,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationN6Groth16Verifier: {
-      address: "0x3437b4cb712e2f34de3ccc1469ef31a558facf6b",
+      address: "0x04f96d76b3066ba4f16d5622ca4bc2750e83715f",
       abi: [
         {
           type: "function",
@@ -6420,11 +6420,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingN6Groth16Verifier: {
-      address: "0xb67d1198027566e97bcbaf2a2022f6c81b86291a",
+      address: "0x96a92633fffebe29c58a7a0c87029a7e76c5abd4",
       abi: [
         {
           type: "function",
@@ -6505,11 +6505,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementN6Groth16Verifier: {
-      address: "0x9b34708671bb32f7f94bfbd7a3ab95a416789986",
+      address: "0xdee21294122fb7f4dffcc15f92fb896fb9bafd6e",
       abi: [
         {
           type: "function",
@@ -6590,11 +6590,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeN6Groth16Verifier: {
-      address: "0xfecf57a4b3fdc30e5670eacbe0943082a21bc4cb",
+      address: "0x47b753bf4e6c601b4015d5d1d429fc55a9d720bc",
       abi: [
         {
           type: "function",
@@ -6670,11 +6670,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationN7Groth16Verifier: {
-      address: "0xd503a9e3c1ccf7352bbd7bbb8bf5488c5ba0b6f5",
+      address: "0x9f0f38a359cce43b7dc1e32750095339e94fc430",
       abi: [
         {
           type: "function",
@@ -6755,11 +6755,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingN7Groth16Verifier: {
-      address: "0xe9c0db81dcff1c55338b3233fd8903ca51701c5b",
+      address: "0x7f3184fd5a98db1cdacf2e1364927aeb6b45c813",
       abi: [
         {
           type: "function",
@@ -6840,11 +6840,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementN7Groth16Verifier: {
-      address: "0x9e9a53d9718920b3bca42f5370394bef4d1c36ed",
+      address: "0xf7a2f46aeccc2a5f2332ff607ff0514faab3eebf",
       abi: [
         {
           type: "function",
@@ -6925,11 +6925,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeN7Groth16Verifier: {
-      address: "0x2b4240285f5b88e13ae2de54daa14652f12536b7",
+      address: "0x848d8ef590f47f30f28054d845f1d3c396f09dca",
       abi: [
         {
           type: "function",
@@ -7005,11 +7005,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationN8Groth16Verifier: {
-      address: "0x7572967fe335a35d3bd0736c51b502d7b1ed3dc7",
+      address: "0xf36ade6aa54808734cff33357a69e72652d15cb3",
       abi: [
         {
           type: "function",
@@ -7090,11 +7090,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingN8Groth16Verifier: {
-      address: "0x836e01c94d22bca9723c1a4d868ff043a4385092",
+      address: "0x0f5a36fe3819926f91cf12d72e5fd3c349d0a7f1",
       abi: [
         {
           type: "function",
@@ -7175,11 +7175,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementN8Groth16Verifier: {
-      address: "0x435a2611a6ab6d0bd212d009c7b095ce30f841c0",
+      address: "0x9455520ffcc32603415d12e9655d463fb6bb44ca",
       abi: [
         {
           type: "function",
@@ -7260,11 +7260,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeN8Groth16Verifier: {
-      address: "0x7a9f90652271864564157b0040df3943752c7061",
+      address: "0xda24f3fdb4a6df7546149574122b8c5a9b303db0",
       abi: [
         {
           type: "function",
@@ -7340,11 +7340,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     DivinationN9Groth16Verifier: {
-      address: "0xe6dc22656ccc40e7066f9c7f4fc82aee06f781e9",
+      address: "0x06e67f7321316f2626726f3fdc9aa9b7900d19db",
       abi: [
         {
           type: "function",
@@ -7425,11 +7425,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     AnonymousVotingN9Groth16Verifier: {
-      address: "0x4224862bd19307c029ad413815dfbe14a6fe25a2",
+      address: "0x027d27508226c81ffab249df642280de4a6a0a79",
       abi: [
         {
           type: "function",
@@ -7510,11 +7510,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     WinningJudgementN9Groth16Verifier: {
-      address: "0xe8b0e2326ffa65fdae664a1a7b83d98d6e8f0b81",
+      address: "0xe15add3a0a80e0ab9bf7be0d19841fa5e2e30387",
       abi: [
         {
           type: "function",
@@ -7595,11 +7595,11 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
     KeyPublicizeN9Groth16Verifier: {
-      address: "0x2391d43140a5732a60fac212084192157f87965e",
+      address: "0x468021184d2de8d4dcabd6c7804493eb968f23e2",
       abi: [
         {
           type: "function",
@@ -7675,7 +7675,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1772097891988.json",
+      deploymentFile: "run-1773219864482.json",
       deploymentScript: "DeployWerewolf.s.sol",
     },
   },
