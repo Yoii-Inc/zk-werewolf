@@ -1,6 +1,7 @@
 use mpc_net::multi::MPCNetConnection;
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 use structopt::StructOpt;
+use tokio::time::sleep;
 use zk_mpc_node::{
     models::Command, node::Node, proof::ProofManager, run_server, AppState, KeyManager,
 };
@@ -46,9 +47,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Initialize the MPC network from environment addresses
             let mut net = MPCNetConnection::new(id, addresses).unwrap();
             net.listen().await.expect("Failed to listen");
-            net.connect_to_all()
-                .await
-                .expect("Failed to connect to all");
+
+            let connect_retry_max = env::var("MPC_CONNECT_MAX_RETRIES")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(30);
+            let connect_retry_interval_ms = env::var("MPC_CONNECT_RETRY_INTERVAL_MS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(20000);
+            let connect_retry_interval = Duration::from_millis(connect_retry_interval_ms);
+
+            let mut connect_attempt = 0u32;
+            loop {
+                connect_attempt += 1;
+                match net.connect_to_all().await {
+                    Ok(_) => {
+                        println!(
+                            "Connected to all peers (attempt {}/{})",
+                            connect_attempt, connect_retry_max
+                        );
+                        break;
+                    }
+                    Err(e) if connect_attempt < connect_retry_max => {
+                        eprintln!(
+                            "Failed to connect to all peers (attempt {}/{}): {:?}. Retrying in {:?}...",
+                            connect_attempt, connect_retry_max, e, connect_retry_interval
+                        );
+                        sleep(connect_retry_interval).await;
+                    }
+                    Err(e) => {
+                        return Err(std::io::Error::other(format!(
+                            "Failed to connect to all peers after {} attempts: {:?}",
+                            connect_attempt, e
+                        ))
+                        .into());
+                    }
+                }
+            }
             let key_manager = Arc::new(KeyManager::new());
 
             // Initialize the node
