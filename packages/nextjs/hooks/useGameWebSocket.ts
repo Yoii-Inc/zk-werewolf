@@ -135,19 +135,28 @@ export const useGameWebSocket = (
         const incomingEventId = parsed.event_id;
         let lastEventId = lastEventIdRef.current;
 
-        // Server restart or room event store reset can roll event_id back.
-        // In that case, treat incoming stream as a new sequence instead of dropping all events forever.
-        if (incomingEventId < lastEventId) {
-          console.warn(
-            `Detected room event_id reset (last=${lastEventId}, incoming=${incomingEventId}). Resetting cursor.`,
-          );
-          lastEventIdRef.current = 0;
-          persistLastEventId(roomId, 0);
-          lastEventId = 0;
-        } else if (incomingEventId === lastEventId) {
+        // Handle duplicate and reset scenarios before normal gap detection.
+        if (incomingEventId === lastEventId) {
+          // Exact duplicate of the last event we've already processed.
           return;
         }
 
+        if (incomingEventId < lastEventId) {
+          // The server's event_id counter appears to have reset (e.g. after restart)
+          // while the client still has a larger lastEventId persisted. Reset our
+          // local tracking so we can resume processing events from the server.
+          lastEventIdRef.current = 0;
+          persistLastEventId(roomId, 0);
+          lastEventId = 0;
+
+          if (onReconnectRef.current) {
+            void Promise.resolve(onReconnectRef.current()).catch(error => {
+              console.error("Failed to recover after WebSocket stream reset:", error);
+            });
+          }
+          // Do not return here: treat this incoming event as the first event
+          // after a reset and allow it to be processed below.
+        }
         if (lastEventId > 0 && incomingEventId > lastEventId + 1) {
           const detail = {
             expectedEventId: lastEventId + 1,
