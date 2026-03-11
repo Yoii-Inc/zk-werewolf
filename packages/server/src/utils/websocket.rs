@@ -49,6 +49,24 @@ struct ComputationResultNotification {
 pub struct WebSocketConnectQuery {
     #[serde(default)]
     last_event_id: Option<u64>,
+    #[serde(default)]
+    player_id: Option<String>,
+}
+
+fn should_send_event_to_player(
+    payload: &serde_json::Value,
+    connected_player_id: Option<&str>,
+) -> bool {
+    let message_type = payload.get("message_type").and_then(|v| v.as_str());
+    if message_type != Some("computation_result") {
+        return true;
+    }
+
+    let target_player_id = payload.get("target_player_id").and_then(|v| v.as_str());
+    match target_player_id {
+        Some(target) => connected_player_id.is_some_and(|connected| connected == target),
+        None => true,
+    }
 }
 
 impl WebSocketMessage {
@@ -81,12 +99,22 @@ pub async fn handler(
             state.clone(),
             room_id,
             query.last_event_id.unwrap_or(0),
+            query.player_id.clone(),
         )
     })
 }
 
-pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String, last_event_id: u64) {
-    info!("New WebSocket connection established for room: {}", room_id);
+pub async fn handle_socket(
+    ws: WebSocket,
+    state: AppState,
+    room_id: String,
+    last_event_id: u64,
+    connected_player_id: Option<String>,
+) {
+    info!(
+        "New WebSocket connection established for room: {} (player_id={:?})",
+        room_id, connected_player_id
+    );
     let tx = state.get_or_create_room_channel(&room_id).await;
 
     let (mut sender, mut receiver) = ws.split();
@@ -100,6 +128,9 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String, last
         .replay_room_events_since(&room_id, last_event_id)
         .await;
     for event in replay_events {
+        if !should_send_event_to_player(&event.payload, connected_player_id.as_deref()) {
+            continue;
+        }
         match serde_json::to_string(&event) {
             Ok(message_text) => {
                 if sender
@@ -187,8 +218,24 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String, last
     });
 
     let room_id_for_send = room_id_for_send.clone();
+    let connected_player_id_for_send = connected_player_id.clone();
     let send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
+            if let Message::Text(ref text) = msg {
+                match serde_json::from_str::<crate::state::RoomEventEnvelope>(text) {
+                    Ok(event) => {
+                        if !should_send_event_to_player(
+                            &event.payload,
+                            connected_player_id_for_send.as_deref(),
+                        ) {
+                            continue;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error parsing room event envelope: {}", e);
+                    }
+                }
+            }
             info!("Sending message in room {}: {:?}", room_id_for_send, msg);
             if let Err(e) = sender.send(msg).await {
                 eprintln!("Error sending message: {}", e);

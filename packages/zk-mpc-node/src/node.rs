@@ -11,6 +11,7 @@ use mpc_algebra::{AdditivePairingShare, MpcPairingEngine, Reveal};
 use mpc_algebra_wasm::{CircuitEncryptedInputIdentifier, CircuitProfile};
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::iter::zip;
 use std::path::PathBuf;
@@ -21,6 +22,12 @@ use zk_mpc::groth16::create_random_proof;
 type LocalProvingKey = ProvingKey<ark_bn254::Bn254>;
 type MPCProvingKey =
     ProvingKey<MpcPairingEngine<ark_bn254::Bn254, AdditivePairingShare<ark_bn254::Bn254>>>;
+
+#[derive(Serialize)]
+struct RoleSharePayload<'a> {
+    role_share: &'a str,
+    share_encoding: &'static str,
+}
 
 #[derive(Clone)]
 struct Groth16Setup {
@@ -348,38 +355,53 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         output: &[u8],
         pubkeys: &[UserPublicKey],
     ) -> Result<Vec<EncryptedShare>, Box<dyn std::error::Error + Send>> {
-        // outputをJSONとしてパース（RoleAssignmentの場合は配列）
+        // outputをJSONとしてパース（RoleAssignmentの場合は share 配列）
         let output_str = std::str::from_utf8(output)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
-        // JSON配列として解釈を試みる
-        let shares: Vec<Vec<u8>> =
-            if let Ok(role_array) = serde_json::from_str::<Vec<String>>(output_str) {
-                // RoleAssignmentの場合：各プレイヤーに対応するインデックスの値のみを送る
-                role_array
-                    .iter()
-                    .take(pubkeys.len())
-                    .map(|role| serde_json::to_vec(&vec![role]))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?
-            } else {
-                // その他の場合：全データを各プレイヤーに送る（従来の動作）
-                vec![output.to_vec(); pubkeys.len()]
-            };
-
-        let pubkeys_vec = pubkeys.to_vec();
+        let parsed_role_shares = serde_json::from_str::<Vec<String>>(output_str).ok();
 
         // 各シェアを暗号化
         let mut encrypted_shares = Vec::new();
-        for (share, pubkey) in zip(shares, pubkeys_vec) {
+        if let Some(role_shares) = parsed_role_shares {
+            if role_shares.len() < pubkeys.len() {
+                return Err(Box::new(std::io::Error::other(format!(
+                    "role share length mismatch: got {}, expected at least {}",
+                    role_shares.len(),
+                    pubkeys.len()
+                ))));
+            }
+            for (role_share, pubkey) in zip(role_shares.iter(), pubkeys.iter()) {
+                let share_payload = RoleSharePayload {
+                    role_share,
+                    share_encoding: "bn254_fr_decimal_string",
+                };
+                let share_bytes = serde_json::to_vec(&share_payload)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+                let encrypted = self
+                    .key_manager
+                    .encrypt_share(&share_bytes, &pubkey.public_key)
+                    .await
+                    .map_err(|e| -> Box<dyn std::error::Error + Send> { Box::new(e) })?;
+                encrypted_shares.push(EncryptedShare {
+                    node_id: self.id,
+                    user_id: pubkey.user_id.clone(),
+                    encrypted_data: encrypted,
+                });
+            }
+            return Ok(encrypted_shares);
+        }
+
+        // その他の場合：全データを各プレイヤーに送る（従来の動作）
+        for pubkey in pubkeys.iter() {
             let encrypted = self
                 .key_manager
-                .encrypt_share(&share, &pubkey.public_key)
+                .encrypt_share(output, &pubkey.public_key)
                 .await
                 .map_err(|e| -> Box<dyn std::error::Error + Send> { Box::new(e) })?;
             encrypted_shares.push(EncryptedShare {
                 node_id: self.id,
-                user_id: pubkey.user_id,
+                user_id: pubkey.user_id.clone(),
                 encrypted_data: encrypted,
             });
         }

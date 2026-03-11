@@ -3,10 +3,7 @@ use crate::{
         state_hash::{compute_game_id, compute_proof_id},
         ProofType as ChainProofType,
     },
-    models::{
-        chat::{ChatMessage, ChatMessageType},
-        role::Role,
-    },
+    models::chat::{ChatMessage, ChatMessageType},
 };
 
 use super::player::Player;
@@ -1121,176 +1118,87 @@ impl Game {
                     CircuitEncryptedInputIdentifier::RoleAssignment(_items) => {
                         println!("RoleAssignment process is starting...");
 
-                        // ProofOutputからEncryptedSharesを取得
-                        if let Some(encrypted_shares) = output.shares {
-                            println!("Received {} encrypted role shares", encrypted_shares.len());
-
-                            // 各プレイヤーに個別に暗号化された役職データを配信
-                            for encrypted_share in encrypted_shares {
-                                let user_index_str = encrypted_share.user_id.clone();
-                                let node_id = encrypted_share.node_id;
-
-                                // user_idは配列のインデックス（文字列）なので、実際のプレイヤーIDに変換
-                                let user_index: usize = match user_index_str.parse() {
-                                    Ok(idx) => idx,
-                                    Err(e) => {
-                                        println!(
-                                            "ERROR: Failed to parse user_id '{}' as index: {}",
-                                            user_index_str, e
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                // インデックスからプレイヤーIDを取得
-                                let actual_player_id = if user_index < self.players.len() {
-                                    self.players[user_index].id.clone()
-                                } else {
-                                    println!(
-                                        "ERROR: Player index {} out of bounds (total players: {})",
-                                        user_index,
-                                        self.players.len()
-                                    );
-                                    continue;
-                                };
-
-                                println!(
-                                    "Converting user_index {} to player_id {}",
-                                    user_index, actual_player_id
-                                );
-
-                                // encrypted_dataは [nonce(24バイト) + ciphertext] の形式
-                                if encrypted_share.encrypted_data.len() < 24 {
-                                    println!(
-                                        "ERROR: Encrypted data too short for player {} (index {})",
-                                        actual_player_id, user_index
-                                    );
-                                    continue;
-                                }
-
-                                // nonceとciphertextを分離
-                                let nonce = &encrypted_share.encrypted_data[..24];
-                                let ciphertext = &encrypted_share.encrypted_data[24..];
-
-                                // Base64エンコード
-                                let nonce_b64 = base64::encode(nonce);
-                                let ciphertext_b64 = base64::encode(ciphertext);
-
-                                // サーバーは中継のみ - node_idを送信してクライアント側で公開鍵を解決
-                                let result_data = serde_json::json!({
-                                    "encrypted_role": {
-                                        "encrypted": ciphertext_b64,
-                                        "nonce": nonce_b64,
-                                        "node_id": node_id
-                                    },
-                                    "status": "ready"
-                                });
-
-                                println!(
-                                    "Sending encrypted role to player {} (index {}, from node {})",
-                                    actual_player_id, user_index, node_id
-                                );
-
-                                // 特定のプレイヤーにのみ送信（実際のプレイヤーIDを使用）
-                                if let Err(e) = app_state
-                                    .broadcast_computation_result(
-                                        &self.room_id,
-                                        "role_assignment",
-                                        result_data,
-                                        Some(actual_player_id.clone()), // 実際のプレイヤーIDを使用
-                                        &self.batch_request.batch_id,
-                                    )
-                                    .await
-                                {
-                                    println!(
-                                        "Failed to send encrypted role to player {}: {}",
-                                        actual_player_id, e
-                                    );
-                                }
-                            }
-
+                        let Some(encrypted_shares) = output.shares else {
+                            println!("RoleAssignment failed: no encrypted shares in proof output");
+                            self.batch_request.status = BatchStatus::Failed;
                             self.chat_log.add_system_message(
-                                "Roles have been assigned. Check your private information."
+                                "Role assignment failed: encrypted shares were missing."
                                     .to_string(),
                             );
-                        } else {
-                            // 後方互換性のため、古い実装も残す（デバッグモード用）
-                            println!("No encrypted shares found, using fallback role assignment");
+                            return;
+                        };
 
-                            let role_result: Vec<Fr> = match output.value {
-                                Some(bytes) => match CanonicalDeserialize::deserialize(&*bytes) {
-                                    Ok(state) => state,
-                                    Err(e) => {
-                                        println!("Failed to deserialize role_result: {}", e);
-                                        return;
-                                    }
-                                },
-                                None => {
-                                    println!("No output value found");
-                                    return;
-                                }
-                            };
+                        if encrypted_shares.is_empty() {
+                            println!("RoleAssignment failed: encrypted share list is empty");
+                            self.batch_request.status = BatchStatus::Failed;
+                            self.chat_log.add_system_message(
+                                "Role assignment failed: encrypted shares were empty."
+                                    .to_string(),
+                            );
+                            return;
+                        }
 
-                            let mut player_role: Option<Role> = None;
+                        println!("Received {} encrypted role shares", encrypted_shares.len());
 
-                            // role_resultをゲームの結果に反映
-                            let mut player_role_assignments = Vec::new();
-                            for (player, role) in self.players.iter_mut().zip(role_result.iter()) {
-                                let assigned_role = if *role == Fr::from(0u32) {
-                                    Some(Role::Villager)
-                                } else if *role == Fr::from(1u32) {
-                                    Some(Role::Seer)
-                                } else if *role == Fr::from(2u32) {
-                                    Some(Role::Werewolf)
-                                } else {
-                                    None
-                                };
+                        let mut required_shares_by_player = std::collections::HashMap::<
+                            String,
+                            usize,
+                        >::new();
+                        for share in &encrypted_shares {
+                            *required_shares_by_player
+                                .entry(share.user_id.clone())
+                                .or_insert(0) += 1;
+                        }
 
-                                player_role = assigned_role.clone();
+                        self.save_role_assignment_result(
+                            self.batch_request.batch_id.clone(),
+                            Vec::new(),
+                            serde_json::json!({
+                                "encrypted_share_count": encrypted_shares.len(),
+                                "required_shares_by_player": required_shares_by_player.clone(),
+                                "share_encoding": "bn254_fr_decimal_string",
+                                "computed_at": chrono::Utc::now().to_rfc3339()
+                            }),
+                        );
 
-                                if let Some(role) = assigned_role {
-                                    player_role_assignments.push(PlayerRoleAssignment {
-                                        player_id: player.id.clone(),
-                                        role: format!("{:?}", role),
-                                    });
-                                }
+                        for encrypted_share in encrypted_shares {
+                            let target_player_id = encrypted_share.user_id.clone();
+                            let node_id = encrypted_share.node_id;
+                            let required_shares = required_shares_by_player
+                                .get(&target_player_id)
+                                .copied()
+                                .unwrap_or_default();
+
+                            if !self.players.iter().any(|p| p.id == target_player_id) {
+                                println!(
+                                    "Skipping role share for unknown player_id={}",
+                                    target_player_id
+                                );
+                                continue;
                             }
 
-                            // 計算結果を保存
-                            self.save_role_assignment_result(
-                                self.batch_request.batch_id.clone(),
-                                player_role_assignments.clone(),
-                                serde_json::json!({
-                                    "raw_role_result": role_result.iter().map(|r| r.into_repr().to_string()).collect::<Vec<_>>(),
-                                    "computation_time": chrono::Utc::now().to_rfc3339()
-                                })
-                            );
+                            if encrypted_share.encrypted_data.len() < 24 {
+                                println!(
+                                    "Encrypted role share too short for player {} (node {})",
+                                    target_player_id, node_id
+                                );
+                                continue;
+                            }
 
-                            // self.chat_log.add_system_message(format!(
-                            //     "Roles have been assigned: {}. Starting the game.",
-                            //     self.players
-                            //         .iter()
-                            //         .map(|p| format!("{}: {:?}", p.name, p.role.as_ref().unwrap()))
-                            //         .collect::<Vec<_>>()
-                            //         .join(", ")
-                            // ));
-
-                            // 全プレイヤーに役職配布結果を通知
-                            let role_assignments: Vec<_> = self
-                                .players
-                                .iter()
-                                .map(|p| {
-                                    serde_json::json!({
-                                        "player_id": p.id,
-                                        "player_name": p.name,
-                                        "role": player_role
-                                    })
-                                })
-                                .collect();
+                            let nonce = &encrypted_share.encrypted_data[..24];
+                            let ciphertext = &encrypted_share.encrypted_data[24..];
+                            let nonce_b64 = base64::encode(nonce);
+                            let ciphertext_b64 = base64::encode(ciphertext);
 
                             let result_data = serde_json::json!({
-                                "role_assignments": role_assignments,
-                                "status": "completed"
+                                "encrypted_role_share": {
+                                    "encrypted": ciphertext_b64,
+                                    "nonce": nonce_b64,
+                                    "node_id": node_id,
+                                    "required_shares": required_shares,
+                                    "share_encoding": "bn254_fr_decimal_string"
+                                },
+                                "status": "ready"
                             });
 
                             if let Err(e) = app_state
@@ -1298,14 +1206,22 @@ impl Game {
                                     &self.room_id,
                                     "role_assignment",
                                     result_data,
-                                    None, // 全プレイヤーに送信
+                                    Some(target_player_id.clone()),
                                     &self.batch_request.batch_id,
                                 )
                                 .await
                             {
-                                println!("Failed to broadcast role assignment result: {}", e);
+                                println!(
+                                    "Failed to send encrypted role share to player {}: {}",
+                                    target_player_id, e
+                                );
                             }
                         }
+
+                        self.chat_log.add_system_message(
+                            "Roles have been assigned. Check your private information."
+                                .to_string(),
+                        );
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(_items) => {
                         println!("KeyPublicize process is starting...");

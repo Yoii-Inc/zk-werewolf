@@ -25,7 +25,7 @@ use mpc_algebra::MpcFpVar;
 use mpc_algebra::Reveal;
 use mpc_algebra::{BitDecomposition, BooleanWire};
 use mpc_algebra::{EqualityZero, ModulusConversion};
-use mpc_algebra_wasm::{calc_shuffle_matrix, Role};
+use mpc_algebra_wasm::Role;
 use nalgebra as na;
 use std::collections::HashSet;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
@@ -1181,37 +1181,88 @@ impl RoleAssignmentCircuit<MpcField<Fr>> {
     // Vec<MpcField<Fr>> は各プレイヤーの役職IDを表す。0が村人、1が占い師、2が人狼など。
     pub fn calculate_output(&self) -> Vec<MpcField<Fr>> {
         let num_players = self.private_input.len();
+        if num_players == 0 {
+            return Vec::new();
+        }
 
         let grouping_parameter = &self.public_input.grouping_parameter;
+        let tau_matrix = self.public_input.tau_matrix.clone();
+        let matrix_size = tau_matrix.nrows();
 
-        let shuffle_matrix = self
+        let shuffle_matrices = self
             .private_input
             .iter()
             .map(|input| input.shuffle_matrices.clone())
             .collect::<Vec<_>>();
-
-        let revealed_shuffle_matrix = shuffle_matrix
+        let inverse_shuffle_matrices = self
+            .private_input
             .iter()
-            .map(|row| row.map(|x| x.sync_reveal()))
+            .rev()
+            .map(|input| input.shuffle_matrices.transpose())
             .collect::<Vec<_>>();
 
-        let mut output_vec = Vec::new();
+        let matrix_m = shuffle_matrices
+            .iter()
+            .skip(1)
+            .fold(shuffle_matrices[0].clone(), |acc, x| acc * x);
+        let inverse_matrix_m = inverse_shuffle_matrices
+            .iter()
+            .skip(1)
+            .fold(inverse_shuffle_matrices[0].clone(), |acc, x| acc * x);
 
-        for id in 0..num_players {
-            let (role, _role_val, _player_ids) =
-                calc_shuffle_matrix(grouping_parameter, &revealed_shuffle_matrix, id).unwrap();
+        // rho = M^-1 * tau * M
+        let rho = inverse_matrix_m * &tau_matrix * &matrix_m;
 
-            match role {
-                Role::Villager => {
-                    output_vec.push(MpcField::<Fr>::from(0u32));
-                }
-                Role::FortuneTeller => {
-                    output_vec.push(MpcField::<Fr>::from(1u32));
-                }
-                Role::Werewolf => {
-                    output_vec.push(MpcField::<Fr>::from(2u32));
-                }
+        let mut rho_sequence = Vec::with_capacity(num_players);
+        let mut current_rho = rho.clone();
+        for _ in 0..num_players {
+            rho_sequence.push(current_rho.clone());
+            current_rho *= rho.clone();
+        }
+
+        let role_id_lookup = (0..matrix_size)
+            .map(|idx| match grouping_parameter.get_corresponding_role(idx) {
+                Role::Villager => MpcField::<Fr>::from(0u32),
+                Role::FortuneTeller => MpcField::<Fr>::from(1u32),
+                Role::Werewolf => MpcField::<Fr>::from(2u32),
+            })
+            .collect::<Vec<_>>();
+
+        let stair_vector = na::DVector::from(
+            (0..matrix_size)
+                .map(|idx| MpcField::<Fr>::from(idx as u32))
+                .collect::<Vec<_>>(),
+        );
+
+        let mut output_vec = Vec::with_capacity(num_players);
+        for player_id in 0..num_players {
+            let mut unit_vec = na::DVector::<MpcField<Fr>>::zeros(matrix_size);
+            unit_vec[player_id] = MpcField::<Fr>::one();
+
+            // rho^1(i), rho^2(i), ..., rho^n(i) を share のまま index 値へ変換
+            let mut role_path = Vec::with_capacity(num_players);
+            for rho_i in &rho_sequence {
+                let moved = rho_i * unit_vec.clone();
+                role_path.push(moved.dot(&stair_vector));
             }
+
+            // role_val = max(role_path) を share のまま求める
+            let mut role_value = role_path[0];
+            for candidate in role_path.iter().skip(1) {
+                let le_like = role_value.sync_is_smaller_than(candidate).field();
+                let is_equal = (role_value - *candidate).sync_is_zero_shared().field();
+                let is_new_max = le_like * (MpcField::<Fr>::one() - is_equal);
+                role_value += (*candidate - role_value) * is_new_max;
+            }
+
+            // role_val (公開インデックス) -> 役職ID(0/1/2) を share のまま変換
+            let mut role_id = MpcField::<Fr>::zero();
+            for (idx, mapped_role_id) in role_id_lookup.iter().enumerate() {
+                let is_eq =
+                    (role_value - MpcField::<Fr>::from(idx as u32)).sync_is_zero_shared().field();
+                role_id += *mapped_role_id * is_eq;
+            }
+            output_vec.push(role_id);
         }
 
         output_vec

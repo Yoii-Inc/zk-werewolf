@@ -87,6 +87,11 @@ async function runFullScenarioFlow(scenario: FullScenario): Promise<void> {
   await GameSetupHelper.submitPlayerCommitments(roomId, players, gameState);
   await new Promise(resolve => setTimeout(resolve, 3000));
   await GameSetupHelper.submitRoleAssignmentRequests(roomId, players, gameState);
+  const deliveries = global.roleAssignmentDeliveries ?? [];
+  expect(deliveries.length).toBeGreaterThan(0);
+  deliveries.forEach(delivery => {
+    expect(delivery.receiverPlayerId).toBe(delivery.targetPlayerId);
+  });
 
   gameState = await global.apiClient.getGameState(roomId);
   await GameSetupHelper.submitKeyPublicizeRequests(roomId, players, gameState);

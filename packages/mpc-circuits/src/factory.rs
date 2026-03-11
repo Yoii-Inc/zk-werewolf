@@ -469,16 +469,17 @@ impl CircuitFactory {
                 buffer
             }
             BuiltinCircuit::RoleAssignment(circuit) => {
-                let roles = circuit.calculate_output().sync_reveal();
+                let role_shares = circuit.calculate_output();
 
-                // Vec<Fr>を文字列の配列に変換してJSON化
-                let role_strings: Vec<String> = roles
+                // 各ノードのローカル share（Fr）を文字列化して返す。
+                // 復元はクライアント側で全ノード share を合成して行う。
+                let role_share_strings: Vec<String> = role_shares
                     .iter()
-                    .map(|role_field| role_field.into_repr().to_string())
+                    .map(|role_share| role_share.unwrap_as_public().into_repr().to_string())
                     .collect();
 
                 // JSONとしてシリアライズ
-                serde_json::to_vec(&role_strings).unwrap()
+                serde_json::to_vec(&role_share_strings).unwrap()
             }
         }
     }

@@ -48,6 +48,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const { websocketRef, websocketStatus, reconnectAttempt, connectWebSocket, disconnectWebSocket, sendMessage } =
     useGameWebSocket(params.id, addServerMessage, user?.username, {
       onReconnect: handleWebSocketReconnect,
+      playerId: user?.id,
     });
   const {
     isStarting,

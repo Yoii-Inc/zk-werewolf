@@ -400,6 +400,7 @@ export class CircuitTestClient {
     roleAssignmentInput: RoleAssignmentInput,
     playerCount: number,
     authToken?: string,
+    requesterPlayerId?: string,
   ): Promise<any> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -416,7 +417,7 @@ export class CircuitTestClient {
     const requestBody = {
       proof_type: "RoleAssignment",
       data: {
-        user_id: String(roleAssignmentInput.privateInput.id),
+        user_id: requesterPlayerId ? String(requesterPlayerId) : String(roleAssignmentInput.privateInput.id),
         prover_count: playerCount,
         encrypted_data: encryptedRoleAssignment,
         public_key: roleAssignmentInput.publicKey,

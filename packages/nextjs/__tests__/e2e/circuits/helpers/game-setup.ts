@@ -207,6 +207,7 @@ export class GameSetupHelper {
           roleAssignmentInput,
           players.length,
           player.token,
+          player.id,
         );
         const batchId = this.extractBatchId(response);
         if (batchId) {
