@@ -133,9 +133,18 @@ export const useGameWebSocket = (
 
       if (isRoomEventEnvelope(parsed)) {
         const incomingEventId = parsed.event_id;
-        const lastEventId = lastEventIdRef.current;
+        let lastEventId = lastEventIdRef.current;
 
-        if (incomingEventId <= lastEventId) {
+        // Server restart or room event store reset can roll event_id back.
+        // In that case, treat incoming stream as a new sequence instead of dropping all events forever.
+        if (incomingEventId < lastEventId) {
+          console.warn(
+            `Detected room event_id reset (last=${lastEventId}, incoming=${incomingEventId}). Resetting cursor.`,
+          );
+          lastEventIdRef.current = 0;
+          persistLastEventId(roomId, 0);
+          lastEventId = 0;
+        } else if (incomingEventId === lastEventId) {
           return;
         }
 

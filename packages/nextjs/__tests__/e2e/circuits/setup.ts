@@ -105,10 +105,33 @@ const roleShareBuffers = new Map<
   string,
   {
     requiredShares: number;
-    sharesByNode: Map<number, bigint>;
+    roleSharesByNode: Map<number, bigint>;
+    werewolfMaskSharesByNode: Map<number, bigint>;
     completed: boolean;
   }
 >();
+
+function decodeWerewolfTeammateIdsForTest(
+  maskValue: bigint,
+  myRole: "Villager" | "Seer" | "Werewolf",
+  myPlayerId: string,
+): string[] {
+  if (myRole !== "Werewolf") {
+    return [];
+  }
+
+  const players = global.testPlayers ?? [];
+  const normalizedMask = normalizeFieldElement(maskValue);
+  const teammateIds: string[] = [];
+  for (let index = 0; index < players.length; index += 1) {
+    const bit = (normalizedMask >> BigInt(index)) & 1n;
+    if (bit !== 1n) continue;
+    const teammateId = players[index]?.id;
+    if (!teammateId || teammateId === myPlayerId) continue;
+    teammateIds.push(teammateId);
+  }
+  return teammateIds;
+}
 
 function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payload: any): void {
   const targetPlayerId = payload?.target_player_id as string | undefined;
@@ -125,7 +148,10 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
   const nonce = encryptedRoleShare.nonce as string | undefined;
   const nodeIdRaw = encryptedRoleShare.node_id as number | string | undefined;
   const requiredSharesRaw = encryptedRoleShare.required_shares as number | string | undefined;
-  const shareEncoding = encryptedRoleShare.share_encoding as string | undefined;
+  const shareEncoding =
+    (encryptedRoleShare.role_share_encoding as string | undefined) ||
+    (encryptedRoleShare.share_encoding as string | undefined);
+  const werewolfMaskShareEncoding = encryptedRoleShare.werewolf_mates_mask_share_encoding as string | undefined;
   const nodeId = typeof nodeIdRaw === "string" ? Number(nodeIdRaw) : nodeIdRaw;
   const requiredShares = typeof requiredSharesRaw === "string" ? Number(requiredSharesRaw) : requiredSharesRaw;
   const batchId = payload?.batch_id as string | undefined;
@@ -139,6 +165,9 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
   if (shareEncoding && shareEncoding !== "bn254_fr_decimal_string") {
     return;
   }
+  if (werewolfMaskShareEncoding && werewolfMaskShareEncoding !== "player_index_bitmask_lsb0") {
+    return;
+  }
   if (!batchId) {
     return;
   }
@@ -146,10 +175,11 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
   const bufferKey = `${roomId}:${playerId}:${batchId}`;
   const existingBuffer = roleShareBuffers.get(bufferKey) ?? {
     requiredShares: requiredShares as number,
-    sharesByNode: new Map<number, bigint>(),
+    roleSharesByNode: new Map<number, bigint>(),
+    werewolfMaskSharesByNode: new Map<number, bigint>(),
     completed: false,
   };
-  if (existingBuffer.completed || existingBuffer.sharesByNode.has(nodeId)) {
+  if (existingBuffer.completed || existingBuffer.roleSharesByNode.has(nodeId)) {
     return;
   }
 
@@ -168,34 +198,51 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
   try {
     const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, senderPublicKey);
     const decryptedString = new TextDecoder("utf-8").decode(decryptedBinary);
-    const parsedShare = JSON.parse(decryptedString) as { role_share?: string };
+    const parsedShare = JSON.parse(decryptedString) as {
+      role_share?: string;
+      werewolf_mates_mask_share?: string;
+    };
     if (!parsedShare || typeof parsedShare.role_share !== "string") {
       throw new Error("Invalid role payload");
     }
+    const werewolfMaskShareString =
+      typeof parsedShare.werewolf_mates_mask_share === "string" ? parsedShare.werewolf_mates_mask_share : "0";
     const shareValue = normalizeFieldElement(BigInt(parsedShare.role_share));
+    const werewolfMaskShareValue = normalizeFieldElement(BigInt(werewolfMaskShareString));
     existingBuffer.requiredShares = Math.max(existingBuffer.requiredShares, requiredShares as number);
-    existingBuffer.sharesByNode.set(nodeId, shareValue);
+    existingBuffer.roleSharesByNode.set(nodeId, shareValue);
+    existingBuffer.werewolfMaskSharesByNode.set(nodeId, werewolfMaskShareValue);
     roleShareBuffers.set(bufferKey, existingBuffer);
 
-    if (existingBuffer.sharesByNode.size < existingBuffer.requiredShares) {
+    if (existingBuffer.roleSharesByNode.size < existingBuffer.requiredShares) {
       return;
     }
 
     let combinedShare = 0n;
-    for (const share of existingBuffer.sharesByNode.values()) {
+    for (const share of existingBuffer.roleSharesByNode.values()) {
       combinedShare = normalizeFieldElement(combinedShare + share);
     }
+
+    let combinedWerewolfMask = 0n;
+    for (const share of existingBuffer.werewolfMaskSharesByNode.values()) {
+      combinedWerewolfMask = normalizeFieldElement(combinedWerewolfMask + share);
+    }
     const roleName = decodeRoleName(combinedShare);
+    const werewolfTeammateIds = decodeWerewolfTeammateIdsForTest(combinedWerewolfMask, roleName, playerId);
     const existingInfo = getPrivateGameInfo(roomId, playerId);
 
     if (!existingInfo) {
       setPrivateGameInfo(roomId, {
         playerId,
         playerRole: roleName as any,
+        werewolfTeammateIds,
         hasActed: false,
       });
-    } else if (existingInfo.playerRole !== roleName) {
-      updatePrivateGameInfo(roomId, playerId, { playerRole: roleName as any });
+    } else if (
+      existingInfo.playerRole !== roleName ||
+      JSON.stringify(existingInfo.werewolfTeammateIds ?? []) !== JSON.stringify(werewolfTeammateIds)
+    ) {
+      updatePrivateGameInfo(roomId, playerId, { playerRole: roleName as any, werewolfTeammateIds });
     }
 
     existingBuffer.completed = true;

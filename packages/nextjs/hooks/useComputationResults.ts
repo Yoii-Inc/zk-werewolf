@@ -24,7 +24,10 @@ interface RoleAssignmentResult {
     nonce: string;
     node_id: number | string;
     required_shares: number | string;
+    schema_version?: string;
     share_encoding?: string;
+    role_share_encoding?: string;
+    werewolf_mates_mask_share_encoding?: string;
   };
   status: string;
 }
@@ -126,6 +129,28 @@ const decodeRoleName = (roleId: bigint): "Villager" | "Seer" | "Werewolf" => {
   return "Villager";
 };
 
+const decodeWerewolfTeammateIds = (
+  maskValue: bigint,
+  players: Array<{ id: string }> | undefined,
+  myPlayerId: string,
+  myRole: "Villager" | "Seer" | "Werewolf",
+): string[] => {
+  if (myRole !== "Werewolf" || !players || players.length === 0) {
+    return [];
+  }
+
+  const normalizedMask = normalizeFieldElement(maskValue);
+  const teammateIds: string[] = [];
+  for (let index = 0; index < players.length; index += 1) {
+    const bit = (normalizedMask >> BigInt(index)) & 1n;
+    if (bit !== 1n) continue;
+    const teammateId = players[index]?.id;
+    if (!teammateId || teammateId === myPlayerId) continue;
+    teammateIds.push(teammateId);
+  }
+  return teammateIds;
+};
+
 export const useComputationResults = (
   roomId: string,
   playerId: string,
@@ -137,9 +162,16 @@ export const useComputationResults = (
   const [winningJudgeResult, setWinningJudgeResult] = useState<WinningJudgeResult | null>(null);
   const [votingResult, setVotingResult] = useState<AnonymousVotingResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const roleShareBuffersRef = useRef<Map<string, { requiredShares: number; sharesByNode: Map<number, bigint> }>>(
-    new Map(),
-  );
+  const roleShareBuffersRef = useRef<
+    Map<
+      string,
+      {
+        requiredShares: number;
+        roleSharesByNode: Map<number, bigint>;
+        werewolfMaskSharesByNode: Map<number, bigint>;
+      }
+    >
+  >(new Map());
   const completedRoleBatchRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -375,11 +407,15 @@ export const useComputationResults = (
                 node_id: nodeIdRaw,
                 required_shares: requiredSharesRaw,
                 share_encoding: shareEncoding,
+                role_share_encoding: roleShareEncodingRaw,
+                werewolf_mates_mask_share_encoding: werewolfMaskEncodingRaw,
               } = shareData;
 
               const nodeId = typeof nodeIdRaw === "string" ? Number(nodeIdRaw) : nodeIdRaw;
               const requiredShares =
                 typeof requiredSharesRaw === "string" ? Number(requiredSharesRaw) : requiredSharesRaw;
+              const roleShareEncoding = roleShareEncodingRaw ?? shareEncoding;
+              const werewolfMaskEncoding = werewolfMaskEncodingRaw ?? "player_index_bitmask_lsb0";
 
               if (!encrypted || !nonce || !Number.isFinite(nodeId)) {
                 throw new Error("Invalid encrypted role share payload");
@@ -387,8 +423,11 @@ export const useComputationResults = (
               if (!Number.isFinite(requiredShares) || requiredShares <= 0) {
                 throw new Error(`Invalid required_shares value: ${String(requiredSharesRaw)}`);
               }
-              if (shareEncoding && shareEncoding !== "bn254_fr_decimal_string") {
-                throw new Error(`Unsupported share encoding: ${shareEncoding}`);
+              if (roleShareEncoding && roleShareEncoding !== "bn254_fr_decimal_string") {
+                throw new Error(`Unsupported role share encoding: ${roleShareEncoding}`);
+              }
+              if (werewolfMaskEncoding && werewolfMaskEncoding !== "player_index_bitmask_lsb0") {
+                throw new Error(`Unsupported werewolf mask encoding: ${werewolfMaskEncoding}`);
               }
 
               const MPC_NODE_PUBLIC_KEYS = [
@@ -418,10 +457,31 @@ export const useComputationResults = (
               const decryptedString = decoder.decode(decryptedBinary);
 
               let roleShareString: string | null = null;
+              let werewolfMatesMaskShareString = "0";
               try {
-                const parsed = JSON.parse(decryptedString) as { role_share?: string };
+                const parsed = JSON.parse(decryptedString) as {
+                  role_share?: string;
+                  werewolf_mates_mask_share?: string;
+                  role_share_encoding?: string;
+                  werewolf_mates_mask_share_encoding?: string;
+                };
                 if (parsed && typeof parsed.role_share === "string") {
                   roleShareString = parsed.role_share;
+                }
+                if (parsed && typeof parsed.werewolf_mates_mask_share === "string") {
+                  werewolfMatesMaskShareString = parsed.werewolf_mates_mask_share;
+                }
+
+                if (parsed?.role_share_encoding && parsed.role_share_encoding !== "bn254_fr_decimal_string") {
+                  throw new Error(`Unsupported decrypted role share encoding: ${parsed.role_share_encoding}`);
+                }
+                if (
+                  parsed?.werewolf_mates_mask_share_encoding &&
+                  parsed.werewolf_mates_mask_share_encoding !== "player_index_bitmask_lsb0"
+                ) {
+                  throw new Error(
+                    `Unsupported decrypted werewolf mask encoding: ${parsed.werewolf_mates_mask_share_encoding}`,
+                  );
                 }
               } catch (parseError) {
                 throw new Error(
@@ -433,33 +493,48 @@ export const useComputationResults = (
               }
 
               const roleShare = normalizeFieldElement(BigInt(roleShareString));
+              const werewolfMatesMaskShare = normalizeFieldElement(BigInt(werewolfMatesMaskShareString));
               const existingBuffer = roleShareBuffersRef.current.get(batchKey) ?? {
                 requiredShares,
-                sharesByNode: new Map<number, bigint>(),
+                roleSharesByNode: new Map<number, bigint>(),
+                werewolfMaskSharesByNode: new Map<number, bigint>(),
               };
               existingBuffer.requiredShares = Math.max(existingBuffer.requiredShares, requiredShares);
-              if (existingBuffer.sharesByNode.has(nodeId)) {
+              if (existingBuffer.roleSharesByNode.has(nodeId)) {
                 break;
               }
-              existingBuffer.sharesByNode.set(nodeId, roleShare);
+              existingBuffer.roleSharesByNode.set(nodeId, roleShare);
+              existingBuffer.werewolfMaskSharesByNode.set(nodeId, werewolfMatesMaskShare);
               roleShareBuffersRef.current.set(batchKey, existingBuffer);
 
-              if (existingBuffer.sharesByNode.size < existingBuffer.requiredShares) {
+              if (existingBuffer.roleSharesByNode.size < existingBuffer.requiredShares) {
                 break;
               }
 
-              let combinedShare = 0n;
-              for (const share of existingBuffer.sharesByNode.values()) {
-                combinedShare = normalizeFieldElement(combinedShare + share);
+              let combinedRoleShare = 0n;
+              for (const share of existingBuffer.roleSharesByNode.values()) {
+                combinedRoleShare = normalizeFieldElement(combinedRoleShare + share);
               }
 
-              const roleName = decodeRoleName(combinedShare);
+              let combinedWerewolfMaskShare = 0n;
+              for (const share of existingBuffer.werewolfMaskSharesByNode.values()) {
+                combinedWerewolfMaskShare = normalizeFieldElement(combinedWerewolfMaskShare + share);
+              }
+
+              const roleName = decodeRoleName(combinedRoleShare);
+              const werewolfTeammateIds = decodeWerewolfTeammateIds(
+                combinedWerewolfMaskShare,
+                gameInfo?.players,
+                playerId,
+                roleName,
+              );
               let existingInfo = getPrivateGameInfo(roomId, playerId);
 
               if (!existingInfo) {
                 const initialInfo: PrivateGameInfo = {
                   playerId,
                   playerRole: null as any,
+                  werewolfTeammateIds: [],
                   hasActed: false,
                 };
                 setPrivateGameInfo(roomId, initialInfo);
@@ -468,6 +543,7 @@ export const useComputationResults = (
 
               const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
                 playerRole: roleName as "Villager" | "Werewolf" | "Seer",
+                werewolfTeammateIds,
               });
 
               if (!updatedInfo) {
@@ -477,10 +553,17 @@ export const useComputationResults = (
               completedRoleBatchRef.current.add(batchKey);
               roleShareBuffersRef.current.delete(batchKey);
 
+              const werewolfTeammateNames = werewolfTeammateIds
+                .map(id => gameInfo?.players?.find((player: any) => String(player.id) === String(id))?.name || id)
+                .filter((name, index, self) => self.indexOf(name) === index);
+
               addMessage({
                 id: Date.now().toString(),
                 sender: "System",
-                message: `Your role has been assigned: ${roleName}`,
+                message:
+                  roleName === "Werewolf" && werewolfTeammateNames.length > 0
+                    ? `Your role has been assigned: ${roleName} (teammates: ${werewolfTeammateNames.join(", ")})`
+                    : `Your role has been assigned: ${roleName}`,
                 timestamp: new Date().toISOString(),
                 type: "system",
               });

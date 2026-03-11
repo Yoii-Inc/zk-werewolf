@@ -74,6 +74,7 @@ export const initializePrivateGameInfo = (roomId: string, playerId: string): voi
   const initialPrivateInfo: PrivateGameInfo = {
     playerId,
     playerRole: null, // 役職は未決定状態で初期化
+    werewolfTeammateIds: [],
     hasActed: false,
   };
   setPrivateGameInfo(roomId, initialPrivateInfo);

@@ -31,6 +31,12 @@ use std::collections::HashSet;
 use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 use zk_mpc::field::*;
 
+#[derive(Clone, Copy)]
+pub struct RoleAssignmentPlayerShares<F> {
+    pub role_share: F,
+    pub werewolf_mates_mask_share: F,
+}
+
 impl AnonymousVotingCircuit<Fr> {
     pub fn calculate_output(&self) -> Fr {
         if self.private_input.is_empty() {
@@ -1266,6 +1272,48 @@ impl RoleAssignmentCircuit<MpcField<Fr>> {
         }
 
         output_vec
+    }
+
+    pub fn calculate_output_with_werewolf_mates_mask(
+        &self,
+    ) -> Vec<RoleAssignmentPlayerShares<MpcField<Fr>>> {
+        let role_shares = self.calculate_output();
+        let num_players = role_shares.len();
+        if num_players == 0 {
+            return Vec::new();
+        }
+
+        let werewolf_flags = role_shares
+            .iter()
+            .map(|role_share| {
+                (*role_share - MpcField::<Fr>::from(2u32))
+                    .sync_is_zero_shared()
+                    .field()
+            })
+            .collect::<Vec<_>>();
+
+        let mut outputs = Vec::with_capacity(num_players);
+        for i in 0..num_players {
+            let mut teammate_mask_share = MpcField::<Fr>::zero();
+            let self_is_werewolf = werewolf_flags[i];
+
+            for j in 0..num_players {
+                if i == j {
+                    continue;
+                }
+
+                let bit = 1u32.checked_shl(j as u32).unwrap_or(0);
+                let weight = MpcField::<Fr>::from(bit);
+                teammate_mask_share += weight * self_is_werewolf * werewolf_flags[j];
+            }
+
+            outputs.push(RoleAssignmentPlayerShares {
+                role_share: role_shares[i],
+                werewolf_mates_mask_share: teammate_mask_share,
+            });
+        }
+
+        outputs
     }
 }
 

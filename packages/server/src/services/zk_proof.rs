@@ -203,19 +203,16 @@ pub async fn check_status_with_retry(
 }
 
 pub async fn execute_batch_request(batch_request: &BatchRequest) -> BatchExecutionResult {
-    let mut sorted_requests = batch_request.requests.clone();
-    sorted_requests.sort_by(|a, b| {
-        let a_user_id = a.get_user_id().parse::<u32>().unwrap_or(u32::MAX);
-        let b_user_id = b.get_user_id().parse::<u32>().unwrap_or(u32::MAX);
-        a_user_id.cmp(&b_user_id)
-    });
+    // Keep canonical order from Game::add_request_to_batch.
+    // Re-sorting here can break index-based outputs (e.g. role shares / werewolf mate mask).
+    let ordered_requests = batch_request.requests.clone();
 
-    let identifier = try_convert_to_identifier(sorted_requests.clone())?;
+    let identifier = try_convert_to_identifier(ordered_requests.clone())?;
 
     let output_type = match &identifier {
         CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
             let mut player_pubkeys = Vec::new();
-            for request in &sorted_requests {
+            for request in &ordered_requests {
                 if let Some(pubkey) = request.get_public_key() {
                     player_pubkeys.push(zk_mpc_node::UserPublicKey {
                         user_id: request.get_user_id().to_string(),

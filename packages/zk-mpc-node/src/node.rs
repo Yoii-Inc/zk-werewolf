@@ -11,7 +11,7 @@ use mpc_algebra::{AdditivePairingShare, MpcPairingEngine, Reveal};
 use mpc_algebra_wasm::{CircuitEncryptedInputIdentifier, CircuitProfile};
 use mpc_circuits::CircuitFactory;
 use mpc_net::multi::MPCNetConnection;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::iter::zip;
 use std::path::PathBuf;
@@ -25,8 +25,18 @@ type MPCProvingKey =
 
 #[derive(Serialize)]
 struct RoleSharePayload<'a> {
+    schema_version: &'static str,
     role_share: &'a str,
-    share_encoding: &'static str,
+    role_share_encoding: &'static str,
+    werewolf_mates_mask_share: &'a str,
+    werewolf_mates_mask_share_encoding: &'static str,
+}
+
+#[derive(Deserialize)]
+struct RoleOutputV2 {
+    role_share: String,
+    #[serde(default)]
+    werewolf_mates_mask_share: Option<String>,
 }
 
 #[derive(Clone)]
@@ -359,11 +369,47 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         let output_str = std::str::from_utf8(output)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
-        let parsed_role_shares = serde_json::from_str::<Vec<String>>(output_str).ok();
+        let parsed_role_outputs_v2 = serde_json::from_str::<Vec<RoleOutputV2>>(output_str).ok();
+        let parsed_role_shares_v1 = serde_json::from_str::<Vec<String>>(output_str).ok();
 
         // 各シェアを暗号化
         let mut encrypted_shares = Vec::new();
-        if let Some(role_shares) = parsed_role_shares {
+        if let Some(role_outputs) = parsed_role_outputs_v2 {
+            if role_outputs.len() < pubkeys.len() {
+                return Err(Box::new(std::io::Error::other(format!(
+                    "role share length mismatch: got {}, expected at least {}",
+                    role_outputs.len(),
+                    pubkeys.len()
+                ))));
+            }
+            for (role_output, pubkey) in zip(role_outputs.iter(), pubkeys.iter()) {
+                let share_payload = RoleSharePayload {
+                    schema_version: "role_assignment_share_v2",
+                    role_share: &role_output.role_share,
+                    role_share_encoding: "bn254_fr_decimal_string",
+                    werewolf_mates_mask_share: role_output
+                        .werewolf_mates_mask_share
+                        .as_deref()
+                        .unwrap_or("0"),
+                    werewolf_mates_mask_share_encoding: "player_index_bitmask_lsb0",
+                };
+                let share_bytes = serde_json::to_vec(&share_payload)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+                let encrypted = self
+                    .key_manager
+                    .encrypt_share(&share_bytes, &pubkey.public_key)
+                    .await
+                    .map_err(|e| -> Box<dyn std::error::Error + Send> { Box::new(e) })?;
+                encrypted_shares.push(EncryptedShare {
+                    node_id: self.id,
+                    user_id: pubkey.user_id.clone(),
+                    encrypted_data: encrypted,
+                });
+            }
+            return Ok(encrypted_shares);
+        }
+
+        if let Some(role_shares) = parsed_role_shares_v1 {
             if role_shares.len() < pubkeys.len() {
                 return Err(Box::new(std::io::Error::other(format!(
                     "role share length mismatch: got {}, expected at least {}",
@@ -373,8 +419,11 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             }
             for (role_share, pubkey) in zip(role_shares.iter(), pubkeys.iter()) {
                 let share_payload = RoleSharePayload {
+                    schema_version: "role_assignment_share_v2",
                     role_share,
-                    share_encoding: "bn254_fr_decimal_string",
+                    role_share_encoding: "bn254_fr_decimal_string",
+                    werewolf_mates_mask_share: "0",
+                    werewolf_mates_mask_share_encoding: "player_index_bitmask_lsb0",
                 };
                 let share_bytes = serde_json::to_vec(&share_payload)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;

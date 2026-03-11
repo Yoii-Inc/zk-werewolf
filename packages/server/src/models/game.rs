@@ -661,7 +661,19 @@ impl Game {
                 batch.requests[existing_index] = request;
             }
         } else {
-            batch.requests.push(request);
+            let player_index_of = |user_id: &str| {
+                self.players
+                    .iter()
+                    .position(|player| player.id == user_id)
+                    .unwrap_or(usize::MAX)
+            };
+            let new_request_player_index = player_index_of(request.get_user_id());
+            let insert_pos = batch
+                .requests
+                .iter()
+                .position(|existing| player_index_of(existing.get_user_id()) > new_request_player_index)
+                .unwrap_or(batch.requests.len());
+            batch.requests.insert(insert_pos, request);
         }
 
         let batch_id = batch.batch_id.clone();
@@ -1156,7 +1168,10 @@ impl Game {
                             serde_json::json!({
                                 "encrypted_share_count": encrypted_shares.len(),
                                 "required_shares_by_player": required_shares_by_player.clone(),
+                                "schema_version": "role_assignment_share_v2",
                                 "share_encoding": "bn254_fr_decimal_string",
+                                "role_share_encoding": "bn254_fr_decimal_string",
+                                "werewolf_mates_mask_share_encoding": "player_index_bitmask_lsb0",
                                 "computed_at": chrono::Utc::now().to_rfc3339()
                             }),
                         );
@@ -1196,7 +1211,10 @@ impl Game {
                                     "nonce": nonce_b64,
                                     "node_id": node_id,
                                     "required_shares": required_shares,
-                                    "share_encoding": "bn254_fr_decimal_string"
+                                    "schema_version": "role_assignment_share_v2",
+                                    "share_encoding": "bn254_fr_decimal_string",
+                                    "role_share_encoding": "bn254_fr_decimal_string",
+                                    "werewolf_mates_mask_share_encoding": "player_index_bitmask_lsb0"
                                 },
                                 "status": "ready"
                             });
