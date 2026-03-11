@@ -4,6 +4,7 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::{test_rng, UniformRand};
 use mpc_algebra::reveal::Reveal;
 use mpc_algebra::FromLocal;
+use serde::Serialize;
 use zk_mpc::circuits::ElGamalLocalOrMPC;
 use zk_mpc::{circuits::LocalOrMPC, marlin::MFr};
 
@@ -15,6 +16,15 @@ use mpc_algebra_wasm::{
 use crate::*;
 
 pub struct CircuitFactory;
+
+#[derive(Serialize)]
+struct RoleAssignmentOutputShare {
+    schema_version: &'static str,
+    role_share: String,
+    role_share_encoding: &'static str,
+    werewolf_mates_mask_share: String,
+    werewolf_mates_mask_share_encoding: &'static str,
+}
 
 impl CircuitFactory {
     pub fn create_local_circuit(
@@ -469,16 +479,25 @@ impl CircuitFactory {
                 buffer
             }
             BuiltinCircuit::RoleAssignment(circuit) => {
-                let roles = circuit.calculate_output().sync_reveal();
+                let role_outputs = circuit.calculate_output_with_werewolf_mates_mask();
 
-                // Vec<Fr>を文字列の配列に変換してJSON化
-                let role_strings: Vec<String> = roles
+                let serialized_outputs: Vec<RoleAssignmentOutputShare> = role_outputs
                     .iter()
-                    .map(|role_field| role_field.into_repr().to_string())
+                    .map(|output| RoleAssignmentOutputShare {
+                        schema_version: "role_assignment_share_v2",
+                        role_share: output.role_share.unwrap_as_public().into_repr().to_string(),
+                        role_share_encoding: "bn254_fr_decimal_string",
+                        werewolf_mates_mask_share: output
+                            .werewolf_mates_mask_share
+                            .unwrap_as_public()
+                            .into_repr()
+                            .to_string(),
+                        werewolf_mates_mask_share_encoding: "player_index_bitmask_lsb0",
+                    })
                     .collect();
 
                 // JSONとしてシリアライズ
-                serde_json::to_vec(&role_strings).unwrap()
+                serde_json::to_vec(&serialized_outputs).unwrap()
             }
         }
     }

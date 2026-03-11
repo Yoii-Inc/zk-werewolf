@@ -183,10 +183,23 @@ async fn process_job(
 
     let execution_result =
         crate::services::zk_proof::execute_batch_request(&job.batch_request).await;
-    let execution_error = execution_result.as_ref().err().cloned();
+    let mut execution_error = execution_result.as_ref().err().cloned();
 
     crate::services::zk_proof::store_precomputed_batch_result(batch_id.clone(), execution_result)
         .await;
+
+    if execution_error.is_none() {
+        let mut games = app_state.games.lock().await;
+        if let Some(game) = games.get_mut(&room_id) {
+            game.apply_proof_result_for_batch(&app_state, &job.batch_key, job.batch_request)
+                .await;
+        } else {
+            execution_error = Some(format!(
+                "Game not found while applying proof result: room_id={}",
+                room_id
+            ));
+        }
+    }
 
     let mut final_status_for_broadcast = None;
     {
@@ -222,12 +235,4 @@ async fn process_job(
             );
         }
     }
-
-    let mut games = app_state.games.lock().await;
-    let Some(game) = games.get_mut(&room_id) else {
-        return;
-    };
-
-    game.apply_proof_result_for_batch(&app_state, &job.batch_key, job.batch_request)
-        .await;
 }

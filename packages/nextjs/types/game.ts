@@ -53,6 +53,7 @@ export interface GameInfo {
 export interface PrivateGameInfo {
   playerId: string;
   playerRole: Role;
+  werewolfTeammateIds?: string[];
   hasActed: boolean; // アクションを実行済みか
 }
 

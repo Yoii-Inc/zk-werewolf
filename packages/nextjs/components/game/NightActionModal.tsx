@@ -6,6 +6,7 @@ interface NightActionModalProps {
   players: Player[];
   role: Role;
   gameInfo: GameInfo;
+  werewolfTeammateIds?: string[];
   onSubmit: (targetPlayerId: string) => void;
   onClose: () => void;
   roomId: string;
@@ -16,6 +17,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
   players,
   role,
   gameInfo,
+  werewolfTeammateIds = [],
   onSubmit,
   onClose,
   roomId,
@@ -23,6 +25,7 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
 }) => {
   const [selectedPlayer, setSelectedPlayer] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const werewolfTeammateIdSet = new Set(werewolfTeammateIds);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,10 +86,14 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
   const selectablePlayers = players.filter(p => {
     if (p.is_dead === true) return false;
     if (p.id === myId) return false; // 自分自身は選択できない
-    // Note: Werewolf同士の識別情報はサーバーが保持していないため、
-    // 将来的にMPC計算結果として共有する必要がある
+    if (role === "Werewolf" && werewolfTeammateIdSet.has(p.id)) return false;
     return true;
   });
+
+  const werewolfTeammateNames =
+    role === "Werewolf"
+      ? players.filter(player => werewolfTeammateIdSet.has(player.id)).map(player => player.name)
+      : [];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -94,6 +101,11 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
         <h2 className="text-xl font-bold mb-4 text-indigo-900">
           {role === "Seer" ? "Select a target to divine" : role === "Werewolf" ? "Select a target to attack" : ""}
         </h2>
+        {role === "Werewolf" && werewolfTeammateNames.length > 0 && (
+          <p className="mb-3 text-sm text-red-700 bg-red-50 border border-red-100 rounded px-3 py-2">
+            Werewolf teammates: {werewolfTeammateNames.join(", ")}
+          </p>
+        )}
         <div className="space-y-2 mb-6">
           {selectablePlayers.map(player => (
             <div

@@ -71,6 +71,10 @@ declare global {
   var testPlayers: TestPlayer[];
   // eslint-disable-next-line no-var
   var testSockets: any[] | undefined;
+  // eslint-disable-next-line no-var
+  var roleAssignmentDeliveries:
+    | Array<{ receiverPlayerId: string; targetPlayerId?: string; batchId?: string }>
+    | undefined;
 }
 
 export { GameSetupHelper };
@@ -83,11 +87,50 @@ function getMpcNodePublicKeys(): string[] {
   ];
 }
 
-function decodeRoleName(roleHex: string): "Villager" | "Seer" | "Werewolf" {
-  const roleId = (BigInt("0x" + roleHex) % BigInt(3)).toString();
-  if (roleId === "1") return "Seer";
-  if (roleId === "2") return "Werewolf";
+const BN254_SCALAR_MODULUS = BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+
+const normalizeFieldElement = (value: bigint): bigint => {
+  const reduced = value % BN254_SCALAR_MODULUS;
+  return reduced >= 0n ? reduced : reduced + BN254_SCALAR_MODULUS;
+};
+
+function decodeRoleName(roleValue: bigint): "Villager" | "Seer" | "Werewolf" {
+  const roleId = normalizeFieldElement(roleValue) % 3n;
+  if (roleId === 1n) return "Seer";
+  if (roleId === 2n) return "Werewolf";
   return "Villager";
+}
+
+const roleShareBuffers = new Map<
+  string,
+  {
+    requiredShares: number;
+    roleSharesByNode: Map<number, bigint>;
+    werewolfMaskSharesByNode: Map<number, bigint>;
+    completed: boolean;
+  }
+>();
+
+function decodeWerewolfTeammateIdsForTest(
+  maskValue: bigint,
+  myRole: "Villager" | "Seer" | "Werewolf",
+  myPlayerId: string,
+): string[] {
+  if (myRole !== "Werewolf") {
+    return [];
+  }
+
+  const players = global.testPlayers ?? [];
+  const normalizedMask = normalizeFieldElement(maskValue);
+  const teammateIds: string[] = [];
+  for (let index = 0; index < players.length; index += 1) {
+    const bit = (normalizedMask >> BigInt(index)) & 1n;
+    if (bit !== 1n) continue;
+    const teammateId = players[index]?.id;
+    if (!teammateId || teammateId === myPlayerId) continue;
+    teammateIds.push(teammateId);
+  }
+  return teammateIds;
 }
 
 function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payload: any): void {
@@ -96,17 +139,47 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
     return;
   }
 
-  const encryptedRole = payload?.result_data?.encrypted_role;
-  if (!encryptedRole) {
+  const encryptedRoleShare = payload?.result_data?.encrypted_role_share;
+  if (!encryptedRoleShare) {
     return;
   }
 
-  const encrypted = encryptedRole.encrypted as string | undefined;
-  const nonce = encryptedRole.nonce as string | undefined;
-  const nodeIdRaw = encryptedRole.node_id as number | string | undefined;
+  const encrypted = encryptedRoleShare.encrypted as string | undefined;
+  const nonce = encryptedRoleShare.nonce as string | undefined;
+  const nodeIdRaw = encryptedRoleShare.node_id as number | string | undefined;
+  const requiredSharesRaw = encryptedRoleShare.required_shares as number | string | undefined;
+  const shareEncoding =
+    (encryptedRoleShare.role_share_encoding as string | undefined) ||
+    (encryptedRoleShare.share_encoding as string | undefined);
+  const werewolfMaskShareEncoding = encryptedRoleShare.werewolf_mates_mask_share_encoding as string | undefined;
   const nodeId = typeof nodeIdRaw === "string" ? Number(nodeIdRaw) : nodeIdRaw;
+  const requiredShares = typeof requiredSharesRaw === "string" ? Number(requiredSharesRaw) : requiredSharesRaw;
+  const batchId = payload?.batch_id as string | undefined;
 
   if (!encrypted || !nonce || typeof nodeId !== "number") {
+    return;
+  }
+  if (!Number.isFinite(requiredShares) || (requiredShares ?? 0) <= 0) {
+    return;
+  }
+  if (shareEncoding && shareEncoding !== "bn254_fr_decimal_string") {
+    return;
+  }
+  if (werewolfMaskShareEncoding && werewolfMaskShareEncoding !== "player_index_bitmask_lsb0") {
+    return;
+  }
+  if (!batchId) {
+    return;
+  }
+
+  const bufferKey = `${roomId}:${playerId}:${batchId}`;
+  const existingBuffer = roleShareBuffers.get(bufferKey) ?? {
+    requiredShares: requiredShares as number,
+    roleSharesByNode: new Map<number, bigint>(),
+    werewolfMaskSharesByNode: new Map<number, bigint>(),
+    completed: false,
+  };
+  if (existingBuffer.completed || existingBuffer.roleSharesByNode.has(nodeId)) {
     return;
   }
 
@@ -125,23 +198,55 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
   try {
     const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, senderPublicKey);
     const decryptedString = new TextDecoder("utf-8").decode(decryptedBinary);
-    const roleData = JSON.parse(decryptedString) as string[];
-    if (!Array.isArray(roleData) || roleData.length === 0 || typeof roleData[0] !== "string") {
+    const parsedShare = JSON.parse(decryptedString) as {
+      role_share?: string;
+      werewolf_mates_mask_share?: string;
+    };
+    if (!parsedShare || typeof parsedShare.role_share !== "string") {
       throw new Error("Invalid role payload");
     }
+    const werewolfMaskShareString =
+      typeof parsedShare.werewolf_mates_mask_share === "string" ? parsedShare.werewolf_mates_mask_share : "0";
+    const shareValue = normalizeFieldElement(BigInt(parsedShare.role_share));
+    const werewolfMaskShareValue = normalizeFieldElement(BigInt(werewolfMaskShareString));
+    existingBuffer.requiredShares = Math.max(existingBuffer.requiredShares, requiredShares as number);
+    existingBuffer.roleSharesByNode.set(nodeId, shareValue);
+    existingBuffer.werewolfMaskSharesByNode.set(nodeId, werewolfMaskShareValue);
+    roleShareBuffers.set(bufferKey, existingBuffer);
 
-    const roleName = decodeRoleName(roleData[0]);
+    if (existingBuffer.roleSharesByNode.size < existingBuffer.requiredShares) {
+      return;
+    }
+
+    let combinedShare = 0n;
+    for (const share of existingBuffer.roleSharesByNode.values()) {
+      combinedShare = normalizeFieldElement(combinedShare + share);
+    }
+
+    let combinedWerewolfMask = 0n;
+    for (const share of existingBuffer.werewolfMaskSharesByNode.values()) {
+      combinedWerewolfMask = normalizeFieldElement(combinedWerewolfMask + share);
+    }
+    const roleName = decodeRoleName(combinedShare);
+    const werewolfTeammateIds = decodeWerewolfTeammateIdsForTest(combinedWerewolfMask, roleName, playerId);
     const existingInfo = getPrivateGameInfo(roomId, playerId);
 
     if (!existingInfo) {
       setPrivateGameInfo(roomId, {
         playerId,
         playerRole: roleName as any,
+        werewolfTeammateIds,
         hasActed: false,
       });
-    } else if (existingInfo.playerRole !== roleName) {
-      updatePrivateGameInfo(roomId, playerId, { playerRole: roleName as any });
+    } else if (
+      existingInfo.playerRole !== roleName ||
+      JSON.stringify(existingInfo.werewolfTeammateIds ?? []) !== JSON.stringify(werewolfTeammateIds)
+    ) {
+      updatePrivateGameInfo(roomId, playerId, { playerRole: roleName as any, werewolfTeammateIds });
     }
+
+    existingBuffer.completed = true;
+    roleShareBuffers.set(bufferKey, existingBuffer);
 
     console.log(`   🔐 [${playerId}] Role reflected from encrypted assignment: ${roleName}`);
   } catch (error) {
@@ -174,9 +279,9 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
 
   const sockets: any[] = [];
   const wsConstructor = WS.WebSocket ? WS.WebSocket : WS;
-  const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8080/api"}/room/${roomId}/ws`;
+  const wsBaseUrl = `${process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8080/api"}/room/${roomId}/ws`;
 
-  console.log(`   Connecting to: ${wsUrl}`);
+  console.log(`   Connecting to: ${wsBaseUrl}`);
 
   // 各プレイヤーのWebSocket接続を並列で開く
   const connectionPromises = players.map(
@@ -187,6 +292,7 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
         }, 5000);
 
         try {
+          const wsUrl = `${wsBaseUrl}?player_id=${encodeURIComponent(player.id)}`;
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call
           const socket: any = new wsConstructor(wsUrl);
 
@@ -233,6 +339,14 @@ async function openTestWebSockets(roomId: string, players: TestPlayer[]): Promis
                 // 注: E2Eテストでは実際の復号化はuseComputationResultsフックが行う
                 // ここではsessionStorageモックが正常に動作することを確認するためのログ出力のみ
                 if (data.computation_type === "role_assignment" && data.target_player_id) {
+                  if (!global.roleAssignmentDeliveries) {
+                    global.roleAssignmentDeliveries = [];
+                  }
+                  global.roleAssignmentDeliveries.push({
+                    receiverPlayerId: player.id,
+                    targetPlayerId: String(data.target_player_id),
+                    batchId: typeof data.batch_id === "string" ? data.batch_id : undefined,
+                  });
                   console.log(
                     `   💾 [${player.name}] Role assignment result received for player_id: ${data.target_player_id}`,
                   );
@@ -428,12 +542,15 @@ export function createTestSetup(options?: TestSetupOptions) {
       console.log("✅ Crypto parameters loaded from server\n");
 
       console.log("✅ Setup completed!\n");
+      global.roleAssignmentDeliveries = [];
     },
 
     /**
      * 各テストの前に実行
      */
     beforeEach: async (): Promise<void> => {
+      roleShareBuffers.clear();
+      global.roleAssignmentDeliveries = [];
       // バッチリセット（エラーが出ても続行）
       try {
         await global.apiClient.resetBatch();

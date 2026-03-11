@@ -96,6 +96,12 @@ describe("ZK Werewolf Integration E2E Tests", () => {
     console.log(`✅ Updated game state (Phase: ${updatedGameState.phase})`);
     console.log(`   Players: ${updatedGameState.players?.length || 0}`);
 
+    const deliveries = global.roleAssignmentDeliveries ?? [];
+    expect(deliveries.length).toBeGreaterThan(0);
+    deliveries.forEach(delivery => {
+      expect(delivery.receiverPlayerId).toBe(delivery.targetPlayerId);
+    });
+
     console.log("\n✅ Test 2 completed: Commitments and role assignment successful\n");
   }, 300000);
 

@@ -82,6 +82,7 @@ export const useGameInfo = (
             const newPrivateInfo: PrivateGameInfo = {
               playerId: userId,
               playerRole: null as any, // Roleはまだ未決定
+              werewolfTeammateIds: [],
               hasActed: false,
             };
 

@@ -49,6 +49,24 @@ struct ComputationResultNotification {
 pub struct WebSocketConnectQuery {
     #[serde(default)]
     last_event_id: Option<u64>,
+    #[serde(default)]
+    player_id: Option<String>,
+}
+
+fn should_send_event_to_player(
+    payload: &serde_json::Value,
+    connected_player_id: Option<&str>,
+) -> bool {
+    let message_type = payload.get("message_type").and_then(|v| v.as_str());
+    if message_type != Some("computation_result") {
+        return true;
+    }
+
+    let target_player_id = payload.get("target_player_id").and_then(|v| v.as_str());
+    match target_player_id {
+        Some(target) => connected_player_id.is_some_and(|connected| connected == target),
+        None => true,
+    }
 }
 
 impl WebSocketMessage {
@@ -81,12 +99,22 @@ pub async fn handler(
             state.clone(),
             room_id,
             query.last_event_id.unwrap_or(0),
+            query.player_id.clone(),
         )
     })
 }
 
-pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String, last_event_id: u64) {
-    info!("New WebSocket connection established for room: {}", room_id);
+pub async fn handle_socket(
+    ws: WebSocket,
+    state: AppState,
+    room_id: String,
+    last_event_id: u64,
+    connected_player_id: Option<String>,
+) {
+    info!(
+        "New WebSocket connection established for room: {} (player_id={:?})",
+        room_id, connected_player_id
+    );
     let tx = state.get_or_create_room_channel(&room_id).await;
 
     let (mut sender, mut receiver) = ws.split();
@@ -100,6 +128,9 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String, last
         .replay_room_events_since(&room_id, last_event_id)
         .await;
     for event in replay_events {
+        if !should_send_event_to_player(&event.payload, connected_player_id.as_deref()) {
+            continue;
+        }
         match serde_json::to_string(&event) {
             Ok(message_text) => {
                 if sender
@@ -117,81 +148,109 @@ pub async fn handle_socket(ws: WebSocket, state: AppState, room_id: String, last
     let state_for_receive = state.clone();
     let receive_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            if let Message::Text(text) = msg {
-                // JSONメッセージをパースを試みる
-                match serde_json::from_str::<WebSocketMessage>(&text) {
-                    Ok(mut ws_message) => {
-                        // player_idが空の場合はデフォルトIDを使用
-                        if ws_message.player_id.trim().is_empty() {
-                            ws_message.player_id = default_player_id.clone();
-                        }
-                        ws_message.room_id = room_id_for_receive.clone();
-
-                        // チャットメッセージに変換して保存
-                        let chat_message = ws_message.to_chat_message();
-                        if let Err(e) = state_for_receive
-                            .save_chat_message(&room_id_for_receive, chat_message)
-                            .await
-                        {
-                            eprintln!("Error saving chat message: {}", e);
-                        }
-
-                        let payload = match serde_json::to_value(&ws_message) {
-                            Ok(payload) => payload,
-                            Err(e) => {
-                                eprintln!("Error converting websocket message to json: {}", e);
-                                continue;
+            match msg {
+                Message::Text(text) => {
+                    // JSONメッセージをパースを試みる
+                    match serde_json::from_str::<WebSocketMessage>(&text) {
+                        Ok(mut ws_message) => {
+                            // player_idが空の場合はデフォルトIDを使用
+                            if ws_message.player_id.trim().is_empty() {
+                                ws_message.player_id = default_player_id.clone();
                             }
-                        };
-                        info!(
-                            "Received valid message in room {}: {:?}",
-                            room_id_for_receive, ws_message
-                        );
-                        if let Err(e) = state_for_receive
-                            .publish_room_event(&room_id_for_receive, payload)
-                            .await
-                        {
-                            eprintln!("Error sending message: {}", e);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        // 不正なメッセージフォーマットの場合、エラーメッセージを送信
-                        let error_message = WebSocketMessage {
-                            message_type: "error".to_string(),
-                            player_id: "system".to_string(),
-                            player_name: "System".to_string(),
-                            content: format!("メッセージのフォーマットが不正です: {}", e),
-                            timestamp: chrono::Local::now().to_rfc3339(),
-                            room_id: room_id_for_receive.clone(),
-                        };
+                            ws_message.room_id = room_id_for_receive.clone();
 
-                        info!("Sending error message: {:?}", error_message);
-                        let error_payload = match serde_json::to_value(&error_message) {
-                            Ok(payload) => payload,
-                            Err(err) => {
-                                eprintln!("Error converting error message to json: {}", err);
-                                continue;
+                            // チャットメッセージに変換して保存
+                            let chat_message = ws_message.to_chat_message();
+                            if let Err(e) = state_for_receive
+                                .save_chat_message(&room_id_for_receive, chat_message)
+                                .await
+                            {
+                                eprintln!("Error saving chat message: {}", e);
                             }
-                        };
-                        if let Err(err) = state_for_receive
-                            .publish_room_event(&room_id_for_receive, error_payload)
-                            .await
-                        {
-                            eprintln!("Error sending error message: {}", err);
+
+                            let payload = match serde_json::to_value(&ws_message) {
+                                Ok(payload) => payload,
+                                Err(e) => {
+                                    eprintln!("Error converting websocket message to json: {}", e);
+                                    continue;
+                                }
+                            };
+                            info!(
+                                "Received valid message in room {}: {:?}",
+                                room_id_for_receive, ws_message
+                            );
+                            if let Err(e) = state_for_receive
+                                .publish_room_event(&room_id_for_receive, payload)
+                                .await
+                            {
+                                eprintln!("Error sending message: {}", e);
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            // 不正なメッセージフォーマットの場合、エラーメッセージを送信
+                            let error_message = WebSocketMessage {
+                                message_type: "error".to_string(),
+                                player_id: "system".to_string(),
+                                player_name: "System".to_string(),
+                                content: format!("メッセージのフォーマットが不正です: {}", e),
+                                timestamp: chrono::Local::now().to_rfc3339(),
+                                room_id: room_id_for_receive.clone(),
+                            };
+
+                            info!("Sending error message: {:?}", error_message);
+                            let error_payload = match serde_json::to_value(&error_message) {
+                                Ok(payload) => payload,
+                                Err(err) => {
+                                    eprintln!("Error converting error message to json: {}", err);
+                                    continue;
+                                }
+                            };
+                            if let Err(err) = state_for_receive
+                                .publish_room_event(&room_id_for_receive, error_payload)
+                                .await
+                            {
+                                eprintln!("Error sending error message: {}", err);
+                            }
                         }
                     }
                 }
+                Message::Close(_) => {
+                    info!("WebSocket close received for room {}", room_id_for_receive);
+                    break;
+                }
+                _ => {}
             }
         }
     });
 
     let room_id_for_send = room_id_for_send.clone();
+    let connected_player_id_for_send = connected_player_id.clone();
     let send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
+            if let Message::Text(ref text) = msg {
+                match serde_json::from_str::<crate::state::RoomEventEnvelope>(text) {
+                    Ok(event) => {
+                        if !should_send_event_to_player(
+                            &event.payload,
+                            connected_player_id_for_send.as_deref(),
+                        ) {
+                            continue;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error parsing room event envelope: {}", e);
+                    }
+                }
+            }
             info!("Sending message in room {}: {:?}", room_id_for_send, msg);
             if let Err(e) = sender.send(msg).await {
-                eprintln!("Error sending message: {}", e);
+                let err_text = e.to_string();
+                if err_text.contains("closed connection") {
+                    info!("WebSocket already closed for room {}. closing sender task.", room_id_for_send);
+                } else {
+                    eprintln!("Error sending message: {}", err_text);
+                }
                 break;
             }
         }

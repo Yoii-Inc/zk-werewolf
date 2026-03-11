@@ -175,10 +175,10 @@ export const useGamePhase = (
             );
 
             console.log(
-              `Player ${username} (ID: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
+              `Player ${username} (player_id: ${currentPlayer.id}, circuit_id: ${roleAssignmentData.privateInput.id}) initiating role assignment for ${playerCount} players`,
             );
 
-            await submitRoleAssignment(roomId, roleAssignmentData, playerCount);
+            await submitRoleAssignment(roomId, roleAssignmentData, playerCount, currentPlayer.id);
           } catch (error) {
             console.error("Role assignment process error:", error);
 

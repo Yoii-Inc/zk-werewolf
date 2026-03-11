@@ -16,7 +16,12 @@ export const useRoleAssignment = () => {
   ].filter((key): key is string => key != null);
 
   const submitRoleAssignment = useCallback(
-    async (roomId: string, roleAssignmentData: RoleAssignmentInput, alivePlayerCount: number) => {
+    async (
+      roomId: string,
+      roleAssignmentData: RoleAssignmentInput,
+      alivePlayerCount: number,
+      requesterPlayerId?: string,
+    ) => {
       setIsLoading(true);
       setError(null);
       try {
@@ -35,7 +40,7 @@ export const useRoleAssignment = () => {
         const requestBody = {
           proof_type: "RoleAssignment",
           data: {
-            user_id: String(roleAssignmentData.privateInput.id),
+            user_id: requesterPlayerId ? String(requesterPlayerId) : String(roleAssignmentData.privateInput.id),
             prover_count: alivePlayerCount,
             encrypted_data: encryptedRoleAssignment,
             public_key: roleAssignmentData.publicKey, // プレイヤーの公開鍵を追加

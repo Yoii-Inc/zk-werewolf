@@ -1,6 +1,7 @@
 import { CryptoHelper } from "./helpers/crypto";
 import { GameSetupHelper, checkWebSocketConnections, createTestSetup } from "./setup";
 import { GameInfo } from "~~/types/game";
+import { getPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
 type DivinationStrategy = "next-player" | "last-player";
 type VotingStrategy = "ring" | "focus-player-2" | "split-vote";
@@ -87,6 +88,38 @@ async function runFullScenarioFlow(scenario: FullScenario): Promise<void> {
   await GameSetupHelper.submitPlayerCommitments(roomId, players, gameState);
   await new Promise(resolve => setTimeout(resolve, 3000));
   await GameSetupHelper.submitRoleAssignmentRequests(roomId, players, gameState);
+  const deliveries = global.roleAssignmentDeliveries ?? [];
+  expect(deliveries.length).toBeGreaterThan(0);
+  deliveries.forEach(delivery => {
+    expect(delivery.receiverPlayerId).toBe(delivery.targetPlayerId);
+  });
+
+  if (scenario.werewolfCount >= 2) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const privateInfos = players
+      .map(player => getPrivateGameInfo(roomId, player.id))
+      .filter((info): info is NonNullable<typeof info> => Boolean(info));
+    const werewolves = privateInfos.filter(info => info.playerRole === "Werewolf");
+    const werewolfIdSet = new Set(werewolves.map(info => info.playerId));
+
+    expect(werewolves.length).toBe(scenario.werewolfCount);
+
+    werewolves.forEach(werewolfInfo => {
+      const teammateIds = werewolfInfo.werewolfTeammateIds ?? [];
+      expect(teammateIds.length).toBe(scenario.werewolfCount - 1);
+      expect(teammateIds).not.toContain(werewolfInfo.playerId);
+      teammateIds.forEach(teammateId => {
+        expect(werewolfIdSet.has(teammateId)).toBe(true);
+      });
+    });
+
+    privateInfos
+      .filter(info => info.playerRole !== "Werewolf")
+      .forEach(info => {
+        expect(info.werewolfTeammateIds ?? []).toHaveLength(0);
+      });
+  }
 
   gameState = await global.apiClient.getGameState(roomId);
   await GameSetupHelper.submitKeyPublicizeRequests(roomId, players, gameState);

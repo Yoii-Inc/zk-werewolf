@@ -6,6 +6,7 @@ type WebSocketStatus = "disconnected" | "connecting" | "connected" | "reconnecti
 interface UseGameWebSocketOptions {
   onReconnect?: () => void | Promise<void>;
   onGapDetected?: (detail: { expectedEventId: number; receivedEventId: number }) => void | Promise<void>;
+  playerId?: string;
 }
 
 interface RoomEventEnvelope {
@@ -58,7 +59,7 @@ export const useGameWebSocket = (
   username?: string,
   options?: UseGameWebSocketOptions,
 ) => {
-  const { onReconnect, onGapDetected } = options ?? {};
+  const { onReconnect, onGapDetected, playerId } = options ?? {};
   const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<WebSocketStatus>("disconnected");
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -132,7 +133,7 @@ export const useGameWebSocket = (
 
       if (isRoomEventEnvelope(parsed)) {
         const incomingEventId = parsed.event_id;
-        const lastEventId = lastEventIdRef.current;
+        let lastEventId = lastEventIdRef.current;
 
         // Handle duplicate and reset scenarios before normal gap detection.
         if (incomingEventId === lastEventId) {
@@ -146,6 +147,7 @@ export const useGameWebSocket = (
           // local tracking so we can resume processing events from the server.
           lastEventIdRef.current = 0;
           persistLastEventId(roomId, 0);
+          lastEventId = 0;
 
           if (onReconnectRef.current) {
             void Promise.resolve(onReconnectRef.current()).catch(error => {
@@ -311,7 +313,15 @@ export const useGameWebSocket = (
     setWebsocketStatus(reconnectAttemptRef.current > 0 ? "reconnecting" : "connecting");
 
     const lastEventId = lastEventIdRef.current;
-    const resumeWsUrl = lastEventId > 0 ? `${wsUrl}?last_event_id=${encodeURIComponent(String(lastEventId))}` : wsUrl;
+    const params = new URLSearchParams();
+    if (lastEventId > 0) {
+      params.set("last_event_id", String(lastEventId));
+    }
+    if (playerId) {
+      params.set("player_id", playerId);
+    }
+    const query = params.toString();
+    const resumeWsUrl = query.length > 0 ? `${wsUrl}?${query}` : wsUrl;
 
     const ws = new WebSocket(resumeWsUrl);
     websocketRef.current = ws;
@@ -355,7 +365,7 @@ export const useGameWebSocket = (
       setWebsocketStatus("error");
       ws.close();
     };
-  }, [clearReconnectTimer, handleSocketMessage, roomId, scheduleReconnect, wsUrl]);
+  }, [clearReconnectTimer, handleSocketMessage, playerId, roomId, scheduleReconnect, wsUrl]);
   connectWebSocketRef.current = connectWebSocket;
 
   const disconnectWebSocket = useCallback(() => {

@@ -48,6 +48,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const { websocketRef, websocketStatus, reconnectAttempt, connectWebSocket, disconnectWebSocket, sendMessage } =
     useGameWebSocket(params.id, addServerMessage, user?.username, {
       onReconnect: handleWebSocketReconnect,
+      playerId: user?.id,
     });
   const {
     isStarting,
@@ -91,6 +92,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           const updatedInfo = {
             ...existingInfo,
             playerRole: null as any,
+            werewolfTeammateIds: [],
             hasActed: false,
           };
           sessionStorage.setItem(`game_${roomId}_player_${user.id}`, JSON.stringify(updatedInfo));
@@ -266,6 +268,14 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
   const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
+  const werewolfTeammateNames =
+    privateGameInfo?.playerRole === "Werewolf"
+      ? (privateGameInfo.werewolfTeammateIds ?? [])
+          .map(
+            teammateId => playersForView.find(player => String(player.id) === String(teammateId))?.name ?? teammateId,
+          )
+          .filter((name, index, self) => self.indexOf(name) === index)
+      : [];
   const isLobbyState = roomInfo?.status === "Open" || roomInfo?.status === "Ready";
   const isInProgress = roomInfo?.status === "InProgress";
   const isRoomActionDisabled = isInProgress || isLeavingRoom || isDeletingRoom;
@@ -414,6 +424,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     <span className="flex items-center gap-2 text-purple-600 bg-purple-50 px-3 py-1 rounded-full text-sm">
                       Your Role: {privateGameInfo?.playerRole ?? "Unknown"}
                     </span>
+                    {privateGameInfo?.playerRole === "Werewolf" && werewolfTeammateNames.length > 0 && (
+                      <span className="flex items-center gap-2 text-rose-700 bg-rose-50 px-3 py-1 rounded-full text-sm border border-rose-100">
+                        Werewolf Teammates: {werewolfTeammateNames.join(", ")}
+                      </span>
+                    )}
 
                     {isDebugMode && gameInfo.result === "InProgress" && (
                       <>
@@ -803,6 +818,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           onClose={() => setShowNightAction(false)}
           roomId={gameInfo.room_id}
           myId={privateGameInfo?.playerId ?? ""}
+          werewolfTeammateIds={privateGameInfo?.werewolfTeammateIds}
         />
       )}
       {showVoteModal && gameInfo?.phase === "Voting" && (

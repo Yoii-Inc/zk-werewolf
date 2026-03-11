@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getFortuneTellerSecretKey, loadCryptoParams } from "~~/services/gameInputGenerator";
 import type { ChatMessage, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
@@ -19,11 +19,16 @@ interface DivinationResult {
 }
 
 interface RoleAssignmentResult {
-  role_assignments: Array<{
-    player_id: string;
-    player_name: string;
-    role: string;
-  }>;
+  encrypted_role_share?: {
+    encrypted: string;
+    nonce: string;
+    node_id: number | string;
+    required_shares: number | string;
+    schema_version?: string;
+    share_encoding?: string;
+    role_share_encoding?: string;
+    werewolf_mates_mask_share_encoding?: string;
+  };
   status: string;
 }
 
@@ -45,6 +50,16 @@ interface PersistedDivinationLog {
   timestamp: string;
   message: string;
 }
+
+const divinationTargetIdByDayKey = (roomId: string, dayCount: number): string =>
+  `divination_target_${roomId}_${dayCount}`;
+
+const divinationTargetNameByDayKey = (roomId: string, dayCount: number): string =>
+  `divination_target_name_${roomId}_${dayCount}`;
+
+const latestDivinationTargetIdKey = (roomId: string): string => `divination_target_${roomId}`;
+
+const latestDivinationTargetNameKey = (roomId: string): string => `divination_target_name_${roomId}`;
 
 const getDivinationLogsKey = (roomId: string, playerId: string) => `divination_logs_${roomId}_${playerId}`;
 
@@ -100,6 +115,42 @@ const clearDivinationLogs = (roomId: string, playerId: string) => {
   localStorage.removeItem(getDivinationLogsKey(roomId, playerId));
 };
 
+const BN254_SCALAR_MODULUS = BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+
+const normalizeFieldElement = (value: bigint): bigint => {
+  const reduced = value % BN254_SCALAR_MODULUS;
+  return reduced >= 0n ? reduced : reduced + BN254_SCALAR_MODULUS;
+};
+
+const decodeRoleName = (roleId: bigint): "Villager" | "Seer" | "Werewolf" => {
+  const normalized = normalizeFieldElement(roleId) % 3n;
+  if (normalized === 1n) return "Seer";
+  if (normalized === 2n) return "Werewolf";
+  return "Villager";
+};
+
+const decodeWerewolfTeammateIds = (
+  maskValue: bigint,
+  players: Array<{ id: string }> | undefined,
+  myPlayerId: string,
+  myRole: "Villager" | "Seer" | "Werewolf",
+): string[] => {
+  if (myRole !== "Werewolf" || !players || players.length === 0) {
+    return [];
+  }
+
+  const normalizedMask = normalizeFieldElement(maskValue);
+  const teammateIds: string[] = [];
+  for (let index = 0; index < players.length; index += 1) {
+    const bit = (normalizedMask >> BigInt(index)) & 1n;
+    if (bit !== 1n) continue;
+    const teammateId = players[index]?.id;
+    if (!teammateId || teammateId === myPlayerId) continue;
+    teammateIds.push(teammateId);
+  }
+  return teammateIds;
+};
+
 export const useComputationResults = (
   roomId: string,
   playerId: string,
@@ -111,6 +162,22 @@ export const useComputationResults = (
   const [winningJudgeResult, setWinningJudgeResult] = useState<WinningJudgeResult | null>(null);
   const [votingResult, setVotingResult] = useState<AnonymousVotingResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const roleShareBuffersRef = useRef<
+    Map<
+      string,
+      {
+        requiredShares: number;
+        roleSharesByNode: Map<number, bigint>;
+        werewolfMaskSharesByNode: Map<number, bigint>;
+      }
+    >
+  >(new Map());
+  const completedRoleBatchRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    roleShareBuffersRef.current.clear();
+    completedRoleBatchRef.current.clear();
+  }, [playerId, roomId]);
 
   useEffect(() => {
     if (!roomId || !playerId) return;
@@ -252,12 +319,27 @@ export const useComputationResults = (
                 }
 
                 // 占い対象のプレイヤー名を取得
-                const targetPlayerId = localStorage.getItem(`divination_target_${roomId}`);
-                const targetPlayerName = localStorage.getItem(`divination_target_name_${roomId}`);
+                const resultDayCountRaw = result.resultData?.day_count;
+                const resultDayCount =
+                  typeof resultDayCountRaw === "number"
+                    ? resultDayCountRaw
+                    : Number.parseInt(String(resultDayCountRaw ?? ""), 10);
+
+                const targetPlayerIdByDay = Number.isFinite(resultDayCount)
+                  ? localStorage.getItem(divinationTargetIdByDayKey(roomId, resultDayCount))
+                  : null;
+                const targetPlayerNameByDay = Number.isFinite(resultDayCount)
+                  ? localStorage.getItem(divinationTargetNameByDayKey(roomId, resultDayCount))
+                  : null;
+
+                const targetPlayerId = targetPlayerIdByDay || localStorage.getItem(latestDivinationTargetIdKey(roomId));
+                const targetPlayerName =
+                  targetPlayerNameByDay || localStorage.getItem(latestDivinationTargetNameKey(roomId));
+
                 let targetName = targetPlayerName || "Unknown";
                 // gameInfoから最新の名前も確認
                 if (targetPlayerId && gameInfo?.players) {
-                  const targetPlayer = gameInfo.players.find((p: any) => p.id === targetPlayerId);
+                  const targetPlayer = gameInfo.players.find((p: any) => String(p.id) === String(targetPlayerId));
                   if (targetPlayer) {
                     targetName = targetPlayer.name;
                   }
@@ -313,104 +395,146 @@ export const useComputationResults = (
           case "role_assignment":
             setRoleAssignmentResult(result.resultData);
 
-            // Role情報の復号処理
             try {
-              console.log("Starting role assignment decryption process");
-              console.log("Result data:", result.resultData);
-
-              // 暗号化されたRoleデータを取得
-              if (!result.resultData.encrypted_role) {
-                throw new Error("No encrypted role data in result");
+              const shareData = result.resultData?.encrypted_role_share;
+              if (!shareData) {
+                throw new Error("No encrypted role share found in role_assignment result");
               }
 
-              const { encrypted, nonce, node_id } = result.resultData.encrypted_role;
+              const {
+                encrypted,
+                nonce,
+                node_id: nodeIdRaw,
+                required_shares: requiredSharesRaw,
+                share_encoding: shareEncoding,
+                role_share_encoding: roleShareEncodingRaw,
+                werewolf_mates_mask_share_encoding: werewolfMaskEncodingRaw,
+              } = shareData;
 
-              if (!encrypted || !nonce || node_id === undefined) {
-                throw new Error("Invalid encrypted role data structure");
+              const nodeId = typeof nodeIdRaw === "string" ? Number(nodeIdRaw) : nodeIdRaw;
+              const requiredShares =
+                typeof requiredSharesRaw === "string" ? Number(requiredSharesRaw) : requiredSharesRaw;
+              const roleShareEncoding = roleShareEncodingRaw ?? shareEncoding;
+              const werewolfMaskEncoding = werewolfMaskEncodingRaw ?? "player_index_bitmask_lsb0";
+
+              if (!encrypted || !nonce || !Number.isFinite(nodeId)) {
+                throw new Error("Invalid encrypted role share payload");
+              }
+              if (!Number.isFinite(requiredShares) || requiredShares <= 0) {
+                throw new Error(`Invalid required_shares value: ${String(requiredSharesRaw)}`);
+              }
+              if (roleShareEncoding && roleShareEncoding !== "bn254_fr_decimal_string") {
+                throw new Error(`Unsupported role share encoding: ${roleShareEncoding}`);
+              }
+              if (werewolfMaskEncoding && werewolfMaskEncoding !== "player_index_bitmask_lsb0") {
+                throw new Error(`Unsupported werewolf mask encoding: ${werewolfMaskEncoding}`);
               }
 
-              // node_idからMPCノードの公開鍵を取得
               const MPC_NODE_PUBLIC_KEYS = [
                 process.env.NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY || "",
                 process.env.NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY || "",
                 process.env.NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY || "",
               ];
 
-              const sender_public_key = MPC_NODE_PUBLIC_KEYS[node_id];
+              const senderPublicKey = MPC_NODE_PUBLIC_KEYS[nodeId];
 
-              if (!sender_public_key) {
-                throw new Error(`MPC node ${node_id} public key not configured`);
+              if (!senderPublicKey) {
+                throw new Error(`MPC node ${nodeId} public key not configured`);
               }
 
-              // CryptoManagerで復号
               const cryptoManager = new CryptoManager(playerId);
-
               if (!cryptoManager.hasKeyPair()) {
-                throw new Error("No keypair found. Cannot decrypt role.");
+                throw new Error("No keypair found. Cannot decrypt role share.");
               }
 
-              console.log("Decrypting role with CryptoManager");
-              console.log("Encrypted (first 50 chars):", encrypted.substring(0, 50));
-              console.log("Nonce:", nonce);
-              console.log("Sender public key (first 20 chars):", sender_public_key.substring(0, 20));
+              const batchKey = `${result.batchId}:${playerId}`;
+              if (completedRoleBatchRef.current.has(batchKey)) {
+                break;
+              }
 
-              // バイナリデータとして復号
-              const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, sender_public_key);
-
-              console.log("Role decrypted successfully. Binary length:", decryptedBinary.length);
-
-              // バイナリデータをUTF8文字列に変換
+              const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, senderPublicKey);
               const decoder = new TextDecoder("utf-8");
               const decryptedString = decoder.decode(decryptedBinary);
 
-              console.log("Decrypted string:", decryptedString);
-
-              // JSONとしてパース（Vec<String>形式を想定）
-              let roleData: string[] | null = null;
+              let roleShareString: string | null = null;
+              let werewolfMatesMaskShareString = "0";
               try {
-                roleData = JSON.parse(decryptedString);
-                console.log("Parsed role data:", roleData);
+                const parsed = JSON.parse(decryptedString) as {
+                  role_share?: string;
+                  werewolf_mates_mask_share?: string;
+                  role_share_encoding?: string;
+                  werewolf_mates_mask_share_encoding?: string;
+                };
+                if (parsed && typeof parsed.role_share === "string") {
+                  roleShareString = parsed.role_share;
+                }
+                if (parsed && typeof parsed.werewolf_mates_mask_share === "string") {
+                  werewolfMatesMaskShareString = parsed.werewolf_mates_mask_share;
+                }
+
+                if (parsed?.role_share_encoding && parsed.role_share_encoding !== "bn254_fr_decimal_string") {
+                  throw new Error(`Unsupported decrypted role share encoding: ${parsed.role_share_encoding}`);
+                }
+                if (
+                  parsed?.werewolf_mates_mask_share_encoding &&
+                  parsed.werewolf_mates_mask_share_encoding !== "player_index_bitmask_lsb0"
+                ) {
+                  throw new Error(
+                    `Unsupported decrypted werewolf mask encoding: ${parsed.werewolf_mates_mask_share_encoding}`,
+                  );
+                }
               } catch (parseError) {
-                console.error("Failed to parse role data as JSON:", parseError);
-                console.log("Raw data (first 200 chars):", decryptedString.substring(0, 200));
-                throw new Error("Invalid role data format");
+                throw new Error(
+                  `Invalid role share payload: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                );
+              }
+              if (!roleShareString) {
+                throw new Error("Missing role_share in decrypted payload");
               }
 
-              // roleDataから実際のRole情報を抽出
-              // 修正後: 各プレイヤーには自分のRole IDのみが配列として送られる
-              // 例: ["0000000000000000000000000000000000000000000000000000000000000002"]
-              // 値はBigInt形式の16進数文字列で、0=Villager, 1=FortuneTeller, 2=Werewolf
-
-              if (!roleData || roleData.length === 0) {
-                throw new Error("Empty role data received");
-              }
-
-              // 配列の最初（唯一）の要素がこのプレイヤーのRole ID
-              const roleIdStr = roleData[0];
-
-              // 16進数文字列をBigIntとしてパース
-              const roleIdBigInt = BigInt("0x" + roleIdStr);
-              const roleId = roleIdBigInt % BigInt(3); // 0, 1, 2 のいずれか
-
-              const ROLE_MAPPING: Record<string, string> = {
-                "0": "Villager",
-                "1": "Seer",
-                "2": "Werewolf",
+              const roleShare = normalizeFieldElement(BigInt(roleShareString));
+              const werewolfMatesMaskShare = normalizeFieldElement(BigInt(werewolfMatesMaskShareString));
+              const existingBuffer = roleShareBuffersRef.current.get(batchKey) ?? {
+                requiredShares,
+                roleSharesByNode: new Map<number, bigint>(),
+                werewolfMaskSharesByNode: new Map<number, bigint>(),
               };
+              existingBuffer.requiredShares = Math.max(existingBuffer.requiredShares, requiredShares);
+              if (existingBuffer.roleSharesByNode.has(nodeId)) {
+                break;
+              }
+              existingBuffer.roleSharesByNode.set(nodeId, roleShare);
+              existingBuffer.werewolfMaskSharesByNode.set(nodeId, werewolfMatesMaskShare);
+              roleShareBuffersRef.current.set(batchKey, existingBuffer);
 
-              const roleName = ROLE_MAPPING[roleId.toString()] || "Unknown";
+              if (existingBuffer.roleSharesByNode.size < existingBuffer.requiredShares) {
+                break;
+              }
 
-              console.log("Role ID:", roleId.toString(), "Role Name:", roleName);
+              let combinedRoleShare = 0n;
+              for (const share of existingBuffer.roleSharesByNode.values()) {
+                combinedRoleShare = normalizeFieldElement(combinedRoleShare + share);
+              }
 
-              // 復号したRoleをprivateGameInfoに保存
-              // まず既存の情報を確認し、なければ初期化してから更新
+              let combinedWerewolfMaskShare = 0n;
+              for (const share of existingBuffer.werewolfMaskSharesByNode.values()) {
+                combinedWerewolfMaskShare = normalizeFieldElement(combinedWerewolfMaskShare + share);
+              }
+
+              const roleName = decodeRoleName(combinedRoleShare);
+              const werewolfTeammateIds = decodeWerewolfTeammateIds(
+                combinedWerewolfMaskShare,
+                gameInfo?.players,
+                playerId,
+                roleName,
+              );
               let existingInfo = getPrivateGameInfo(roomId, playerId);
 
               if (!existingInfo) {
-                console.log("PrivateGameInfo not found, initializing before role assignment");
                 const initialInfo: PrivateGameInfo = {
-                  playerId: playerId,
+                  playerId,
                   playerRole: null as any,
+                  werewolfTeammateIds: [],
                   hasActed: false,
                 };
                 setPrivateGameInfo(roomId, initialInfo);
@@ -419,25 +543,32 @@ export const useComputationResults = (
 
               const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
                 playerRole: roleName as "Villager" | "Werewolf" | "Seer",
+                werewolfTeammateIds,
               });
 
-              if (updatedInfo) {
-                console.log("PrivateGameInfo updated successfully:", updatedInfo);
-              } else {
+              if (!updatedInfo) {
                 console.error("Failed to update PrivateGameInfo even after initialization attempt");
               }
+
+              completedRoleBatchRef.current.add(batchKey);
+              roleShareBuffersRef.current.delete(batchKey);
+
+              const werewolfTeammateNames = werewolfTeammateIds
+                .map(id => gameInfo?.players?.find((player: any) => String(player.id) === String(id))?.name || id)
+                .filter((name, index, self) => self.indexOf(name) === index);
 
               addMessage({
                 id: Date.now().toString(),
                 sender: "System",
-                message: `Your role has been assigned: ${roleName} (from node ${node_id})`,
+                message:
+                  roleName === "Werewolf" && werewolfTeammateNames.length > 0
+                    ? `Your role has been assigned: ${roleName} (teammates: ${werewolfTeammateNames.join(", ")})`
+                    : `Your role has been assigned: ${roleName}`,
                 timestamp: new Date().toISOString(),
                 type: "system",
               });
 
-              // Role割り当て完了イベントを発火
               window.dispatchEvent(new CustomEvent("roleAssignmentCompleted"));
-              console.log("Role assignment completion event dispatched");
             } catch (error) {
               console.error("Role decryption error:", error);
               addMessage({
