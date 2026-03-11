@@ -796,7 +796,6 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           players={gameInfo.players}
           role={privateGameInfo?.playerRole ?? "Villager"}
           gameInfo={gameInfo}
-          username={user?.username ?? ""}
           onSubmit={() => {
             // handleNightAction(targetPlayerId, privateGameInfo?.playerRole);
             setShowNightAction(false);

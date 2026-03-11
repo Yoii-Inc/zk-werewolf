@@ -5,15 +5,60 @@ type WebSocketStatus = "disconnected" | "connecting" | "connected" | "reconnecti
 
 interface UseGameWebSocketOptions {
   onReconnect?: () => void | Promise<void>;
+  onGapDetected?: (detail: { expectedEventId: number; receivedEventId: number }) => void | Promise<void>;
 }
+
+interface RoomEventEnvelope {
+  event_id: number;
+  room_id: string;
+  timestamp: string;
+  payload: unknown;
+}
+
+const getLastEventIdStorageKey = (roomId: string) => `ws_last_event_id_${roomId}`;
+
+const loadLastEventId = (roomId: string): number => {
+  if (typeof window === "undefined" || !roomId) return 0;
+  try {
+    const raw = sessionStorage.getItem(getLastEventIdStorageKey(roomId));
+    if (!raw) return 0;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const persistLastEventId = (roomId: string, eventId: number) => {
+  if (typeof window === "undefined" || !roomId) return;
+  try {
+    sessionStorage.setItem(getLastEventIdStorageKey(roomId), String(eventId));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const isRoomEventEnvelope = (value: unknown): value is RoomEventEnvelope => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<RoomEventEnvelope>;
+  return (
+    typeof candidate.event_id === "number" &&
+    typeof candidate.room_id === "string" &&
+    typeof candidate.timestamp === "string" &&
+    "payload" in candidate
+  );
+};
 
 export const useGameWebSocket = (
   roomId: string,
-  addServerMessage: (message: ChatMessage) => void, // サーバー側メッセージを追加する関数
+  addServerMessage: (message: ChatMessage) => void,
   username?: string,
   options?: UseGameWebSocketOptions,
 ) => {
-  const { onReconnect } = options ?? {};
+  const { onReconnect, onGapDetected } = options ?? {};
   const websocketRef = useRef<WebSocket | null>(null);
   const [websocketStatus, setWebsocketStatus] = useState<WebSocketStatus>("disconnected");
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -23,11 +68,21 @@ export const useGameWebSocket = (
   const manualDisconnectRef = useRef(false);
   const hasConnectedOnceRef = useRef(false);
   const onReconnectRef = useRef<UseGameWebSocketOptions["onReconnect"]>(onReconnect);
+  const onGapDetectedRef = useRef<UseGameWebSocketOptions["onGapDetected"]>(onGapDetected);
   const connectWebSocketRef = useRef<() => void>(() => undefined);
+  const lastEventIdRef = useRef(0);
 
   useEffect(() => {
     onReconnectRef.current = onReconnect;
   }, [onReconnect]);
+
+  useEffect(() => {
+    onGapDetectedRef.current = onGapDetected;
+  }, [onGapDetected]);
+
+  useEffect(() => {
+    lastEventIdRef.current = loadLastEventId(roomId);
+  }, [roomId]);
 
   const wsUrl = useMemo(
     () => `${process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/api"}/room/${roomId}/ws`,
@@ -63,20 +118,78 @@ export const useGameWebSocket = (
 
   const handleSocketMessage = useCallback(
     (rawData: string) => {
-      let data: any;
+      let parsed: unknown;
       try {
-        data = JSON.parse(rawData);
+        parsed = JSON.parse(rawData);
       } catch (error) {
         console.error("Failed to parse WebSocket message:", error);
         return;
       }
 
-      if (!data || typeof data !== "object") {
+      let messageData = parsed;
+      let sourceEventId: number | undefined;
+      let sourceEventTimestamp: string | undefined;
+
+      if (isRoomEventEnvelope(parsed)) {
+        const incomingEventId = parsed.event_id;
+        const lastEventId = lastEventIdRef.current;
+
+        // Handle duplicate and reset scenarios before normal gap detection.
+        if (incomingEventId === lastEventId) {
+          // Exact duplicate of the last event we've already processed.
+          return;
+        }
+
+        if (incomingEventId < lastEventId) {
+          // The server's event_id counter appears to have reset (e.g. after restart)
+          // while the client still has a larger lastEventId persisted. Reset our
+          // local tracking so we can resume processing events from the server.
+          lastEventIdRef.current = 0;
+          persistLastEventId(roomId, 0);
+
+          if (onReconnectRef.current) {
+            void Promise.resolve(onReconnectRef.current()).catch(error => {
+              console.error("Failed to recover after WebSocket stream reset:", error);
+            });
+          }
+          // Do not return here: treat this incoming event as the first event
+          // after a reset and allow it to be processed below.
+        }
+        if (lastEventId > 0 && incomingEventId > lastEventId + 1) {
+          const detail = {
+            expectedEventId: lastEventId + 1,
+            receivedEventId: incomingEventId,
+          };
+
+          window.dispatchEvent(new CustomEvent("wsEventGapDetected", { detail }));
+
+          if (onGapDetectedRef.current) {
+            void Promise.resolve(onGapDetectedRef.current(detail)).catch(error => {
+              console.error("Failed to recover after WebSocket event gap:", error);
+            });
+          } else if (onReconnectRef.current) {
+            void Promise.resolve(onReconnectRef.current()).catch(error => {
+              console.error("Failed to recover after WebSocket event gap:", error);
+            });
+          }
+        }
+
+        lastEventIdRef.current = incomingEventId;
+        persistLastEventId(roomId, incomingEventId);
+
+        sourceEventId = incomingEventId;
+        sourceEventTimestamp = parsed.timestamp;
+        messageData = parsed.payload;
+      }
+
+      if (!messageData || typeof messageData !== "object") {
         return;
       }
 
-      // フェーズ変更通知の場合
-      if (data.message_type === "phase_change") {
+      const data = messageData as Record<string, unknown>;
+      const messageType = data.message_type;
+
+      if (messageType === "phase_change") {
         window.dispatchEvent(
           new CustomEvent("phaseChangeNotification", {
             detail: {
@@ -89,8 +202,7 @@ export const useGameWebSocket = (
         return;
       }
 
-      // コミットメント準備完了通知の場合
-      if (data.message_type === "commitments_ready") {
+      if (messageType === "commitments_ready") {
         window.dispatchEvent(
           new CustomEvent("commitmentsReadyNotification", {
             detail: {
@@ -104,8 +216,7 @@ export const useGameWebSocket = (
         return;
       }
 
-      // 計算結果通知の場合
-      if (data.message_type === "computation_result") {
+      if (messageType === "computation_result") {
         window.dispatchEvent(
           new CustomEvent("computationResultNotification", {
             detail: {
@@ -120,8 +231,37 @@ export const useGameWebSocket = (
         return;
       }
 
-      // ゲームリセット通知の場合
-      if (data.message_type === "game_reset") {
+      if (messageType === "proof_job_status") {
+        window.dispatchEvent(
+          new CustomEvent("proofJobStatusNotification", {
+            detail: {
+              roomId: data.room_id,
+              batchId: data.batch_id,
+              state: data.state,
+              attemptCount: data.attempt_count,
+              lastError: data.last_error,
+              jobNodeStatus: data.job_node_status,
+              updatedAt: data.updated_at,
+            },
+          }),
+        );
+        return;
+      }
+
+      if (messageType === "room_state_changed") {
+        window.dispatchEvent(
+          new CustomEvent("roomStateChangedNotification", {
+            detail: {
+              roomId: data.room_id,
+              reason: data.reason,
+              timestamp: data.timestamp,
+            },
+          }),
+        );
+        return;
+      }
+
+      if (messageType === "game_reset") {
         window.dispatchEvent(
           new CustomEvent("gameResetNotification", {
             detail: {
@@ -133,22 +273,29 @@ export const useGameWebSocket = (
         return;
       }
 
-      // 通常のチャットメッセージ
       if (typeof data.player_name !== "string" || typeof data.content !== "string") {
         return;
       }
 
-      const fullMessage: WebSocketMessage = data;
+      const fullMessage = data as unknown as WebSocketMessage;
       addServerMessage({
-        id: typeof fullMessage.player_id === "string" ? fullMessage.player_id : "Server",
+        id:
+          sourceEventId !== undefined
+            ? `event-${sourceEventId}`
+            : typeof fullMessage.player_id === "string"
+              ? fullMessage.player_id
+              : "Server",
         sender: fullMessage.player_name,
         message: fullMessage.content,
-        timestamp: typeof fullMessage.timestamp === "string" ? fullMessage.timestamp : new Date().toISOString(),
+        timestamp:
+          typeof fullMessage.timestamp === "string"
+            ? fullMessage.timestamp
+            : sourceEventTimestamp || new Date().toISOString(),
         type: "normal",
         source: "server",
       });
     },
-    [addServerMessage],
+    [addServerMessage, roomId],
   );
 
   const connectWebSocket = useCallback(() => {
@@ -163,7 +310,10 @@ export const useGameWebSocket = (
     manualDisconnectRef.current = false;
     setWebsocketStatus(reconnectAttemptRef.current > 0 ? "reconnecting" : "connecting");
 
-    const ws = new WebSocket(wsUrl);
+    const lastEventId = lastEventIdRef.current;
+    const resumeWsUrl = lastEventId > 0 ? `${wsUrl}?last_event_id=${encodeURIComponent(String(lastEventId))}` : wsUrl;
+
+    const ws = new WebSocket(resumeWsUrl);
     websocketRef.current = ws;
 
     ws.onopen = () => {
@@ -245,12 +395,13 @@ export const useGameWebSocket = (
     setReconnectAttempt(0);
     hasConnectedOnceRef.current = false;
     manualDisconnectRef.current = false;
+    lastEventIdRef.current = loadLastEventId(roomId);
     connectWebSocket();
 
     return () => {
       disconnectWebSocket();
     };
-  }, [connectWebSocket, disconnectWebSocket]);
+  }, [connectWebSocket, disconnectWebSocket, roomId]);
 
   useEffect(() => {
     const tryReconnectNow = () => {

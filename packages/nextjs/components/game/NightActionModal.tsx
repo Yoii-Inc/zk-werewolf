@@ -1,15 +1,11 @@
 import React, { useState } from "react";
 import type { Player, Role } from "../../app/types";
-import { useGameInputGenerator } from "../../hooks/useGameInputGenerator";
-import { useBackgroundNightAction } from "~~/hooks/useBackgroundNightAction";
-import { useDivination } from "~~/hooks/useDivination";
 import type { GameInfo } from "~~/types/game";
 
 interface NightActionModalProps {
   players: Player[];
   role: Role;
   gameInfo: GameInfo;
-  username: string;
   onSubmit: (targetPlayerId: string) => void;
   onClose: () => void;
   roomId: string;
@@ -20,7 +16,6 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
   players,
   role,
   gameInfo,
-  username,
   onSubmit,
   onClose,
   roomId,
@@ -28,9 +23,6 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
 }) => {
   const [selectedPlayer, setSelectedPlayer] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { submitDivination, error, proofStatus } = useDivination();
-  const { handleBackgroundNightAction } = useBackgroundNightAction();
-  const { isReady, generateDivinationInput } = useGameInputGenerator(roomId, username, gameInfo);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,29 +33,10 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
     try {
       // 占い師の場合は占い処理を行う
       if (role === "Seer") {
-        if (!isReady) {
-          throw new Error("Game crypto is not ready");
-        }
-
-        // 占い対象をlocalStorageに保存（結果受信時に使用）
-        localStorage.setItem(`divination_target_${roomId}`, selectedPlayer);
-        const targetPlayerName = players.find(p => p.id === selectedPlayer)?.name || "Unknown";
-        localStorage.setItem(`divination_target_name_${roomId}`, targetPlayerName);
-        console.log("Divination target saved to localStorage:", selectedPlayer, targetPlayerName);
-
-        // 占いデータを生成
-        const divinationData = await generateDivinationInput(selectedPlayer, false);
-
-        console.log("占いデータ:", divinationData);
-
-        if (!divinationData) {
-          throw new Error("Failed to generate divination data");
-        }
-
-        const alivePlayerCount = players.filter(player => !player.is_dead).length;
-
-        console.log("Executing divination.");
-        await submitDivination(roomId, divinationData, alivePlayerCount);
+        // 占い師は夜フェーズでは送信せず、遷移時に全員同時送信する。
+        const dayCount = gameInfo.day_count ?? 0;
+        localStorage.setItem(`pending_divination_target_${roomId}_${dayCount}`, selectedPlayer);
+        console.log(`Divination target saved for synchronized submission: room=${roomId}, day=${dayCount}`);
       }
       // 人狼の場合は襲撃処理を行う
       else if (role === "Werewolf") {
@@ -104,7 +77,9 @@ const NightActionModal: React.FC<NightActionModalProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  }; // Filter selectable players based on role
+  };
+
+  // Filter selectable players based on role
   const selectablePlayers = players.filter(p => {
     if (p.is_dead === true) return false;
     if (p.id === myId) return false; // 自分自身は選択できない

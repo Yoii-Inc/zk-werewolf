@@ -1,7 +1,7 @@
 use crate::{
     blockchain::state_hash::{compute_game_id, compute_game_state_hash, is_evm_address},
     models::{
-        game::{BatchStatus, Game, GamePhase, NightAction, NightActionRequest},
+        game::{Game, GamePhase, NightAction, NightActionRequest},
         role::Role,
         room::{RoleConfig, RoomStatus, TimeConfig},
     },
@@ -211,7 +211,7 @@ pub async fn auto_advance_due_phases(state: AppState) {
                     return None;
                 }
 
-                if game.batch_request.status == BatchStatus::Processing {
+                if game.has_pending_or_processing_batches() {
                     return None;
                 }
 

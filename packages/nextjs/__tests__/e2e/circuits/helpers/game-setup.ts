@@ -228,7 +228,7 @@ export class GameSetupHelper {
         );
 
         console.log(`   📤 Submitting Divination request for ${player.name}...`);
-        await apiClient.submitDivination(roomId, divinationInput, players.length, player.token);
+        await apiClient.submitDivination(roomId, divinationInput, players.length, player.token, isDummy);
         console.log(`   ✅ ${player.name} Divination request sent`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
