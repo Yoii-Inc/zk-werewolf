@@ -1189,6 +1189,11 @@ impl Game {
                     }
                     CircuitEncryptedInputIdentifier::RoleAssignment(_items) => {
                         println!("RoleAssignment process is starting...");
+                        let player_order: Vec<String> = self
+                            .players
+                            .iter()
+                            .map(|player| player.id.clone())
+                            .collect();
 
                         let Some(encrypted_shares) = output.shares else {
                             println!("RoleAssignment failed: no encrypted shares in proof output");
@@ -1225,6 +1230,7 @@ impl Game {
                             serde_json::json!({
                                 "encrypted_share_count": encrypted_shares.len(),
                                 "required_shares_by_player": required_shares_by_player.clone(),
+                                "player_order": player_order.clone(),
                                 "schema_version": "role_assignment_share_v2",
                                 "share_encoding": "bn254_fr_decimal_string",
                                 "role_share_encoding": "bn254_fr_decimal_string",
@@ -1273,6 +1279,7 @@ impl Game {
                                     "role_share_encoding": "bn254_fr_decimal_string",
                                     "werewolf_mates_mask_share_encoding": "player_index_bitmask_lsb0"
                                 },
+                                "player_order": player_order.clone(),
                                 "status": "ready"
                             });
 

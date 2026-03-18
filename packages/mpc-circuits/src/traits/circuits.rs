@@ -1183,6 +1183,142 @@ impl KeyPublicizeCircuit<MpcField<Fr>> {
     }
 }
 
+impl RoleAssignmentCircuit<Fr> {
+    // Vec<Fr> は各プレイヤーの役職IDを表す。0が村人、1が占い師、2が人狼など。
+    pub fn calculate_output(&self) -> Vec<Fr> {
+        let num_players = self.private_input.len();
+        if num_players == 0 {
+            return Vec::new();
+        }
+
+        let grouping_parameter = &self.public_input.grouping_parameter;
+        let tau_matrix = self.public_input.tau_matrix.clone();
+        let matrix_size = tau_matrix.nrows();
+
+        let shuffle_matrices = self
+            .private_input
+            .iter()
+            .map(|input| input.shuffle_matrices.clone())
+            .collect::<Vec<_>>();
+        let inverse_shuffle_matrices = self
+            .private_input
+            .iter()
+            .rev()
+            .map(|input| input.shuffle_matrices.transpose())
+            .collect::<Vec<_>>();
+
+        let matrix_m = shuffle_matrices
+            .iter()
+            .skip(1)
+            .fold(shuffle_matrices[0].clone(), |acc, x| acc * x);
+        let inverse_matrix_m = inverse_shuffle_matrices
+            .iter()
+            .skip(1)
+            .fold(inverse_shuffle_matrices[0].clone(), |acc, x| acc * x);
+
+        // rho = M^-1 * tau * M
+        let rho = inverse_matrix_m * &tau_matrix * &matrix_m;
+
+        let mut rho_sequence = Vec::with_capacity(num_players);
+        let mut current_rho = rho.clone();
+        for _ in 0..num_players {
+            rho_sequence.push(current_rho.clone());
+            current_rho *= rho.clone();
+        }
+
+        let role_id_lookup = (0..matrix_size)
+            .map(|idx| match grouping_parameter.get_corresponding_role(idx) {
+                Role::Villager => Fr::from(0u32),
+                Role::FortuneTeller => Fr::from(1u32),
+                Role::Werewolf => Fr::from(2u32),
+            })
+            .collect::<Vec<_>>();
+
+        let stair_vector = na::DVector::from(
+            (0..matrix_size)
+                .map(|idx| Fr::from(idx as u32))
+                .collect::<Vec<_>>(),
+        );
+
+        let mut output_vec = Vec::with_capacity(num_players);
+        for player_id in 0..num_players {
+            let mut unit_vec = na::DVector::<Fr>::zeros(matrix_size);
+            unit_vec[player_id] = Fr::one();
+
+            // rho^1(i), rho^2(i), ..., rho^n(i) を index 値へ変換
+            let mut role_path = Vec::with_capacity(num_players);
+            for rho_i in &rho_sequence {
+                let moved = rho_i * unit_vec.clone();
+                role_path.push(moved.dot(&stair_vector));
+            }
+
+            // role_val = max(role_path)
+            let mut role_value = role_path[0];
+            for candidate in role_path.iter().skip(1) {
+                if role_value < *candidate {
+                    role_value = *candidate;
+                }
+            }
+
+            // role_val (公開インデックス) -> 役職ID(0/1/2)
+            let mut role_id = Fr::zero();
+            for (idx, mapped_role_id) in role_id_lookup.iter().enumerate() {
+                if (role_value - Fr::from(idx as u32)).is_zero() {
+                    role_id = *mapped_role_id;
+                    break;
+                }
+            }
+            output_vec.push(role_id);
+        }
+
+        output_vec
+    }
+
+    pub fn calculate_output_with_werewolf_mates_mask(
+        &self,
+    ) -> Vec<RoleAssignmentPlayerShares<Fr>> {
+        let role_shares = self.calculate_output();
+        let num_players = role_shares.len();
+        if num_players == 0 {
+            return Vec::new();
+        }
+
+        let werewolf_flags = role_shares
+            .iter()
+            .map(|role_share| {
+                if (*role_share - Fr::from(2u32)).is_zero() {
+                    Fr::one()
+                } else {
+                    Fr::zero()
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut outputs = Vec::with_capacity(num_players);
+        for i in 0..num_players {
+            let mut teammate_mask_share = Fr::zero();
+            let self_is_werewolf = werewolf_flags[i];
+
+            for j in 0..num_players {
+                if i == j {
+                    continue;
+                }
+
+                let bit = 1u32.checked_shl(j as u32).unwrap_or(0);
+                let weight = Fr::from(bit);
+                teammate_mask_share += weight * self_is_werewolf * werewolf_flags[j];
+            }
+
+            outputs.push(RoleAssignmentPlayerShares {
+                role_share: role_shares[i],
+                werewolf_mates_mask_share: teammate_mask_share,
+            });
+        }
+
+        outputs
+    }
+}
+
 impl RoleAssignmentCircuit<MpcField<Fr>> {
     // Vec<MpcField<Fr>> は各プレイヤーの役職IDを表す。0が村人、1が占い師、2が人狼など。
     pub fn calculate_output(&self) -> Vec<MpcField<Fr>> {
