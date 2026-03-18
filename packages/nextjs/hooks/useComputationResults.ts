@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getFortuneTellerSecretKey, loadCryptoParams } from "~~/services/gameInputGenerator";
 import type { ChatMessage, PrivateGameInfo } from "~~/types/game";
 import { MPCEncryption } from "~~/utils/crypto/InputEncryption";
@@ -29,6 +29,7 @@ interface RoleAssignmentResult {
     role_share_encoding?: string;
     werewolf_mates_mask_share_encoding?: string;
   };
+  player_order?: string[];
   status: string;
 }
 
@@ -131,24 +132,30 @@ const decodeRoleName = (roleId: bigint): "Villager" | "Seer" | "Werewolf" => {
 
 const decodeWerewolfTeammateIds = (
   maskValue: bigint,
-  players: Array<{ id: string }> | undefined,
+  playerOrderIds: string[] | undefined,
   myPlayerId: string,
   myRole: "Villager" | "Seer" | "Werewolf",
 ): string[] => {
-  if (myRole !== "Werewolf" || !players || players.length === 0) {
+  if (myRole !== "Werewolf" || !playerOrderIds || playerOrderIds.length === 0) {
     return [];
   }
 
   const normalizedMask = normalizeFieldElement(maskValue);
   const teammateIds: string[] = [];
-  for (let index = 0; index < players.length; index += 1) {
+  for (let index = 0; index < playerOrderIds.length; index += 1) {
     const bit = (normalizedMask >> BigInt(index)) & 1n;
     if (bit !== 1n) continue;
-    const teammateId = players[index]?.id;
+    const teammateId = playerOrderIds[index];
     if (!teammateId || teammateId === myPlayerId) continue;
     teammateIds.push(teammateId);
   }
-  return teammateIds;
+  return Array.from(new Set(teammateIds));
+};
+
+const parsePlayerOrderIds = (raw: unknown): string[] | undefined => {
+  if (!Array.isArray(raw)) return undefined;
+  const ids = raw.map(id => String(id)).filter(id => id.length > 0);
+  return ids.length > 0 ? ids : undefined;
 };
 
 export const useComputationResults = (
@@ -169,6 +176,7 @@ export const useComputationResults = (
         requiredShares: number;
         roleSharesByNode: Map<number, bigint>;
         werewolfMaskSharesByNode: Map<number, bigint>;
+        playerOrderIds?: string[];
       }
     >
   >(new Map());
@@ -178,6 +186,101 @@ export const useComputationResults = (
     roleShareBuffersRef.current.clear();
     completedRoleBatchRef.current.clear();
   }, [playerId, roomId]);
+
+  const finalizeRoleAssignmentBatch = useCallback(
+    (
+      batchKey: string,
+      buffer: {
+        requiredShares: number;
+        roleSharesByNode: Map<number, bigint>;
+        werewolfMaskSharesByNode: Map<number, bigint>;
+        playerOrderIds?: string[];
+      },
+    ): boolean => {
+      if (completedRoleBatchRef.current.has(batchKey)) {
+        return true;
+      }
+      if (buffer.roleSharesByNode.size < buffer.requiredShares) {
+        return false;
+      }
+
+      const fallbackPlayerOrder = Array.isArray(gameInfo?.players)
+        ? gameInfo.players.map((player: any) => String(player.id))
+        : undefined;
+      const playerOrderIds = buffer.playerOrderIds ?? fallbackPlayerOrder;
+      if (!playerOrderIds || playerOrderIds.length === 0) {
+        return false;
+      }
+
+      let combinedRoleShare = 0n;
+      for (const share of buffer.roleSharesByNode.values()) {
+        combinedRoleShare = normalizeFieldElement(combinedRoleShare + share);
+      }
+
+      let combinedWerewolfMaskShare = 0n;
+      for (const share of buffer.werewolfMaskSharesByNode.values()) {
+        combinedWerewolfMaskShare = normalizeFieldElement(combinedWerewolfMaskShare + share);
+      }
+
+      const roleName = decodeRoleName(combinedRoleShare);
+      const werewolfTeammateIds = decodeWerewolfTeammateIds(
+        combinedWerewolfMaskShare,
+        playerOrderIds,
+        playerId,
+        roleName,
+      );
+
+      const existingInfo = getPrivateGameInfo(roomId, playerId);
+      if (!existingInfo) {
+        const initialInfo: PrivateGameInfo = {
+          playerId,
+          playerRole: null as any,
+          werewolfTeammateIds: [],
+          hasActed: false,
+        };
+        setPrivateGameInfo(roomId, initialInfo);
+      }
+
+      const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
+        playerRole: roleName as "Villager" | "Werewolf" | "Seer",
+        werewolfTeammateIds,
+      });
+
+      if (!updatedInfo) {
+        console.error("Failed to update PrivateGameInfo even after initialization attempt");
+        return false;
+      }
+
+      completedRoleBatchRef.current.add(batchKey);
+      roleShareBuffersRef.current.delete(batchKey);
+
+      const werewolfTeammateNames = werewolfTeammateIds
+        .map(id => gameInfo?.players?.find((player: any) => String(player.id) === String(id))?.name || id)
+        .filter((name, index, self) => self.indexOf(name) === index);
+
+      addMessage({
+        id: Date.now().toString(),
+        sender: "System",
+        message:
+          roleName === "Werewolf" && werewolfTeammateNames.length > 0
+            ? `Your role has been assigned: ${roleName} (teammates: ${werewolfTeammateNames.join(", ")})`
+            : `Your role has been assigned: ${roleName}`,
+        timestamp: new Date().toISOString(),
+        type: "system",
+      });
+
+      window.dispatchEvent(new CustomEvent("roleAssignmentCompleted"));
+      return true;
+    },
+    [addMessage, gameInfo?.players, playerId, roomId],
+  );
+
+  useEffect(() => {
+    if (!playerId || !roomId) return;
+    for (const [batchKey, buffer] of roleShareBuffersRef.current.entries()) {
+      finalizeRoleAssignmentBatch(batchKey, buffer);
+    }
+  }, [finalizeRoleAssignmentBatch, playerId, roomId]);
 
   useEffect(() => {
     if (!roomId || !playerId) return;
@@ -452,6 +555,8 @@ export const useComputationResults = (
                 break;
               }
 
+              const playerOrderIds = parsePlayerOrderIds(result.resultData?.player_order);
+
               const decryptedBinary = cryptoManager.decryptBinary(encrypted, nonce, senderPublicKey);
               const decoder = new TextDecoder("utf-8");
               const decryptedString = decoder.decode(decryptedBinary);
@@ -498,77 +603,22 @@ export const useComputationResults = (
                 requiredShares,
                 roleSharesByNode: new Map<number, bigint>(),
                 werewolfMaskSharesByNode: new Map<number, bigint>(),
+                playerOrderIds,
               };
               existingBuffer.requiredShares = Math.max(existingBuffer.requiredShares, requiredShares);
+              if (playerOrderIds && playerOrderIds.length > 0) {
+                existingBuffer.playerOrderIds = playerOrderIds;
+              }
               if (existingBuffer.roleSharesByNode.has(nodeId)) {
+                roleShareBuffersRef.current.set(batchKey, existingBuffer);
+                finalizeRoleAssignmentBatch(batchKey, existingBuffer);
                 break;
               }
               existingBuffer.roleSharesByNode.set(nodeId, roleShare);
               existingBuffer.werewolfMaskSharesByNode.set(nodeId, werewolfMatesMaskShare);
               roleShareBuffersRef.current.set(batchKey, existingBuffer);
 
-              if (existingBuffer.roleSharesByNode.size < existingBuffer.requiredShares) {
-                break;
-              }
-
-              let combinedRoleShare = 0n;
-              for (const share of existingBuffer.roleSharesByNode.values()) {
-                combinedRoleShare = normalizeFieldElement(combinedRoleShare + share);
-              }
-
-              let combinedWerewolfMaskShare = 0n;
-              for (const share of existingBuffer.werewolfMaskSharesByNode.values()) {
-                combinedWerewolfMaskShare = normalizeFieldElement(combinedWerewolfMaskShare + share);
-              }
-
-              const roleName = decodeRoleName(combinedRoleShare);
-              const werewolfTeammateIds = decodeWerewolfTeammateIds(
-                combinedWerewolfMaskShare,
-                gameInfo?.players,
-                playerId,
-                roleName,
-              );
-              let existingInfo = getPrivateGameInfo(roomId, playerId);
-
-              if (!existingInfo) {
-                const initialInfo: PrivateGameInfo = {
-                  playerId,
-                  playerRole: null as any,
-                  werewolfTeammateIds: [],
-                  hasActed: false,
-                };
-                setPrivateGameInfo(roomId, initialInfo);
-                existingInfo = initialInfo;
-              }
-
-              const updatedInfo = updatePrivateGameInfo(roomId, playerId, {
-                playerRole: roleName as "Villager" | "Werewolf" | "Seer",
-                werewolfTeammateIds,
-              });
-
-              if (!updatedInfo) {
-                console.error("Failed to update PrivateGameInfo even after initialization attempt");
-              }
-
-              completedRoleBatchRef.current.add(batchKey);
-              roleShareBuffersRef.current.delete(batchKey);
-
-              const werewolfTeammateNames = werewolfTeammateIds
-                .map(id => gameInfo?.players?.find((player: any) => String(player.id) === String(id))?.name || id)
-                .filter((name, index, self) => self.indexOf(name) === index);
-
-              addMessage({
-                id: Date.now().toString(),
-                sender: "System",
-                message:
-                  roleName === "Werewolf" && werewolfTeammateNames.length > 0
-                    ? `Your role has been assigned: ${roleName} (teammates: ${werewolfTeammateNames.join(", ")})`
-                    : `Your role has been assigned: ${roleName}`,
-                timestamp: new Date().toISOString(),
-                type: "system",
-              });
-
-              window.dispatchEvent(new CustomEvent("roleAssignmentCompleted"));
+              finalizeRoleAssignmentBatch(batchKey, existingBuffer);
             } catch (error) {
               console.error("Role decryption error:", error);
               addMessage({
@@ -626,7 +676,7 @@ export const useComputationResults = (
     return () => {
       window.removeEventListener("computationResultNotification", handleComputationResult);
     };
-  }, [playerId, addMessage, roomId, gameInfo]);
+  }, [playerId, addMessage, roomId, gameInfo, finalizeRoleAssignmentBatch]);
 
   return {
     divinationResult,

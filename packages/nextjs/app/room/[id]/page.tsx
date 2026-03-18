@@ -255,8 +255,14 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         return;
       }
 
-      const elapsedSec = Math.floor((Date.now() - phaseStartMs) / 1000);
-      setRemainingTime(Math.max(0, targetDuration - elapsedSec));
+      const nowMs = Date.now();
+      const pausedTotalSeconds = Math.max(0, Math.floor(gameInfo.phase_timer_paused_total_seconds ?? 0));
+      const pausedAtMs = gameInfo.phase_timer_paused_at ? new Date(gameInfo.phase_timer_paused_at).getTime() : NaN;
+      const activePausedSeconds = Number.isNaN(pausedAtMs) ? 0 : Math.max(0, Math.floor((nowMs - pausedAtMs) / 1000));
+
+      const rawElapsedSec = Math.floor((nowMs - phaseStartMs) / 1000);
+      const effectiveElapsedSec = Math.max(0, rawElapsedSec - pausedTotalSeconds - activePausedSeconds);
+      setRemainingTime(Math.max(0, targetDuration - effectiveElapsedSec));
     };
 
     updateRemainingTime();
@@ -355,7 +361,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     playersForView.length > 0 &&
     playersForView.every(player => getPlayerReady(player as { isReady?: boolean; is_ready?: boolean }));
   const timerProgressPercent = Math.max(0, Math.min(100, (remainingTime / Math.max(phaseDuration, 1)) * 100));
-  const isTimeWarning = roomInfo?.status === "InProgress" && remainingTime <= 30;
+  const isPhaseTimerPaused = Boolean(gameInfo?.phase_timer_paused_at);
+  const isTimeWarning = roomInfo?.status === "InProgress" && !isPhaseTimerPaused && remainingTime <= 30;
   const isWebSocketConnected = websocketStatus === "connected";
   const websocketStatusLabel =
     websocketStatus === "connected"
@@ -459,7 +466,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2 text-indigo-700">
                   <Clock size={18} />
                   <span>
-                    Time Remaining: {Math.floor(remainingTime / 60)}:{String(remainingTime % 60).padStart(2, "0")}
+                    {isPhaseTimerPaused
+                      ? "Computing proof..."
+                      : `Time Remaining: ${Math.floor(remainingTime / 60)}:${String(remainingTime % 60).padStart(2, "0")}`}
                   </span>
                 </div>
                 <div className="w-40">

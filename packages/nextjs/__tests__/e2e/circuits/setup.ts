@@ -115,22 +115,25 @@ function decodeWerewolfTeammateIdsForTest(
   maskValue: bigint,
   myRole: "Villager" | "Seer" | "Werewolf",
   myPlayerId: string,
+  playerOrderIds?: string[],
 ): string[] {
   if (myRole !== "Werewolf") {
     return [];
   }
 
-  const players = global.testPlayers ?? [];
+  const fallbackPlayers = global.testPlayers ?? [];
+  const orderedPlayerIds =
+    playerOrderIds && playerOrderIds.length > 0 ? playerOrderIds : fallbackPlayers.map(player => player.id);
   const normalizedMask = normalizeFieldElement(maskValue);
   const teammateIds: string[] = [];
-  for (let index = 0; index < players.length; index += 1) {
+  for (let index = 0; index < orderedPlayerIds.length; index += 1) {
     const bit = (normalizedMask >> BigInt(index)) & 1n;
     if (bit !== 1n) continue;
-    const teammateId = players[index]?.id;
+    const teammateId = orderedPlayerIds[index];
     if (!teammateId || teammateId === myPlayerId) continue;
     teammateIds.push(teammateId);
   }
-  return teammateIds;
+  return Array.from(new Set(teammateIds));
 }
 
 function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payload: any): void {
@@ -143,6 +146,10 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
   if (!encryptedRoleShare) {
     return;
   }
+  const playerOrderIds =
+    Array.isArray(payload?.result_data?.player_order) && payload.result_data.player_order.length > 0
+      ? payload.result_data.player_order.map((id: unknown) => String(id))
+      : undefined;
 
   const encrypted = encryptedRoleShare.encrypted as string | undefined;
   const nonce = encryptedRoleShare.nonce as string | undefined;
@@ -228,7 +235,12 @@ function reflectRoleAssignmentForPlayer(roomId: string, playerId: string, payloa
       combinedWerewolfMask = normalizeFieldElement(combinedWerewolfMask + share);
     }
     const roleName = decodeRoleName(combinedShare);
-    const werewolfTeammateIds = decodeWerewolfTeammateIdsForTest(combinedWerewolfMask, roleName, playerId);
+    const werewolfTeammateIds = decodeWerewolfTeammateIdsForTest(
+      combinedWerewolfMask,
+      roleName,
+      playerId,
+      playerOrderIds,
+    );
     const existingInfo = getPrivateGameInfo(roomId, playerId);
 
     if (!existingInfo) {

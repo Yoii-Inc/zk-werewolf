@@ -4,15 +4,13 @@ use axum::Router;
 use chrono::Duration;
 use tokio::time::{interval, Duration as TokioDuration};
 
-fn is_debug_mode_enabled() -> bool {
-    let debug_mode = std::env::var("DEBUG_MODE")
+fn is_auto_phase_advance_enabled() -> bool {
+    // Backward-compatible override:
+    // - DEBUG_AUTO_ADVANCE_PHASES=true/false explicitly controls auto progression.
+    // - If unset, auto progression is enabled by default even in debug mode.
+    std::env::var("DEBUG_AUTO_ADVANCE_PHASES")
         .map(|v| v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-    let debug_enabled = std::env::var("DEBUG_ENABLED")
-        .map(|v| v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    debug_mode || debug_enabled
+        .unwrap_or(true)
 }
 
 pub fn create_app() -> Router {
@@ -21,7 +19,7 @@ pub fn create_app() -> Router {
 
 pub fn create_app_with_state(state: AppState) -> Router {
     let auto_phase_state = state.clone();
-    if !is_debug_mode_enabled() {
+    if is_auto_phase_advance_enabled() {
         tokio::spawn(async move {
             let mut ticker = interval(TokioDuration::from_secs(1));
             loop {
@@ -30,6 +28,8 @@ pub fn create_app_with_state(state: AppState) -> Router {
                     .await;
             }
         });
+    } else {
+        tracing::info!("Auto phase advance is disabled by DEBUG_AUTO_ADVANCE_PHASES");
     }
 
     let cleanup_state = state.clone();
