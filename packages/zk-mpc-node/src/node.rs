@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::iter::zip;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::io::{AsyncRead, AsyncWrite};
 use zk_mpc::groth16::create_random_proof;
 
@@ -46,7 +47,22 @@ struct Groth16Setup {
 
 impl Groth16Setup {
     fn from_pk_path(path: &PathBuf, label: &str) -> Result<Self, std::io::Error> {
+        let total_started = Instant::now();
+        println!(
+            "[node:init][groth16] start loading {label} PK from {}",
+            path.display()
+        );
+
+        let read_started = Instant::now();
         let bytes = std::fs::read(path)?;
+        println!(
+            "[node:init][groth16] read {} bytes for {label} PK from {} in {} ms",
+            bytes.len(),
+            path.display(),
+            read_started.elapsed().as_millis()
+        );
+
+        let deserialize_started = Instant::now();
         let local_proving_key = LocalProvingKey::deserialize_uncompressed(bytes.as_slice())
             .map_err(|e| {
                 std::io::Error::other(format!(
@@ -55,6 +71,12 @@ impl Groth16Setup {
                     e
                 ))
             })?;
+        println!(
+            "[node:init][groth16] finished deserializing {label} PK from {} in {} ms (total {} ms)",
+            path.display(),
+            deserialize_started.elapsed().as_millis(),
+            total_started.elapsed().as_millis()
+        );
 
         Ok(Self {
             local_proving_key: Arc::new(local_proving_key),
@@ -82,10 +104,13 @@ struct CircuitGroth16Setups {
 
 impl CircuitGroth16Setups {
     fn load() -> Result<Self, std::io::Error> {
+        let started = Instant::now();
+        println!("[node:init][groth16] loading all Groth16 setups...");
+
         let mut by_profile = HashMap::new();
         load_profile_setups_from_data_dir(&mut by_profile)?;
 
-        Ok(Self {
+        let setup = Self {
             by_profile,
             role_assignment: load_setup_with_fallback(
                 "ROLE_ASSIGNMENT_GROTH16_PK_PATH",
@@ -112,7 +137,27 @@ impl CircuitGroth16Setups {
                 "key_publicize_max5_v1.pk",
                 "KeyPublicize",
             )?,
-        })
+        };
+
+        let fallback_loaded = [
+            setup.role_assignment.is_some(),
+            setup.divination.is_some(),
+            setup.anonymous_voting.is_some(),
+            setup.winning_judgement.is_some(),
+            setup.key_publicize.is_some(),
+        ]
+        .into_iter()
+        .filter(|loaded| *loaded)
+        .count();
+
+        println!(
+            "[node:init][groth16] completed loading Groth16 setups in {} ms (profile_setups={}, fallback_setups={})",
+            started.elapsed().as_millis(),
+            setup.by_profile.len(),
+            fallback_loaded
+        );
+
+        Ok(setup)
     }
 
     fn for_circuit(&self, circuit_type: &CircuitEncryptedInputIdentifier) -> Option<&Groth16Setup> {
@@ -147,13 +192,18 @@ pub struct Node<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
 impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
     pub async fn new(
         id: u32,
-        net: Arc<MPCNetConnection<IO>>,
+        net: MPCNetConnection<IO>,
         proof_manager: Arc<ProofManager>,
         key_manager: Arc<KeyManager>,
         server_url: String,
     ) -> Self {
+        let init_started = Instant::now();
+        println!("[node:init] start node initialization: id={id}");
+
+        let key_load_started = Instant::now();
         // 環境変数から秘密鍵と公開鍵を取得（優先）、なければファイルから読込
         if let Ok(private_key_base64) = std::env::var("MPC_PRIVATE_KEY") {
+            println!("[node:init] loading node keypair from environment variables");
             // 本番環境：環境変数から取得
             let public_key_env_name = format!("MPC_NODE_{}_PUBLIC_KEY", id);
             if let Ok(public_key_base64) = std::env::var(&public_key_env_name) {
@@ -168,6 +218,10 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                     .set_keys_from_base64_bytes(private_key_bytes, public_key_bytes)
                     .await
                     .expect("Failed to set keys from environment variables");
+                println!(
+                    "[node:init] loaded node keypair from env in {} ms",
+                    key_load_started.elapsed().as_millis()
+                );
             } else {
                 panic!(
                     "Environment variable {} not found. Please set both MPC_PRIVATE_KEY and {}",
@@ -175,21 +229,34 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
                 );
             }
         } else {
+            println!("[node:init] MPC_PRIVATE_KEY is not set. Loading node keypair from file...");
             // 開発環境：ファイルから読込
             key_manager
                 .load_keypair(id)
                 .await
                 .expect("Failed to load keypair from file");
+            println!(
+                "[node:init] loaded node keypair from file in {} ms",
+                key_load_started.elapsed().as_millis()
+            );
         }
 
         let api_client = Arc::new(ApiClient::new(server_url.clone()));
+        println!("[node:init] created API client for server URL: {}", server_url);
+
+        let groth16_started = Instant::now();
+        println!("[node:init] start loading Groth16 PK setups...");
         let groth16_setups = CircuitGroth16Setups::load().unwrap_or_else(|e| {
             panic!("Failed to load Groth16 proving key(s): {}", e);
         });
+        println!(
+            "[node:init] finished loading Groth16 PK setups in {} ms",
+            groth16_started.elapsed().as_millis()
+        );
 
         let node = Self {
             id,
-            net,
+            net: Arc::new(net),
             proof_manager,
             key_manager,
             api_client: api_client.clone(),
@@ -197,19 +264,54 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
         };
 
         // 生成した公開鍵をサーバーに登録
+        let register_started = Instant::now();
+        println!(
+            "[node:init] start register_public_key for node {}...",
+            node.id
+        );
         node.register_public_key()
             .await
             .expect("Failed to register public key with server");
+        println!(
+            "[node:init] finished register_public_key for node {} in {} ms",
+            node.id,
+            register_started.elapsed().as_millis()
+        );
+
+        println!(
+            "[node:init] node initialization completed: id={}, total={} ms",
+            node.id,
+            init_started.elapsed().as_millis()
+        );
 
         node
     }
 
     // 公開鍵を登録するメソッドを追加
     pub async fn register_public_key(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let started = Instant::now();
+        println!(
+            "[node:init] register_public_key: fetching local public key for node {}",
+            self.id
+        );
         let public_key = self.key_manager.get_public_key().await?;
+        println!(
+            "[node:init] register_public_key: fetched local public key for node {} (length={})",
+            self.id,
+            public_key.len()
+        );
+        println!(
+            "[node:init] register_public_key: sending request to backend for node {}",
+            self.id
+        );
         self.api_client
             .register_public_key(self.id, public_key)
             .await?;
+        println!(
+            "[node:init] register_public_key: backend registration succeeded for node {} in {} ms",
+            self.id,
+            started.elapsed().as_millis()
+        );
         Ok(())
     }
 
@@ -493,12 +595,52 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
 
 fn pk_path_from_env_or_default(env_var: &str, default_pk_file: &str) -> Option<PathBuf> {
     match std::env::var(env_var) {
-        Ok(value) if !value.trim().is_empty() => Some(PathBuf::from(value)),
+        Ok(value) if !value.trim().is_empty() => {
+            let path = PathBuf::from(value);
+            println!(
+                "[node:init][groth16] using {} from env: {}",
+                env_var,
+                path.display()
+            );
+            Some(path)
+        }
+        Ok(_) => {
+            println!(
+                "[node:init][groth16] {} is set but empty. Trying default {} in data dir",
+                env_var, default_pk_file
+            );
+            let default_path = groth16_data_dir().join(default_pk_file);
+            if default_path.exists() {
+                println!(
+                    "[node:init][groth16] using default PK for {}: {}",
+                    env_var,
+                    default_path.display()
+                );
+                Some(default_path)
+            } else {
+                println!(
+                    "[node:init][groth16] default PK for {} is missing: {}",
+                    env_var,
+                    default_path.display()
+                );
+                None
+            }
+        }
         _ => {
             let default_path = groth16_data_dir().join(default_pk_file);
             if default_path.exists() {
+                println!(
+                    "[node:init][groth16] {} is not set. Using default PK: {}",
+                    env_var,
+                    default_path.display()
+                );
                 Some(default_path)
             } else {
+                println!(
+                    "[node:init][groth16] {} is not set and default PK is missing: {}",
+                    env_var,
+                    default_path.display()
+                );
                 None
             }
         }
@@ -529,26 +671,56 @@ fn groth16_data_dir() -> PathBuf {
 fn load_profile_setups_from_data_dir(
     setups: &mut HashMap<CircuitProfile, Groth16Setup>,
 ) -> Result<(), std::io::Error> {
+    let started = Instant::now();
     let data_dir = groth16_data_dir();
+    println!(
+        "[node:init][groth16] scanning data dir for profile PKs: {}",
+        data_dir.display()
+    );
     if !data_dir.exists() {
+        println!(
+            "[node:init][groth16] data dir does not exist. skipping profile PK scan: {}",
+            data_dir.display()
+        );
         return Ok(());
     }
 
-    for entry in std::fs::read_dir(data_dir)? {
+    let mut pk_paths = Vec::new();
+    for entry in std::fs::read_dir(&data_dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.extension().and_then(|s| s.to_str()) != Some("pk") {
             continue;
         }
+        pk_paths.push(path);
+    }
+    pk_paths.sort();
+    println!(
+        "[node:init][groth16] found {} PK files under {}",
+        pk_paths.len(),
+        data_dir.display()
+    );
 
-        let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
-            continue;
-        };
+    for path in pk_paths {
+        let file_name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("<invalid-utf8>");
+
         let Some(profile) = parse_profile_from_pk_filename(file_name) else {
+            println!(
+                "[node:init][groth16] skipping non-profile PK filename: {}",
+                path.display()
+            );
             continue;
         };
 
         let label = format!("{} profile", circuit_profile_label(profile));
+        println!(
+            "[node:init][groth16] loading profile PK {} from {}",
+            label,
+            path.display()
+        );
         let setup = Groth16Setup::from_pk_path(&path, &label)?;
         setups.insert(profile, setup);
         println!(
@@ -557,6 +729,12 @@ fn load_profile_setups_from_data_dir(
             path.display()
         );
     }
+
+    println!(
+        "[node:init][groth16] completed profile PK scan/load in {} ms (loaded_profiles={})",
+        started.elapsed().as_millis(),
+        setups.len()
+    );
 
     Ok(())
 }
@@ -642,6 +820,7 @@ fn load_setup_with_fallback(
     default_pk_file: &str,
     label: &str,
 ) -> Result<Option<Groth16Setup>, std::io::Error> {
+    let started = Instant::now();
     let Some(path) = pk_path_from_env_or_default(env_var, default_pk_file) else {
         println!(
             "{env_var} is not set and default key is missing. Falling back to runtime Groth16 setup for {label}."
@@ -649,10 +828,15 @@ fn load_setup_with_fallback(
         return Ok(None);
     };
 
+    println!(
+        "[node:init][groth16] loading {label} setup from {}",
+        path.display()
+    );
     let setup = Groth16Setup::from_pk_path(&path, label)?;
     println!(
-        "Loaded {label} Groth16 proving key from {}.",
-        path.display()
+        "Loaded {label} Groth16 proving key from {} in {} ms.",
+        path.display(),
+        started.elapsed().as_millis()
     );
     Ok(Some(setup))
 }
