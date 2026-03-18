@@ -21,7 +21,10 @@ use zk_mpc::circuits::{ElGamalLocalOrMPC, LocalOrMPC};
 
 use arkworks_solidity_verifier::SolidityVerifier;
 
-const PLAYER_COUNTS: [usize; 6] = [4, 5, 6, 7, 8, 9];
+const DIVINATION_PLAYER_COUNTS: [usize; 7] = [3, 4, 5, 6, 7, 8, 9];
+const ANONYMOUS_VOTING_PLAYER_COUNTS: [usize; 7] = [3, 4, 5, 6, 7, 8, 9];
+const WINNING_JUDGEMENT_PLAYER_COUNTS: [usize; 8] = [2, 3, 4, 5, 6, 7, 8, 9];
+const KEY_PUBLICIZE_PLAYER_COUNTS: [usize; 6] = [4, 5, 6, 7, 8, 9];
 const ROLE_ASSIGNMENT_PROFILES: [(usize, usize); 7] = [
     (4, 1),
     (5, 1),
@@ -56,10 +59,16 @@ fn main() -> Result<()> {
         generate_role_assignment_profile(num_players, werewolf_count)?;
     }
 
-    for num_players in PLAYER_COUNTS {
+    for num_players in DIVINATION_PLAYER_COUNTS {
         generate_divination_profile(num_players)?;
+    }
+    for num_players in ANONYMOUS_VOTING_PLAYER_COUNTS {
         generate_anonymous_voting_profile(num_players)?;
+    }
+    for num_players in WINNING_JUDGEMENT_PLAYER_COUNTS {
         generate_winning_judgement_profile(num_players)?;
+    }
+    for num_players in KEY_PUBLICIZE_PLAYER_COUNTS {
         generate_key_publicize_profile(num_players)?;
     }
 

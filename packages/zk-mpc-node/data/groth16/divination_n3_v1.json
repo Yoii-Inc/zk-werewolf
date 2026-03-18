@@ -1,0 +1,7 @@
+{
+  "circuitId": "divination_n3_v1",
+  "maxPlayers": 3,
+  "publicInputLen": 8,
+  "pkPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../zk-mpc-node/data/groth16/divination_n3_v1.pk",
+  "verifierPath": "/home/yusuke/dev/zk-werewolf/packages/arkworks-solidity-verifier/../foundry/contracts/verifiers/generated/DivinationN3Groth16Verifier.sol"
+}

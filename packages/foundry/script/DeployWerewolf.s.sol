@@ -11,9 +11,6 @@ import "openzeppelin-contracts/contracts/utils/Strings.sol";
 contract DeployWerewolf is ScaffoldETHDeploy {
     using Strings for uint256;
 
-    uint8 internal constant MIN_PLAYERS = 4;
-    uint8 internal constant MAX_PLAYERS = 9;
-
     function run() external ScaffoldEthDeployerRunner {
         WerewolfGame game = new WerewolfGame();
         WerewolfProofVerifier verifier = new WerewolfProofVerifier();
@@ -52,7 +49,7 @@ contract DeployWerewolf is ScaffoldETHDeploy {
     }
 
     function _registerPlayerCountProfiles(WerewolfProofVerifier verifier) internal {
-        for (uint8 n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
+        for (uint8 n = 3; n <= 9; n++) {
             _deployAndRegister(
                 verifier,
                 WerewolfProofVerifier.ProofType.Divination,
@@ -69,6 +66,9 @@ contract DeployWerewolf is ScaffoldETHDeploy {
                 _anonymousVotingContractName(n),
                 1
             );
+        }
+
+        for (uint8 n = 2; n <= 9; n++) {
             _deployAndRegister(
                 verifier,
                 WerewolfProofVerifier.ProofType.WinningJudgement,
@@ -77,6 +77,9 @@ contract DeployWerewolf is ScaffoldETHDeploy {
                 _winningJudgementContractName(n),
                 2
             );
+        }
+
+        for (uint8 n = 4; n <= 9; n++) {
             _deployAndRegister(
                 verifier,
                 WerewolfProofVerifier.ProofType.KeyPublicize,
