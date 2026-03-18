@@ -334,6 +334,19 @@ export class GameSetupHelper {
   }
 
   /**
+   * 夜アクション（襲撃）を送信
+   */
+  static async submitNightAttack(roomId: string, attacker: TestPlayer, targetPlayerId: string): Promise<void> {
+    console.log(
+      `🌙 Submitting night attack (attacker: ${attacker.name}(${attacker.id}) -> target: ${targetPlayerId})...`,
+    );
+
+    const apiClient = new CircuitTestClient(roomId);
+    await apiClient.submitNightAttack(roomId, attacker.id, targetPlayerId, attacker.token);
+    console.log(`✅ Night attack submitted\n`);
+  }
+
+  /**
    * 各プレイヤーのVotingリクエストを送信
    * 本番環境では useVoting フックが投票フェーズ時に実行
    */

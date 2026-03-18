@@ -153,7 +153,7 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
         let mut games = state.games.lock().await;
         let game = games.get_mut(room_id).ok_or("Game not found".to_string())?;
 
-        if current_phase == GamePhase::Night {
+        if current_phase == GamePhase::DivinationProcessing {
             game.resolve_night_actions();
         } else if current_phase == GamePhase::Voting {
             game.resolve_voting();

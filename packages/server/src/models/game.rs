@@ -488,6 +488,8 @@ impl Game {
         if self.phase == GamePhase::DivinationProcessing {
             println!("Divination processing completed. Moving to Discussion phase.");
 
+            // Night phase で登録された襲撃を、占い処理完了後に適用する。
+            self.resolve_night_actions();
             self.change_phase(GamePhase::Discussion);
 
             // フェーズ変更をWebSocketで通知
