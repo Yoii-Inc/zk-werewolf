@@ -15,6 +15,7 @@ import { useGamePhase } from "~~/hooks/useGamePhase";
 import { useGameWebSocket } from "~~/hooks/useGameWebSocket";
 import * as GameInputGenerator from "~~/services/gameInputGenerator";
 import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
+import { clearRoomScopedLogs } from "~~/utils/roomLogStorage";
 
 const isDebugMode = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
 
@@ -34,6 +35,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [remainingTime, setRemainingTime] = useState(0);
   const [phaseDuration, setPhaseDuration] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const hasClearedLobbyLogsRef = useRef(false);
 
   // Custom hooks
   const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id);
@@ -107,6 +109,22 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       window.removeEventListener("gameResetNotification", handleGameReset);
     };
   }, [resetMessages, user?.id, privateGameInfo]);
+
+  // ロビー状態（Open/Ready）で部屋に入った際、前ゲームのローカルログを一度だけ削除する
+  useEffect(() => {
+    if (!roomInfo?.room_id) return;
+
+    const isLobbyState = roomInfo.status === "Open" || roomInfo.status === "Ready";
+    if (isLobbyState && !hasClearedLobbyLogsRef.current) {
+      clearRoomScopedLogs(roomInfo.room_id, user?.id);
+      hasClearedLobbyLogsRef.current = true;
+    }
+
+    // 進行中に移ったらフラグを戻し、次にロビーへ戻った際に再クリーンアップできるようにする
+    if (!isLobbyState) {
+      hasClearedLobbyLogsRef.current = false;
+    }
+  }, [roomInfo?.room_id, roomInfo?.status, user?.id]);
 
   // ゲーム終了を検知してモーダルを表示
   useEffect(() => {
