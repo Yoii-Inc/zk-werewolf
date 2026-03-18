@@ -723,7 +723,9 @@ impl Game {
             let insert_pos = batch
                 .requests
                 .iter()
-                .position(|existing| player_index_of(existing.get_user_id()) > new_request_player_index)
+                .position(|existing| {
+                    player_index_of(existing.get_user_id()) > new_request_player_index
+                })
                 .unwrap_or(batch.requests.len());
             batch.requests.insert(insert_pos, request);
         }
@@ -1202,18 +1204,15 @@ impl Game {
                             println!("RoleAssignment failed: encrypted share list is empty");
                             self.batch_request.status = BatchStatus::Failed;
                             self.chat_log.add_system_message(
-                                "Role assignment failed: encrypted shares were empty."
-                                    .to_string(),
+                                "Role assignment failed: encrypted shares were empty.".to_string(),
                             );
                             return;
                         }
 
                         println!("Received {} encrypted role shares", encrypted_shares.len());
 
-                        let mut required_shares_by_player = std::collections::HashMap::<
-                            String,
-                            usize,
-                        >::new();
+                        let mut required_shares_by_player =
+                            std::collections::HashMap::<String, usize>::new();
                         for share in &encrypted_shares {
                             *required_shares_by_player
                                 .entry(share.user_id.clone())
@@ -1295,8 +1294,7 @@ impl Game {
                         }
 
                         self.chat_log.add_system_message(
-                            "Roles have been assigned. Check your private information."
-                                .to_string(),
+                            "Roles have been assigned. Check your private information.".to_string(),
                         );
                     }
                     CircuitEncryptedInputIdentifier::KeyPublicize(_items) => {

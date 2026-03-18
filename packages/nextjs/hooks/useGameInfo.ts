@@ -67,32 +67,20 @@ export const useGameInfo = (
         const currentPlayer = data.players.find((player: any) => player.id === userId);
 
         if (currentPlayer) {
-          // 既存のPrivateGameInfoを確認
-          const existingPrivateInfo = getPrivateGameInfo(roomId, userId);
+          // PrivateGameInfoを常に初期化（roleはMPC計算結果から後で設定）
+          const newPrivateInfo: PrivateGameInfo = {
+            playerId: userId,
+            playerRole: null as any, // Roleはまだ未決定
+            werewolfTeammateIds: [],
+            hasActed: false,
+          };
 
-          // すでにRoleが割り当てられている場合は上書きしない
-          if (existingPrivateInfo && existingPrivateInfo.playerRole !== null) {
-            console.log(
-              "PrivateGameInfo already exists with role assigned, skipping initialization:",
-              existingPrivateInfo,
-            );
-            setPrivateGameInfoState(existingPrivateInfo);
-          } else {
-            // PrivateGameInfoを初期化（roleはMPC計算結果から後で設定）
-            const newPrivateInfo: PrivateGameInfo = {
-              playerId: userId,
-              playerRole: null as any, // Roleはまだ未決定
-              werewolfTeammateIds: [],
-              hasActed: false,
-            };
+          // セッションストレージに保存
+          setPrivateGameInfo(roomId, newPrivateInfo);
+          console.log("PrivateGameInfo reset for newly started game:", newPrivateInfo);
 
-            // セッションストレージに保存
-            setPrivateGameInfo(roomId, newPrivateInfo);
-            console.log("PrivateGameInfo initialized for player (role not yet assigned):", newPrivateInfo);
-
-            // ステート更新
-            setPrivateGameInfoState(newPrivateInfo);
-          }
+          // ステート更新
+          setPrivateGameInfoState(newPrivateInfo);
         }
       }
       // 通常の更新処理
