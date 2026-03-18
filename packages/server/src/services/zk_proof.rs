@@ -19,7 +19,7 @@ use crate::{
     state::AppState,
 };
 
-const MAX_RETRY_ATTEMPTS: u32 = 180;
+const MAX_RETRY_ATTEMPTS: u32 = 600;
 const RETRY_DELAY_SECS: u64 = 1;
 type BatchExecutionResult = Result<(CircuitEncryptedInputIdentifier, ProofOutput), String>;
 

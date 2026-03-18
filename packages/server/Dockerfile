@@ -17,6 +17,8 @@ COPY packages/ ./packages/
 # Build the application
 RUN cargo build --release --package server --locked
 
+FROM ghcr.io/foundry-rs/foundry:latest AS foundry
+
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
@@ -26,6 +28,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY --from=builder /usr/src/workspace/target/release/server /app/server
+COPY --from=foundry /usr/local/bin/cast /usr/local/bin/cast
 
 EXPOSE 8080
 
