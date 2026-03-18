@@ -384,8 +384,6 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
             },
         )?;
 
-        let is_valid = true;
-
         let outputs = if is_valid {
             let proof_bytes = abi_encode_groth16_proof(&publicized_proof);
             let public_input_len = expected_public_input_len(&request.circuit_type);
