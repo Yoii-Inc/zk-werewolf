@@ -41,6 +41,10 @@ pub struct Game {
     pub computation_results: ComputationResults,
     pub started_at: Option<DateTime<Utc>>,
     pub phase_started_at: DateTime<Utc>,
+    #[serde(default)]
+    pub phase_timer_paused_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub phase_timer_paused_total_seconds: u64,
     pub grouping_parameter: GroupingParameter,
 }
 
@@ -378,6 +382,8 @@ impl Game {
             computation_results: ComputationResults::default(),
             started_at: Some(Utc::now()),
             phase_started_at: Utc::now(),
+            phase_timer_paused_at: None,
+            phase_timer_paused_total_seconds: 0,
             grouping_parameter,
         }
     }
@@ -433,6 +439,50 @@ impl Game {
             || !self.active_batches.is_empty()
     }
 
+    pub fn pause_phase_timer(&mut self) {
+        self.pause_phase_timer_at(Utc::now());
+    }
+
+    pub fn pause_phase_timer_at(&mut self, now: DateTime<Utc>) {
+        if self.phase_timer_paused_at.is_none() {
+            self.phase_timer_paused_at = Some(now);
+        }
+    }
+
+    pub fn resume_phase_timer(&mut self) {
+        self.resume_phase_timer_at(Utc::now());
+    }
+
+    pub fn resume_phase_timer_at(&mut self, now: DateTime<Utc>) {
+        if let Some(paused_at) = self.phase_timer_paused_at.take() {
+            let paused_seconds = now.signed_duration_since(paused_at).num_seconds().max(0) as u64;
+            self.phase_timer_paused_total_seconds = self
+                .phase_timer_paused_total_seconds
+                .saturating_add(paused_seconds);
+        }
+    }
+
+    pub fn effective_phase_elapsed_seconds(&self) -> i64 {
+        self.effective_phase_elapsed_seconds_at(Utc::now())
+    }
+
+    pub fn effective_phase_elapsed_seconds_at(&self, now: DateTime<Utc>) -> i64 {
+        let total_elapsed_seconds = now
+            .signed_duration_since(self.phase_started_at)
+            .num_seconds()
+            .max(0);
+        let mut paused_seconds = if self.phase_timer_paused_total_seconds > i64::MAX as u64 {
+            i64::MAX
+        } else {
+            self.phase_timer_paused_total_seconds as i64
+        };
+        if let Some(paused_at) = self.phase_timer_paused_at {
+            let active_pause_seconds = now.signed_duration_since(paused_at).num_seconds().max(0);
+            paused_seconds = paused_seconds.saturating_add(active_pause_seconds);
+        }
+        total_elapsed_seconds.saturating_sub(paused_seconds).max(0)
+    }
+
     // DivinationProcessing フェーズから Discussion フェーズへの遷移を管理
     pub async fn complete_divination_processing(&mut self, app_state: &crate::state::AppState) {
         if self.phase == GamePhase::DivinationProcessing {
@@ -467,6 +517,8 @@ impl Game {
 
         self.phase = new_phase.clone();
         self.phase_started_at = Utc::now();
+        self.phase_timer_paused_at = None;
+        self.phase_timer_paused_total_seconds = 0;
         self.add_phase_change_message(old_phase, new_phase);
     }
     pub fn save_role_assignment_result(
@@ -715,11 +767,17 @@ impl Game {
 
     pub async fn process_current_batch(&mut self, app_state: &crate::state::AppState) {
         if self.batch_request.requests.is_empty() {
+            if !self.has_pending_or_processing_batches() {
+                self.resume_phase_timer();
+            }
             return;
         }
 
         self.process_batch(app_state).await;
         self.batch_request = BatchRequest::new(0);
+        if !self.has_pending_or_processing_batches() {
+            self.resume_phase_timer();
+        }
     }
 
     async fn process_batch(&mut self, app_state: &crate::state::AppState) {
@@ -1335,6 +1393,108 @@ impl std::fmt::Display for Game {
             "Game {{ room_id: {}, name: {}, players: {:?}, phase: {:?}, result: {:?} }}",
             self.room_id, self.name, self.players, self.phase, self.result
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Duration;
+    use std::collections::BTreeMap;
+
+    fn make_grouping_parameter() -> GroupingParameter {
+        let mut map = BTreeMap::new();
+        map.insert(Role::FortuneTeller, (1, false));
+        map.insert(Role::Werewolf, (1, false));
+        map.insert(Role::Villager, (2, false));
+        GroupingParameter::new(map)
+    }
+
+    fn make_test_game() -> Game {
+        let players = vec![
+            Player {
+                id: "p1".to_string(),
+                name: "p1".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+            Player {
+                id: "p2".to_string(),
+                name: "p2".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+            Player {
+                id: "p3".to_string(),
+                name: "p3".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+            Player {
+                id: "p4".to_string(),
+                name: "p4".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+        ];
+        Game::new(
+            "room-timer-test".to_string(),
+            players,
+            4,
+            make_grouping_parameter(),
+        )
+    }
+
+    #[test]
+    fn pause_resume_accumulates_paused_duration() {
+        let mut game = make_test_game();
+        let started_at = Utc::now();
+        game.phase_started_at = started_at;
+
+        let pause_at = started_at + Duration::seconds(10);
+        let resume_at = started_at + Duration::seconds(25);
+        let check_at = started_at + Duration::seconds(35);
+
+        game.pause_phase_timer_at(pause_at);
+        assert_eq!(game.effective_phase_elapsed_seconds_at(resume_at), 10);
+
+        game.resume_phase_timer_at(resume_at);
+
+        assert_eq!(game.phase_timer_paused_at, None);
+        assert_eq!(game.phase_timer_paused_total_seconds, 15);
+        assert_eq!(game.effective_phase_elapsed_seconds_at(check_at), 20);
+    }
+
+    #[test]
+    fn multiple_pause_resume_cycles_accumulate() {
+        let mut game = make_test_game();
+        let started_at = Utc::now();
+        game.phase_started_at = started_at;
+
+        game.pause_phase_timer_at(started_at + Duration::seconds(5));
+        game.resume_phase_timer_at(started_at + Duration::seconds(9));
+        game.pause_phase_timer_at(started_at + Duration::seconds(12));
+        game.resume_phase_timer_at(started_at + Duration::seconds(15));
+
+        assert_eq!(game.phase_timer_paused_total_seconds, 7);
+        assert_eq!(
+            game.effective_phase_elapsed_seconds_at(started_at + Duration::seconds(25)),
+            18
+        );
+    }
+
+    #[test]
+    fn change_phase_resets_timer_pause_state() {
+        let mut game = make_test_game();
+        game.phase = GamePhase::Night;
+        game.phase_timer_paused_at = Some(Utc::now());
+        game.phase_timer_paused_total_seconds = 42;
+
+        game.change_phase(GamePhase::Discussion);
+
+        assert_eq!(game.phase, GamePhase::Discussion);
+        assert_eq!(game.phase_timer_paused_at, None);
+        assert_eq!(game.phase_timer_paused_total_seconds, 0);
     }
 }
 

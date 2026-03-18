@@ -33,6 +33,8 @@ export interface GameInfo {
   phase: "Waiting" | "Night" | "DivinationProcessing" | "Discussion" | "Voting" | "Result" | "Finished";
   day_count?: number;
   phase_started_at?: string;
+  phase_timer_paused_at?: string | null;
+  phase_timer_paused_total_seconds?: number;
   players: Player[];
   playerRole: Role;
   hasActed: boolean;

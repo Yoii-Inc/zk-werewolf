@@ -350,6 +350,7 @@ pub async fn batch_proof_handling(
             .map_err(|error| match error {
                 BatchEnqueueError::Conflict(message) => ProofHandlingError::Conflict(message),
             })?;
+        game.pause_phase_timer();
         let job = if enqueue_result.should_process {
             Some(ProofJob {
                 room_id: room_id.to_string(),
