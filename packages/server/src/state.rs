@@ -68,6 +68,30 @@ impl AppState {
         }
     }
 
+    pub async fn remove_room_runtime_resources(&self, room_id: &str) -> (bool, bool) {
+        let channel_removed = {
+            let mut channels = self.channel.lock().await;
+            channels.remove(room_id).is_some()
+        };
+        let event_store_removed = {
+            let mut stores = self.room_event_store.lock().await;
+            stores.remove(room_id).is_some()
+        };
+        (channel_removed, event_store_removed)
+    }
+
+    #[cfg(test)]
+    pub async fn has_room_channel_for_test(&self, room_id: &str) -> bool {
+        let channels = self.channel.lock().await;
+        channels.contains_key(room_id)
+    }
+
+    #[cfg(test)]
+    pub async fn has_room_event_store_for_test(&self, room_id: &str) -> bool {
+        let stores = self.room_event_store.lock().await;
+        stores.contains_key(room_id)
+    }
+
     async fn create_room_event(&self, room_id: &str, payload: Value) -> RoomEventEnvelope {
         let mut stores = self.room_event_store.lock().await;
         let store = stores.entry(room_id.to_string()).or_default();
