@@ -69,7 +69,7 @@ const troubleshootingTips = [
     body: "The game requires at least 4 players. Also make sure all players are marked as ready.",
   },
   {
-    title: "Realtime updates look stale",
+    title: "Real-time updates look stale",
     body: "Refresh the room page and reconnect to the room if WebSocket updates are delayed.",
   },
   {
