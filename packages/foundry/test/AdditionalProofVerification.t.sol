@@ -4,14 +4,11 @@ pragma solidity ^0.8.19;
 import "forge-std/Test.sol";
 import "../contracts/WerewolfGame.sol";
 import "../contracts/WerewolfProofVerifier.sol";
-import "../contracts/verifiers/AnonymousVotingGroth16Verifier.sol";
-import "../contracts/verifiers/AnonymousVotingGroth16VerifierAdapter.sol";
-import "../contracts/verifiers/DivinationGroth16Verifier.sol";
-import "../contracts/verifiers/DivinationGroth16VerifierAdapter.sol";
-import "../contracts/verifiers/KeyPublicizeGroth16Verifier.sol";
-import "../contracts/verifiers/KeyPublicizeGroth16VerifierAdapter.sol";
-import "../contracts/verifiers/WinningJudgementGroth16Verifier.sol";
-import "../contracts/verifiers/WinningJudgementGroth16VerifierAdapter.sol";
+import "../contracts/verifiers/Groth16VerifierAdapter.sol";
+import "../contracts/verifiers/generated/AnonymousVotingN5Groth16Verifier.sol";
+import "../contracts/verifiers/generated/DivinationN5Groth16Verifier.sol";
+import "../contracts/verifiers/generated/KeyPublicizeN5Groth16Verifier.sol";
+import "../contracts/verifiers/generated/WinningJudgementN5Groth16Verifier.sol";
 
 contract AdditionalProofVerificationTest is Test {
     uint256 internal constant ANONYMOUS_VOTING_PUBLIC_INPUTS = 1;
@@ -21,30 +18,46 @@ contract AdditionalProofVerificationTest is Test {
     WerewolfGame internal game;
     WerewolfProofVerifier internal verifier;
 
-    AnonymousVotingGroth16Verifier internal anonymousVotingVerifier;
-    AnonymousVotingGroth16VerifierAdapter internal anonymousVotingAdapter;
-    DivinationGroth16Verifier internal divinationVerifier;
-    DivinationGroth16VerifierAdapter internal divinationAdapter;
-    WinningJudgementGroth16Verifier internal winningJudgementVerifier;
-    WinningJudgementGroth16VerifierAdapter internal winningJudgementAdapter;
-    KeyPublicizeGroth16Verifier internal keyPublicizeVerifier;
-    KeyPublicizeGroth16VerifierAdapter internal keyPublicizeAdapter;
+    AnonymousVotingN5Groth16Verifier internal anonymousVotingVerifier;
+    Groth16VerifierAdapter internal anonymousVotingAdapter;
+    DivinationN5Groth16Verifier internal divinationVerifier;
+    Groth16VerifierAdapter internal divinationAdapter;
+    WinningJudgementN5Groth16Verifier internal winningJudgementVerifier;
+    Groth16VerifierAdapter internal winningJudgementAdapter;
+    KeyPublicizeN5Groth16Verifier internal keyPublicizeVerifier;
+    Groth16VerifierAdapter internal keyPublicizeAdapter;
 
     function setUp() public {
         game = new WerewolfGame();
         verifier = new WerewolfProofVerifier();
 
-        anonymousVotingVerifier = new AnonymousVotingGroth16Verifier();
-        anonymousVotingAdapter = new AnonymousVotingGroth16VerifierAdapter(address(anonymousVotingVerifier));
+        anonymousVotingVerifier = new AnonymousVotingN5Groth16Verifier();
+        anonymousVotingAdapter = new Groth16VerifierAdapter(
+            address(anonymousVotingVerifier),
+            bytes4(keccak256("verifyTx(((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),uint256[1])")),
+            ANONYMOUS_VOTING_PUBLIC_INPUTS
+        );
 
-        divinationVerifier = new DivinationGroth16Verifier();
-        divinationAdapter = new DivinationGroth16VerifierAdapter(address(divinationVerifier));
+        divinationVerifier = new DivinationN5Groth16Verifier();
+        divinationAdapter = new Groth16VerifierAdapter(
+            address(divinationVerifier),
+            bytes4(keccak256("verifyTx(((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),uint256[8])")),
+            DIVINATION_PUBLIC_INPUTS
+        );
 
-        winningJudgementVerifier = new WinningJudgementGroth16Verifier();
-        winningJudgementAdapter = new WinningJudgementGroth16VerifierAdapter(address(winningJudgementVerifier));
+        winningJudgementVerifier = new WinningJudgementN5Groth16Verifier();
+        winningJudgementAdapter = new Groth16VerifierAdapter(
+            address(winningJudgementVerifier),
+            bytes4(keccak256("verifyTx(((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),uint256[2])")),
+            WINNING_JUDGEMENT_PUBLIC_INPUTS
+        );
 
-        keyPublicizeVerifier = new KeyPublicizeGroth16Verifier();
-        keyPublicizeAdapter = new KeyPublicizeGroth16VerifierAdapter(address(keyPublicizeVerifier));
+        keyPublicizeVerifier = new KeyPublicizeN5Groth16Verifier();
+        keyPublicizeAdapter = new Groth16VerifierAdapter(
+            address(keyPublicizeVerifier),
+            bytes4(keccak256("verifyTx(((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256))")),
+            0
+        );
 
         game.setVerifier(address(verifier));
         verifier.setGameContract(address(game));
@@ -175,8 +188,8 @@ contract AdditionalProofVerificationTest is Test {
     {
         string memory json = _runFixture("anonymous_voting_groth16_fixture");
 
-        AnonymousVotingGroth16Verifier.Proof memory solidityProof;
-        solidityProof.a = AnonymousVotingPairing.G1Point(
+        AnonymousVotingN5Groth16Verifier.Proof memory solidityProof;
+        solidityProof.a = AnonymousVotingN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".ax"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".ay"), (bytes32)))
         );
@@ -184,9 +197,11 @@ contract AdditionalProofVerificationTest is Test {
         bytes32[] memory bx = abi.decode(vm.parseJson(json, ".bx"), (bytes32[]));
         bytes32[] memory by = abi.decode(vm.parseJson(json, ".by"), (bytes32[]));
         require(bx.length == 2 && by.length == 2, "invalid groth16 g2 proof shape");
-        solidityProof.b = AnonymousVotingPairing.G2Point([uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]);
+        solidityProof.b = AnonymousVotingN5Groth16VerifierPairing.G2Point(
+            [uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]
+        );
 
-        solidityProof.c = AnonymousVotingPairing.G1Point(
+        solidityProof.c = AnonymousVotingN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".cx"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".cy"), (bytes32)))
         );
@@ -210,8 +225,8 @@ contract AdditionalProofVerificationTest is Test {
     {
         string memory json = _runFixture("divination_groth16_fixture");
 
-        DivinationGroth16Verifier.Proof memory solidityProof;
-        solidityProof.a = DivinationPairing.G1Point(
+        DivinationN5Groth16Verifier.Proof memory solidityProof;
+        solidityProof.a = DivinationN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".ax"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".ay"), (bytes32)))
         );
@@ -219,9 +234,11 @@ contract AdditionalProofVerificationTest is Test {
         bytes32[] memory bx = abi.decode(vm.parseJson(json, ".bx"), (bytes32[]));
         bytes32[] memory by = abi.decode(vm.parseJson(json, ".by"), (bytes32[]));
         require(bx.length == 2 && by.length == 2, "invalid groth16 g2 proof shape");
-        solidityProof.b = DivinationPairing.G2Point([uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]);
+        solidityProof.b = DivinationN5Groth16VerifierPairing.G2Point(
+            [uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]
+        );
 
-        solidityProof.c = DivinationPairing.G1Point(
+        solidityProof.c = DivinationN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".cx"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".cy"), (bytes32)))
         );
@@ -245,8 +262,8 @@ contract AdditionalProofVerificationTest is Test {
     {
         string memory json = _runFixture("winning_judgement_groth16_fixture");
 
-        WinningJudgementGroth16Verifier.Proof memory solidityProof;
-        solidityProof.a = WinningJudgementPairing.G1Point(
+        WinningJudgementN5Groth16Verifier.Proof memory solidityProof;
+        solidityProof.a = WinningJudgementN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".ax"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".ay"), (bytes32)))
         );
@@ -254,10 +271,11 @@ contract AdditionalProofVerificationTest is Test {
         bytes32[] memory bx = abi.decode(vm.parseJson(json, ".bx"), (bytes32[]));
         bytes32[] memory by = abi.decode(vm.parseJson(json, ".by"), (bytes32[]));
         require(bx.length == 2 && by.length == 2, "invalid groth16 g2 proof shape");
-        solidityProof.b =
-            WinningJudgementPairing.G2Point([uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]);
+        solidityProof.b = WinningJudgementN5Groth16VerifierPairing.G2Point(
+            [uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]
+        );
 
-        solidityProof.c = WinningJudgementPairing.G1Point(
+        solidityProof.c = WinningJudgementN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".cx"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".cy"), (bytes32)))
         );
@@ -281,8 +299,8 @@ contract AdditionalProofVerificationTest is Test {
     {
         string memory json = _runFixture("key_publicize_groth16_fixture");
 
-        KeyPublicizeGroth16Verifier.Proof memory solidityProof;
-        solidityProof.a = KeyPublicizePairing.G1Point(
+        KeyPublicizeN5Groth16Verifier.Proof memory solidityProof;
+        solidityProof.a = KeyPublicizeN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".ax"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".ay"), (bytes32)))
         );
@@ -290,9 +308,11 @@ contract AdditionalProofVerificationTest is Test {
         bytes32[] memory bx = abi.decode(vm.parseJson(json, ".bx"), (bytes32[]));
         bytes32[] memory by = abi.decode(vm.parseJson(json, ".by"), (bytes32[]));
         require(bx.length == 2 && by.length == 2, "invalid groth16 g2 proof shape");
-        solidityProof.b = KeyPublicizePairing.G2Point([uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]);
+        solidityProof.b = KeyPublicizeN5Groth16VerifierPairing.G2Point(
+            [uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]
+        );
 
-        solidityProof.c = KeyPublicizePairing.G1Point(
+        solidityProof.c = KeyPublicizeN5Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".cx"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".cy"), (bytes32)))
         );

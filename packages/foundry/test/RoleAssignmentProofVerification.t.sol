@@ -4,22 +4,30 @@ pragma solidity ^0.8.19;
 import "forge-std/Test.sol";
 import "../contracts/WerewolfGame.sol";
 import "../contracts/WerewolfProofVerifier.sol";
-import "../contracts/verifiers/RoleAssignmentGroth16Verifier.sol";
-import "../contracts/verifiers/RoleAssignmentGroth16VerifierAdapter.sol";
+import "../contracts/verifiers/Groth16VerifierAdapter.sol";
+import "../contracts/verifiers/generated/RoleAssignmentN5W1Groth16Verifier.sol";
 
 contract RoleAssignmentProofVerificationTest is Test {
     uint256 internal constant FIXED_PUBLIC_INPUTS = 100; // (5 players + 5 groups)^2
 
     WerewolfGame internal game;
     WerewolfProofVerifier internal verifier;
-    RoleAssignmentGroth16Verifier internal roleAssignmentGroth16Verifier;
-    RoleAssignmentGroth16VerifierAdapter internal roleAssignmentGroth16Adapter;
+    RoleAssignmentN5W1Groth16Verifier internal roleAssignmentGroth16Verifier;
+    Groth16VerifierAdapter internal roleAssignmentGroth16Adapter;
 
     function setUp() public {
         game = new WerewolfGame();
         verifier = new WerewolfProofVerifier();
-        roleAssignmentGroth16Verifier = new RoleAssignmentGroth16Verifier();
-        roleAssignmentGroth16Adapter = new RoleAssignmentGroth16VerifierAdapter(address(roleAssignmentGroth16Verifier));
+        roleAssignmentGroth16Verifier = new RoleAssignmentN5W1Groth16Verifier();
+        roleAssignmentGroth16Adapter = new Groth16VerifierAdapter(
+            address(roleAssignmentGroth16Verifier),
+            bytes4(
+                keccak256(
+                    "verifyTx(((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),uint256[100])"
+                )
+            ),
+            FIXED_PUBLIC_INPUTS
+        );
 
         game.setVerifier(address(verifier));
         verifier.setGameContract(address(game));
@@ -95,16 +103,18 @@ contract RoleAssignmentProofVerificationTest is Test {
 
         string memory json = string(vm.ffi(ffiCmd));
 
-        RoleAssignmentGroth16Verifier.Proof memory solidityProof;
-        solidityProof.a = Pairing.G1Point(
+        RoleAssignmentN5W1Groth16Verifier.Proof memory solidityProof;
+        solidityProof.a = RoleAssignmentN5W1Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".ax"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".ay"), (bytes32)))
         );
         bytes32[] memory bx = abi.decode(vm.parseJson(json, ".bx"), (bytes32[]));
         bytes32[] memory by = abi.decode(vm.parseJson(json, ".by"), (bytes32[]));
         require(bx.length == 2 && by.length == 2, "invalid Groth16 G2 proof shape");
-        solidityProof.b = Pairing.G2Point([uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]);
-        solidityProof.c = Pairing.G1Point(
+        solidityProof.b = RoleAssignmentN5W1Groth16VerifierPairing.G2Point(
+            [uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]
+        );
+        solidityProof.c = RoleAssignmentN5W1Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".cx"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".cy"), (bytes32)))
         );
