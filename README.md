@@ -1,51 +1,147 @@
 # ZK Werewolf
 
-A decentralized werewolf game using zero-knowledge proofs and secure multi-party computation (MPC) to ensure player privacy and game integrity.
+ZK Werewolf is a privacy-preserving social deduction game that combines zero-knowledge proofs (ZK) and secure multi-party computation (MPC).
 
-## Development Setup
+Players can play Werewolf while keeping sensitive information (such as role details and private actions) hidden from other players and from central server logic.
+
+## What Is ZK Werewolf?
+
+ZK Werewolf is designed to keep game integrity and privacy at the same time:
+
+- Privacy-focused gameplay using ZK/MPC-assisted computation flows
+- Real-time multiplayer rooms with WebSocket updates
+- Smart-contract integration for game-related on-chain workflows
+- Multi-service architecture for frontend, backend, blockchain, and MPC nodes
+
+## Core Concepts
+
+### Privacy Model
+
+- The frontend handles player interaction and encrypted payload preparation.
+- The backend orchestrates room/game flow and API/WebSocket communication.
+- MPC nodes process proof-related workloads.
+- Smart contracts can be used for on-chain state/proof-related workflows.
+
+### Game Flow (high level)
+
+A typical game moves through:
+
+`Night -> DivinationProcessing -> Discussion -> Voting -> Result`
+
+The backend coordinates phase progression and broadcasts updates to clients.
+
+## Quick Start (Local)
 
 ### Prerequisites
 
-- Docker & Docker Compose
+- Docker and Docker Compose
 
-### Getting Started
-
-1. Start all services:
-   ```bash
-   docker compose up --build
-   ```
-
-2. Access the services:
-   - Frontend: http://localhost:3000  
-   - Backend: http://localhost:8080
-   - Blockchain: http://localhost:8545
-   - MPC Nodes: http://localhost:9000, http://localhost:9001, http://localhost:9002
-
-### Development Commands
+### Option A: Run full stack with Docker Compose
 
 ```bash
-# Start development environment
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Stop services  
-docker compose down
-
-# Clean rebuild
-docker compose down -v
 docker compose up --build
 ```
 
-### Project Structure
+Main local endpoints:
 
-- `packages/foundry/` - Smart contracts (Solidity + Foundry)
-- `packages/nextjs/` - Frontend (Next.js + React)
-- `packages/server/` - Backend API (Rust + Axum)
-- `packages/zk-mpc-node/` - MPC node (Rust)
-- `packages/mpc-circuits/` - ZK circuits
-- `packages/mpc-algebra-wasm/` - WebAssembly bindings
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8080`
+- Backend health check: `http://localhost:8080/health`
+- Blockchain RPC: `http://localhost:8545`
+- MPC nodes: `http://localhost:9000`, `http://localhost:9001`, `http://localhost:9002`
+
+Useful commands:
+
+```bash
+# Start in background
+docker compose up --build -d
+
+# Show logs
+docker compose logs -f
+
+# Stop stack
+docker compose down --remove-orphans
+```
+
+### Option B: Use Make targets for local components
+
+```bash
+# Show available commands
+make help
+
+# Start frontend only
+make frontend
+
+# Start backend only
+make server
+
+# Start MPC nodes (small Groth16 keys profile)
+make node-small
+
+# Stop processes by known ports
+make stop
+```
+
+## Architecture
+
+```mermaid
+flowchart TD
+  Player[Player Browser]
+
+  subgraph App["Application"]
+    FE[Next.js Frontend\npackages/nextjs]
+    BE[Rust Backend API\npackages/server]
+  end
+
+  subgraph MPC["MPC Cluster"]
+    MPC0[MPC Node 0\npackages/zk-mpc-node]
+    MPC1[MPC Node 1\npackages/zk-mpc-node]
+    MPC2[MPC Node 2\npackages/zk-mpc-node]
+  end
+
+  Chain[Local Chain / EVM\npackages/foundry]
+  DB[(Supabase)]
+
+  Player --> FE
+  FE -->|HTTP /api/*| BE
+  FE <-->|WebSocket /api/room/:id/ws| BE
+
+  BE -->|job / protocol calls| MPC0
+  BE -->|job / protocol calls| MPC1
+  BE -->|job / protocol calls| MPC2
+
+  FE -->|wallet tx / reads| Chain
+  BE -->|server-side reads / tx| Chain
+
+  BE -->|queries| DB
+```
+
+## Repository Map
+
+- `packages/nextjs/`: Next.js frontend (UI, wallet integration, gameplay interaction)
+- `packages/server/`: Rust backend (room/game lifecycle, REST API, WebSocket events)
+- `packages/zk-mpc-node/`: MPC node service used for proof-related computation
+- `packages/mpc-circuits/`: Circuit-related logic used by proof workflows
+- `packages/mpc-algebra-wasm/`: WASM bindings used by frontend/server proof-related flows
+- `packages/foundry/`: Solidity contracts and local chain/deployment scripts
+- `terraform/`: AWS infrastructure definitions
+- `scripts/`: deployment/update helper scripts
+
+## API Entry Points (Current)
+
+Backend base URL (local): `http://localhost:8080`
+
+- `GET /health`
+- `/api/users/*` (user registration/login/user info)
+- `/api/room/*` (room create/list/join/leave/ready/ws)
+- `/api/game/*` (game lifecycle, phase actions, proof-related endpoints)
+- `/api/nodes/keys/*` (node key registration/query)
+
+WebSocket example:
+
+```bash
+websocat ws://localhost:8080/api/room/{roomId}/ws
+```
 
 ## AWS Deployment
 
