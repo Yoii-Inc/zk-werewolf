@@ -205,7 +205,7 @@ module "backend_service" {
     },
     {
       name  = "BLOCKCHAIN_ENABLED"
-      value = tostring(try(local.secrets.backend.blockchain_enabled, true))
+      value = "true"
     },
     {
       name  = "ETHEREUM_RPC_URL"
@@ -213,7 +213,7 @@ module "backend_service" {
     },
     {
       name  = "ETHEREUM_CHAIN_ID"
-      value = tostring(try(local.secrets.backend.ethereum_chain_id, 11155111))
+      value = "11155111"
     },
     {
       name  = "DEPLOYER_PRIVATE_KEY"
@@ -221,15 +221,15 @@ module "backend_service" {
     },
     {
       name  = "WEREWOLF_GAME_CONTRACT"
-      value = try(local.secrets.backend.werewolf_game_contract, "")
+      value = "0x1C2c775173045dF1DDFB09bfA54eAeD8016c39A3"
     },
     {
       name  = "WEREWOLF_VERIFIER_CONTRACT"
-      value = try(local.secrets.backend.werewolf_verifier_contract, "")
+      value = "0x85d5eb629f9038d9D08D4Eba70C59c09A13DFf4F"
     },
     {
       name  = "WEREWOLF_REWARDS_CONTRACT"
-      value = try(local.secrets.backend.werewolf_rewards_contract, "")
+      value = "0x6007499E15A004f588fA1169476f05950251B438"
     },
     {
       name  = "ZK_MPC_NODE_0_HTTP"
