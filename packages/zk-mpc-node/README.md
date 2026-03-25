@@ -6,13 +6,13 @@ Groth16（RoleAssignment）の共通 setup 生成
 make groth16-setup
 
 # 生成される主な成果物
-# - packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
+# - packages/zk-mpc-node/data/groth16/role_assignment_n{players}_w{wolves}_v1.pk
 # - packages/foundry/contracts/verifiers/RoleAssignmentGroth16Verifier.sol
 ```
 
-ノード起動時に proving key を使う
+ノード起動時に Groth16 proving key ディレクトリを指定する（任意）
 ```bash
-export ROLE_ASSIGNMENT_GROTH16_PK_PATH=packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
+export GROTH16_DATA_DIR=packages/zk-mpc-node/data/groth16
 ```
 
 鍵ペアの生成

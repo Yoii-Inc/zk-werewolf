@@ -95,11 +95,6 @@ impl Groth16Setup {
 #[derive(Clone, Default)]
 struct CircuitGroth16Setups {
     by_profile: HashMap<CircuitProfile, Groth16Setup>,
-    role_assignment: Option<Groth16Setup>,
-    divination: Option<Groth16Setup>,
-    anonymous_voting: Option<Groth16Setup>,
-    winning_judgement: Option<Groth16Setup>,
-    key_publicize: Option<Groth16Setup>,
 }
 
 impl CircuitGroth16Setups {
@@ -110,73 +105,20 @@ impl CircuitGroth16Setups {
         let mut by_profile = HashMap::new();
         load_profile_setups_from_data_dir(&mut by_profile)?;
 
-        let setup = Self {
-            by_profile,
-            role_assignment: load_setup_with_fallback(
-                "ROLE_ASSIGNMENT_GROTH16_PK_PATH",
-                "role_assignment_max5_v1.pk",
-                "RoleAssignment",
-            )?,
-            divination: load_setup_with_fallback(
-                "DIVINATION_GROTH16_PK_PATH",
-                "divination_max5_v1.pk",
-                "Divination",
-            )?,
-            anonymous_voting: load_setup_with_fallback(
-                "ANONYMOUS_VOTING_GROTH16_PK_PATH",
-                "anonymous_voting_max5_v1.pk",
-                "AnonymousVoting",
-            )?,
-            winning_judgement: load_setup_with_fallback(
-                "WINNING_JUDGEMENT_GROTH16_PK_PATH",
-                "winning_judgement_max5_v1.pk",
-                "WinningJudgement",
-            )?,
-            key_publicize: load_setup_with_fallback(
-                "KEY_PUBLICIZE_GROTH16_PK_PATH",
-                "key_publicize_max5_v1.pk",
-                "KeyPublicize",
-            )?,
-        };
-
-        let fallback_loaded = [
-            setup.role_assignment.is_some(),
-            setup.divination.is_some(),
-            setup.anonymous_voting.is_some(),
-            setup.winning_judgement.is_some(),
-            setup.key_publicize.is_some(),
-        ]
-        .into_iter()
-        .filter(|loaded| *loaded)
-        .count();
+        let setup = Self { by_profile };
 
         println!(
-            "[node:init][groth16] completed loading Groth16 setups in {} ms (profile_setups={}, fallback_setups={})",
+            "[node:init][groth16] completed loading Groth16 setups in {} ms (profile_setups={})",
             started.elapsed().as_millis(),
             setup.by_profile.len(),
-            fallback_loaded
         );
 
         Ok(setup)
     }
 
     fn for_circuit(&self, circuit_type: &CircuitEncryptedInputIdentifier) -> Option<&Groth16Setup> {
-        if let Some(profile) = circuit_type.circuit_profile() {
-            if let Some(setup) = self.by_profile.get(&profile) {
-                return Some(setup);
-            }
-            // プロファイルが判別できるのに一致する setup がない場合、
-            // max5 等へのフォールバックを行うと不正な鍵で証明してしまうため禁止する。
-            return None;
-        }
-
-        match circuit_type {
-            CircuitEncryptedInputIdentifier::RoleAssignment(_) => self.role_assignment.as_ref(),
-            CircuitEncryptedInputIdentifier::Divination(_) => self.divination.as_ref(),
-            CircuitEncryptedInputIdentifier::AnonymousVoting(_) => self.anonymous_voting.as_ref(),
-            CircuitEncryptedInputIdentifier::WinningJudge(_) => self.winning_judgement.as_ref(),
-            CircuitEncryptedInputIdentifier::KeyPublicize(_) => self.key_publicize.as_ref(),
-        }
+        let profile = circuit_type.circuit_profile()?;
+        self.by_profile.get(&profile)
     }
 }
 
@@ -593,60 +535,6 @@ impl<IO: AsyncRead + AsyncWrite + Unpin + Send + 'static> Node<IO> {
     }
 }
 
-fn pk_path_from_env_or_default(env_var: &str, default_pk_file: &str) -> Option<PathBuf> {
-    match std::env::var(env_var) {
-        Ok(value) if !value.trim().is_empty() => {
-            let path = PathBuf::from(value);
-            println!(
-                "[node:init][groth16] using {} from env: {}",
-                env_var,
-                path.display()
-            );
-            Some(path)
-        }
-        Ok(_) => {
-            println!(
-                "[node:init][groth16] {} is set but empty. Trying default {} in data dir",
-                env_var, default_pk_file
-            );
-            let default_path = groth16_data_dir().join(default_pk_file);
-            if default_path.exists() {
-                println!(
-                    "[node:init][groth16] using default PK for {}: {}",
-                    env_var,
-                    default_path.display()
-                );
-                Some(default_path)
-            } else {
-                println!(
-                    "[node:init][groth16] default PK for {} is missing: {}",
-                    env_var,
-                    default_path.display()
-                );
-                None
-            }
-        }
-        _ => {
-            let default_path = groth16_data_dir().join(default_pk_file);
-            if default_path.exists() {
-                println!(
-                    "[node:init][groth16] {} is not set. Using default PK: {}",
-                    env_var,
-                    default_path.display()
-                );
-                Some(default_path)
-            } else {
-                println!(
-                    "[node:init][groth16] {} is not set and default PK is missing: {}",
-                    env_var,
-                    default_path.display()
-                );
-                None
-            }
-        }
-    }
-}
-
 fn groth16_data_dir() -> PathBuf {
     if let Ok(value) = std::env::var("GROTH16_DATA_DIR") {
         let path = PathBuf::from(value);
@@ -750,16 +638,6 @@ fn parse_profile_from_pk_filename(file_name: &str) -> Option<CircuitProfile> {
             werewolf_count: werewolves.parse().ok()?,
         });
     }
-    if let Some(rest) = stem.strip_prefix("role_assignment_max") {
-        let (players, _) = rest.split_once("_v")?;
-        let player_count: usize = players.parse().ok()?;
-        let werewolf_count = default_werewolf_count_for_player_count(player_count);
-        return Some(CircuitProfile::RoleAssignment {
-            player_count,
-            werewolf_count,
-        });
-    }
-
     parse_single_count_profile(stem, "divination")
         .map(|player_count| CircuitProfile::Divination { player_count })
         .or_else(|| {
@@ -781,21 +659,7 @@ fn parse_single_count_profile(stem: &str, prefix: &str) -> Option<usize> {
         let (players, _) = rest.split_once("_v")?;
         return players.parse().ok();
     }
-    if let Some(rest) = stem.strip_prefix(&format!("{}_max", prefix)) {
-        let (players, _) = rest.split_once("_v")?;
-        return players.parse().ok();
-    }
     None
-}
-
-fn default_werewolf_count_for_player_count(player_count: usize) -> usize {
-    if player_count <= 6 {
-        1
-    } else if player_count <= 9 {
-        2
-    } else {
-        3
-    }
 }
 
 fn circuit_profile_label(profile: CircuitProfile) -> String {
@@ -813,32 +677,6 @@ fn circuit_profile_label(profile: CircuitProfile) -> String {
         }
         CircuitProfile::KeyPublicize { player_count } => format!("key_publicize_n{}", player_count),
     }
-}
-
-fn load_setup_with_fallback(
-    env_var: &str,
-    default_pk_file: &str,
-    label: &str,
-) -> Result<Option<Groth16Setup>, std::io::Error> {
-    let started = Instant::now();
-    let Some(path) = pk_path_from_env_or_default(env_var, default_pk_file) else {
-        println!(
-            "{env_var} is not set and default key is missing. Falling back to runtime Groth16 setup for {label}."
-        );
-        return Ok(None);
-    };
-
-    println!(
-        "[node:init][groth16] loading {label} setup from {}",
-        path.display()
-    );
-    let setup = Groth16Setup::from_pk_path(&path, label)?;
-    println!(
-        "Loaded {label} Groth16 proving key from {} in {} ms.",
-        path.display(),
-        started.elapsed().as_millis()
-    );
-    Ok(Some(setup))
 }
 
 fn abi_encode_groth16_proof(proof: &ark_groth16::Proof<ark_bn254::Bn254>) -> Vec<u8> {
