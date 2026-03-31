@@ -98,6 +98,7 @@ pub async fn end_game(state: AppState, room_id: String) -> Result<String, String
     let game_snapshot = {
         let mut rooms = state.rooms.lock().await;
         let mut games = state.games.lock().await;
+        let now = Utc::now();
 
         let room = rooms
             .get_mut(&room_id)
@@ -108,6 +109,7 @@ pub async fn end_game(state: AppState, room_id: String) -> Result<String, String
 
         room.status = RoomStatus::Closed;
         game.change_phase(GamePhase::Finished);
+        game.ended_at = Some(now);
         game.clone()
     };
 

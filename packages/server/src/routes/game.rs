@@ -306,6 +306,7 @@ async fn reset_game_handler(
         reset_game.phase_started_at = chrono::Utc::now();
         reset_game.phase_timer_paused_at = None;
         reset_game.phase_timer_paused_total_seconds = 0;
+        reset_game.ended_at = None;
         reset_game.chat_log.messages.clear();
         // reset_game.has_acted.clear();
 

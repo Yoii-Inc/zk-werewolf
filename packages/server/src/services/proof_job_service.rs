@@ -124,6 +124,28 @@ impl ProofJobService {
         statuses.get(batch_id).cloned()
     }
 
+    pub async fn remove_room_jobs(&self, room_id: &str) -> usize {
+        let mut statuses = self.statuses.lock().await;
+        let before = statuses.len();
+        statuses.retain(|_, status| status.room_id != room_id);
+        before.saturating_sub(statuses.len())
+    }
+
+    #[cfg(test)]
+    pub async fn insert_status_for_test(&self, status: ProofJobStatus) {
+        let mut statuses = self.statuses.lock().await;
+        statuses.insert(status.batch_id.clone(), status);
+    }
+
+    #[cfg(test)]
+    pub async fn count_statuses_for_room_for_test(&self, room_id: &str) -> usize {
+        let statuses = self.statuses.lock().await;
+        statuses
+            .values()
+            .filter(|status| status.room_id == room_id)
+            .count()
+    }
+
     async fn ensure_worker_started(&self, app_state: AppState) {
         if self.worker_started.swap(true, Ordering::SeqCst) {
             return;

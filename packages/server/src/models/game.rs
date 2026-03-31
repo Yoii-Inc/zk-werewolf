@@ -40,6 +40,8 @@ pub struct Game {
     pub active_batches: HashMap<BatchKey, BatchRequest>,
     pub computation_results: ComputationResults,
     pub started_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub ended_at: Option<DateTime<Utc>>,
     pub phase_started_at: DateTime<Utc>,
     #[serde(default)]
     pub phase_timer_paused_at: Option<DateTime<Utc>>,
@@ -381,6 +383,7 @@ impl Game {
             active_batches: HashMap::new(),
             computation_results: ComputationResults::default(),
             started_at: Some(Utc::now()),
+            ended_at: None,
             phase_started_at: Utc::now(),
             phase_timer_paused_at: None,
             phase_timer_paused_total_seconds: 0,
