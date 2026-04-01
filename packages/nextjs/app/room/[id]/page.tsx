@@ -293,6 +293,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
   const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
+  const isCurrentPlayerDead = currentPlayer?.is_dead === true;
   const werewolfTeammateNames =
     privateGameInfo?.playerRole === "Werewolf"
       ? (privateGameInfo.werewolfTeammateIds ?? [])
@@ -403,6 +404,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           : websocketStatus === "error"
             ? "bg-rose-50 text-rose-700 border-rose-200"
             : "bg-slate-100 text-slate-700 border-slate-200";
+
+  useEffect(() => {
+    if (!isCurrentPlayerDead) return;
+    setShowNightAction(false);
+    setShowVoteModal(false);
+  }, [isCurrentPlayerDead]);
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -533,7 +540,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   privateGameInfo?.playerRole !== null && (
                     <button
                       onClick={() => setShowNightAction(true)}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                      disabled={isCurrentPlayerDead}
+                      className={`px-4 py-2 rounded-lg transition-colors shadow-sm ${
+                        isCurrentPlayerDead
+                          ? "bg-gray-400 text-white cursor-not-allowed"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      }`}
                     >
                       Execute Night Action
                     </button>
@@ -541,7 +553,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 {gameInfo?.phase === "Voting" && (
                   <button
                     onClick={() => setShowVoteModal(true)}
-                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
+                    disabled={isCurrentPlayerDead}
+                    className={`px-4 py-2 rounded-lg transition-colors shadow-sm ${
+                      isCurrentPlayerDead
+                        ? "bg-gray-400 text-white cursor-not-allowed"
+                        : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
                   >
                     Vote
                   </button>
@@ -834,7 +851,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           </div>
         )}
       </div>
-      {showNightAction && gameInfo?.phase === "Night" && (
+      {showNightAction && gameInfo?.phase === "Night" && !isCurrentPlayerDead && (
         <NightActionModal
           players={gameInfo.players}
           role={privateGameInfo?.playerRole ?? "Villager"}
@@ -849,7 +866,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           werewolfTeammateIds={privateGameInfo?.werewolfTeammateIds}
         />
       )}
-      {showVoteModal && gameInfo?.phase === "Voting" && (
+      {showVoteModal && gameInfo?.phase === "Voting" && !isCurrentPlayerDead && (
         <VoteModal
           myId={gameInfo.players.find(player => player.name === user?.username)?.id ?? ""}
           roomId={gameInfo.room_id}
