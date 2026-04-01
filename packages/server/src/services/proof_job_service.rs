@@ -1,5 +1,8 @@
 use crate::{
-    models::game::{BatchKey, BatchRequest},
+    models::{
+        game::{BatchKey, BatchRequest, GameResult},
+        room::RoomStatus,
+    },
     state::AppState,
     utils::config::CONFIG,
 };
@@ -206,6 +209,7 @@ async fn process_job(
     let execution_result =
         crate::services::zk_proof::execute_batch_request(&job.batch_request).await;
     let mut execution_error = execution_result.as_ref().err().cloned();
+    let mut should_close_room = false;
 
     crate::services::zk_proof::store_precomputed_batch_result(batch_id.clone(), execution_result)
         .await;
@@ -215,11 +219,19 @@ async fn process_job(
         if let Some(game) = games.get_mut(&room_id) {
             game.apply_proof_result_for_batch(&app_state, &job.batch_key, job.batch_request)
                 .await;
+            should_close_room = game.result != GameResult::InProgress;
         } else {
             execution_error = Some(format!(
                 "Game not found while applying proof result: room_id={}",
                 room_id
             ));
+        }
+    }
+
+    if should_close_room {
+        let mut rooms = app_state.rooms.lock().await;
+        if let Some(room) = rooms.get_mut(&room_id) {
+            room.status = RoomStatus::Closed;
         }
     }
 

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, GameInfo, PrivateGameInfo, RoomInfo } from "~~/types/game";
 import { getPrivateGameInfo, setPrivateGameInfo } from "~~/utils/privateGameInfoUtils";
 
+export const shouldFetchGameInfoByRoomStatus = (status?: string | null): boolean =>
+  status === "InProgress" || status === "Closed";
+
 export const useGameInfo = (
   roomId: string,
   userId: string | undefined,
@@ -117,7 +120,7 @@ export const useGameInfo = (
   const refetchRoomAndGame = useCallback(async () => {
     const latestRoomInfo = await fetchRoomInfo();
     const status = latestRoomInfo?.status ?? roomInfo?.status;
-    if (status === "InProgress") {
+    if (shouldFetchGameInfoByRoomStatus(status)) {
       await fetchGameInfo();
     }
   }, [fetchGameInfo, fetchRoomInfo, roomInfo?.status]);
