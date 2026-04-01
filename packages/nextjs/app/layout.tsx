@@ -11,7 +11,10 @@ const ScaffoldEthAppWithProviders = dynamic(
   { ssr: false },
 );
 
-export const metadata = getMetadata({ title: "Scaffold-ETH 2 App", description: "Built with 🏗 Scaffold-ETH 2" });
+export const metadata = getMetadata({
+  title: "ZK Werewolf",
+  description: "Zero-knowledge social deduction game on Ethereum",
+});
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   return (

@@ -1,5 +1,5 @@
 {
-  "name": "Scaffold-ETH 2 DApp",
-  "description": "A DApp built with Scaffold-ETH",
-  "iconPath": "logo.svg"
+  "name": "ZK Werewolf",
+  "description": "Zero-knowledge social deduction game on Ethereum",
+  "iconPath": "logo-werewolf.png"
 }
