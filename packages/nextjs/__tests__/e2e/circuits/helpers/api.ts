@@ -612,6 +612,45 @@ export class CircuitTestClient {
   }
 
   /**
+   * 夜アクション（襲撃）を送信
+   * 本番環境では NightActionModal が行う処理
+   */
+  async submitNightAttack(
+    roomId: string,
+    attackerPlayerId: string,
+    targetPlayerId: string,
+    authToken?: string,
+  ): Promise<any> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}/api/game/${roomId}/actions/night-action`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        player_id: attackerPlayerId,
+        action: {
+          Attack: {
+            target_id: targetPlayerId,
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Night attack submission failed (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
    * ゲーム状態を取得
    */
   async getGameState(roomId: string): Promise<GameInfo> {

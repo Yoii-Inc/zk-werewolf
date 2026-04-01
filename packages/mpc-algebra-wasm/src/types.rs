@@ -165,10 +165,10 @@ impl CircuitProfile {
                 player_count: 9,
                 werewolf_count,
             } => (1..=3).contains(werewolf_count),
-            Self::Divination { player_count }
-            | Self::AnonymousVoting { player_count }
-            | Self::WinningJudge { player_count }
-            | Self::KeyPublicize { player_count } => (4..=9).contains(player_count),
+            Self::Divination { player_count } => (3..=9).contains(player_count),
+            Self::AnonymousVoting { player_count } => (3..=9).contains(player_count),
+            Self::WinningJudge { player_count } => (2..=9).contains(player_count),
+            Self::KeyPublicize { player_count } => (4..=9).contains(player_count),
             _ => false,
         }
     }

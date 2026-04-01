@@ -15,6 +15,7 @@ import { useGamePhase } from "~~/hooks/useGamePhase";
 import { useGameWebSocket } from "~~/hooks/useGameWebSocket";
 import * as GameInputGenerator from "~~/services/gameInputGenerator";
 import { TweetNaclKeyManager } from "~~/utils/crypto/tweetNaclKeyManager";
+import { clearRoomScopedLogs } from "~~/utils/roomLogStorage";
 
 const isDebugMode = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
 
@@ -34,6 +35,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [remainingTime, setRemainingTime] = useState(0);
   const [phaseDuration, setPhaseDuration] = useState(1);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const hasClearedLobbyLogsRef = useRef(false);
 
   // Custom hooks
   const { messages, setMessages, addMessage, addServerMessage, resetMessages } = useGameChat(params.id);
@@ -107,6 +109,23 @@ export default function RoomPage({ params }: { params: { id: string } }) {
       window.removeEventListener("gameResetNotification", handleGameReset);
     };
   }, [resetMessages, user?.id, privateGameInfo]);
+
+  // ロビー状態（Open/Ready）で部屋に入った際、前ゲームのローカルログを一度だけ削除する
+  useEffect(() => {
+    if (!roomInfo?.room_id) return;
+
+    const isLobbyState = roomInfo.status === "Open" || roomInfo.status === "Ready";
+    if (isLobbyState && !hasClearedLobbyLogsRef.current) {
+      clearRoomScopedLogs(roomInfo.room_id, user?.id);
+      resetMessages();
+      hasClearedLobbyLogsRef.current = true;
+    }
+
+    // 進行中に移ったらフラグを戻し、次にロビーへ戻った際に再クリーンアップできるようにする
+    if (!isLobbyState) {
+      hasClearedLobbyLogsRef.current = false;
+    }
+  }, [roomInfo?.room_id, roomInfo?.status, user?.id]);
 
   // ゲーム終了を検知してモーダルを表示
   useEffect(() => {
@@ -255,8 +274,14 @@ export default function RoomPage({ params }: { params: { id: string } }) {
         return;
       }
 
-      const elapsedSec = Math.floor((Date.now() - phaseStartMs) / 1000);
-      setRemainingTime(Math.max(0, targetDuration - elapsedSec));
+      const nowMs = Date.now();
+      const pausedTotalSeconds = Math.max(0, Math.floor(gameInfo.phase_timer_paused_total_seconds ?? 0));
+      const pausedAtMs = gameInfo.phase_timer_paused_at ? new Date(gameInfo.phase_timer_paused_at).getTime() : NaN;
+      const activePausedSeconds = Number.isNaN(pausedAtMs) ? 0 : Math.max(0, Math.floor((nowMs - pausedAtMs) / 1000));
+
+      const rawElapsedSec = Math.floor((nowMs - phaseStartMs) / 1000);
+      const effectiveElapsedSec = Math.max(0, rawElapsedSec - pausedTotalSeconds - activePausedSeconds);
+      setRemainingTime(Math.max(0, targetDuration - effectiveElapsedSec));
     };
 
     updateRemainingTime();
@@ -355,7 +380,8 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     playersForView.length > 0 &&
     playersForView.every(player => getPlayerReady(player as { isReady?: boolean; is_ready?: boolean }));
   const timerProgressPercent = Math.max(0, Math.min(100, (remainingTime / Math.max(phaseDuration, 1)) * 100));
-  const isTimeWarning = roomInfo?.status === "InProgress" && remainingTime <= 30;
+  const isPhaseTimerPaused = Boolean(gameInfo?.phase_timer_paused_at);
+  const isTimeWarning = roomInfo?.status === "InProgress" && !isPhaseTimerPaused && remainingTime <= 30;
   const isWebSocketConnected = websocketStatus === "connected";
   const websocketStatusLabel =
     websocketStatus === "connected"
@@ -459,7 +485,9 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-2 text-indigo-700">
                   <Clock size={18} />
                   <span>
-                    Time Remaining: {Math.floor(remainingTime / 60)}:{String(remainingTime % 60).padStart(2, "0")}
+                    {isPhaseTimerPaused
+                      ? "Computing proof..."
+                      : `Time Remaining: ${Math.floor(remainingTime / 60)}:${String(remainingTime % 60).padStart(2, "0")}`}
                   </span>
                 </div>
                 <div className="w-40">

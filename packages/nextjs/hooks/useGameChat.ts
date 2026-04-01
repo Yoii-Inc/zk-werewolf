@@ -44,6 +44,14 @@ export const useGameChat = (roomId: string) => {
   // マージされた全メッセージ（タイムスタンプでソート）
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
+  // ルーム切り替え時にインメモリ状態を新しいroomId基準へ再初期化
+  useEffect(() => {
+    const nextClientMessages = loadClientMessages(roomId);
+    setServerMessages([]);
+    setClientMessages(nextClientMessages);
+    setMessages(nextClientMessages);
+  }, [roomId]);
+
   // サーバー側とクライアント側のメッセージをマージ
   useEffect(() => {
     const dedupedMap = new Map<string, ChatMessage>();

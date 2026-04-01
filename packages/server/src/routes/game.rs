@@ -88,13 +88,10 @@ pub async fn get_game_state(
     Path(room_id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    // match game_service::get_game_state(state, room_id).await {
-    //     Ok(game) => (StatusCode::OK, Json(game)),
-    //     Err(message) => (StatusCode::NOT_FOUND, Json(message)),
-    // }
-    let game = game_service::get_game_state(state, room_id).await.unwrap();
-    (StatusCode::OK, Json(game))
-    // Err(message) => (StatusCode::NOT_FOUND, Json(message)),
+    match game_service::get_game_state(state, room_id).await {
+        Ok(game) => (StatusCode::OK, Json(game)).into_response(),
+        Err(message) => (StatusCode::NOT_FOUND, Json(message)).into_response(),
+    }
 }
 
 async fn end_game_handler(
@@ -307,6 +304,9 @@ async fn reset_game_handler(
         let mut reset_game = game.clone();
         reset_game.phase = GamePhase::Waiting;
         reset_game.phase_started_at = chrono::Utc::now();
+        reset_game.phase_timer_paused_at = None;
+        reset_game.phase_timer_paused_total_seconds = 0;
+        reset_game.ended_at = None;
         reset_game.chat_log.messages.clear();
         // reset_game.has_acted.clear();
 
@@ -382,6 +382,7 @@ async fn reset_batch_request_handler(
         // バッチリクエストを新しいものに置き換え
         game.batch_request = BatchRequest::new(0);
         game.active_batches.clear();
+        game.resume_phase_timer();
 
         // システムメッセージを追加
         game.chat_log

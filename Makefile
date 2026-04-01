@@ -1,10 +1,7 @@
-.PHONY: help install frontend server node stop clean groth16-setup docker-up docker-up-detached docker-down
+.PHONY: help install frontend server node node-small stop stop-node clean groth16-setup docker-up docker-up-detached docker-down
 
-ROLE_ASSIGNMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/role_assignment_max5_v1.pk
-ANONYMOUS_VOTING_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/anonymous_voting_max5_v1.pk
-DIVINATION_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/divination_max5_v1.pk
-WINNING_JUDGEMENT_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/winning_judgement_max5_v1.pk
-KEY_PUBLICIZE_GROTH16_PK_PATH ?= packages/zk-mpc-node/data/groth16/key_publicize_max5_v1.pk
+NODE_PORTS := 8000 8001 8002 9000 9001 9002
+ALL_SERVICE_PORTS := 3000 8080 $(NODE_PORTS)
 
 help:
 	@echo "Available targets:"
@@ -12,7 +9,9 @@ help:
 	@echo "  make frontend - Start frontend (Next.js) only"
 	@echo "  make server   - Start backend server (release mode)"
 	@echo "  make node     - Start all zk-mpc-nodes (id=0,1,2) in background"
-	@echo "  make stop     - Stop all running services (requires pkill)"
+	@echo "  make node-small - Start zk-mpc-nodes with Groth16 keys up to 5 players"
+	@echo "  make stop-node - Stop only zk-mpc-node processes by listening ports"
+	@echo "  make stop     - Stop all running services by listening ports"
 	@echo "  make clean    - Remove build artifacts and node_modules"
 	@echo "  make groth16-setup - Generate Groth16 setup artifacts for all circuits"
 	@echo "  make docker-up - Build and start local stack with docker compose (foreground)"
@@ -41,7 +40,7 @@ server:
 # Start all nodes in background
 node:
 	@echo "Starting zk-mpc-nodes (id=0,1,2) in background..."
-	@for p in 8000 8001 8002 9000 9001 9002; do \
+	@for p in $(NODE_PORTS); do \
 		if lsof -nP -iTCP:$$p -sTCP:LISTEN >/dev/null 2>&1; then \
 			echo "Port $$p is already in use. Run 'make stop' or kill the process using that port."; \
 			exit 1; \
@@ -54,12 +53,61 @@ node:
 	cd packages/zk-mpc-node && cargo run --release --bin zk-mpc-node start --id 0
 	@echo "Background nodes 1 and 2 started; node 0 has exited."
 
+# Start all nodes with up-to-5 Groth16 proving keys in background
+node-small:
+	@echo "Starting zk-mpc-nodes (id=0,1,2) with GROTH16_DATA_DIR=data/groth16-up-to-5 ..."
+	@for p in $(NODE_PORTS); do \
+		if lsof -nP -iTCP:$$p -sTCP:LISTEN >/dev/null 2>&1; then \
+			echo "Port $$p is already in use. Run 'make stop' or kill the process using that port."; \
+			exit 1; \
+		fi; \
+	done
+	# Start nodes 1 and 2 in background and discard their output
+	cd packages/zk-mpc-node && env GROTH16_DATA_DIR=data/groth16-up-to-5 cargo run --release --bin zk-mpc-node start --id 1 &
+	cd packages/zk-mpc-node && env GROTH16_DATA_DIR=data/groth16-up-to-5 cargo run --release --bin zk-mpc-node start --id 2 &
+	# Start node 0 in foreground so its output is shown
+	cd packages/zk-mpc-node && env GROTH16_DATA_DIR=data/groth16-up-to-5 cargo run --release --bin zk-mpc-node start --id 0
+	@echo "Background nodes 1 and 2 started; node 0 has exited."
+
+# Stop only zk-mpc-node services
+stop-node:
+	@echo "Stopping zk-mpc-node services by listening ports..."
+	@for p in $(NODE_PORTS); do \
+		pids=$$(lsof -tiTCP:$$p -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo "Stopping node process(es) on port $$p: $$pids"; \
+			kill $$pids 2>/dev/null || true; \
+		fi; \
+	done
+	@sleep 1
+	@for p in $(NODE_PORTS); do \
+		pids=$$(lsof -tiTCP:$$p -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo "Force stopping node process(es) on port $$p: $$pids"; \
+			kill -9 $$pids 2>/dev/null || true; \
+		fi; \
+	done
+	@echo "Node port-based stop completed."
+
 # Stop all running services
 stop:
-	@echo "Stopping all services..."
-	pkill -f "next dev" || true
-	pkill -f "cargo run" || true
-	@echo "All services stopped!"
+	@echo "Stopping services by listening ports..."
+	@for p in $(ALL_SERVICE_PORTS); do \
+		pids=$$(lsof -tiTCP:$$p -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo "Stopping process(es) on port $$p: $$pids"; \
+			kill $$pids 2>/dev/null || true; \
+		fi; \
+	done
+	@sleep 1
+	@for p in $(ALL_SERVICE_PORTS); do \
+		pids=$$(lsof -tiTCP:$$p -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo "Force stopping process(es) on port $$p: $$pids"; \
+			kill -9 $$pids 2>/dev/null || true; \
+		fi; \
+	done
+	@echo "Port-based stop completed."
 
 # Clean build artifacts
 clean:

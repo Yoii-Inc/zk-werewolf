@@ -141,6 +141,13 @@ output "ws_url" {
   value       = "wss://app.${local.domain}/api"
 }
 
+# Frontend build-time public env
+output "next_public_alchemy_api_key" {
+  description = "Alchemy API key for frontend build-time NEXT_PUBLIC env"
+  value       = "ZpVYQzF3N9udRXFSaoxwe"
+  sensitive   = true
+}
+
 # Frontend build-time public keys (from SOPS secrets)
 output "mpc_node_0_public_key" {
   description = "MPC node 0 public key for frontend build-time env"

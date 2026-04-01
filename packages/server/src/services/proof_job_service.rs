@@ -1,5 +1,8 @@
 use crate::{
-    models::game::{BatchKey, BatchRequest},
+    models::{
+        game::{BatchKey, BatchRequest, GameResult},
+        room::RoomStatus,
+    },
     state::AppState,
     utils::config::CONFIG,
 };
@@ -124,6 +127,28 @@ impl ProofJobService {
         statuses.get(batch_id).cloned()
     }
 
+    pub async fn remove_room_jobs(&self, room_id: &str) -> usize {
+        let mut statuses = self.statuses.lock().await;
+        let before = statuses.len();
+        statuses.retain(|_, status| status.room_id != room_id);
+        before.saturating_sub(statuses.len())
+    }
+
+    #[cfg(test)]
+    pub async fn insert_status_for_test(&self, status: ProofJobStatus) {
+        let mut statuses = self.statuses.lock().await;
+        statuses.insert(status.batch_id.clone(), status);
+    }
+
+    #[cfg(test)]
+    pub async fn count_statuses_for_room_for_test(&self, room_id: &str) -> usize {
+        let statuses = self.statuses.lock().await;
+        statuses
+            .values()
+            .filter(|status| status.room_id == room_id)
+            .count()
+    }
+
     async fn ensure_worker_started(&self, app_state: AppState) {
         if self.worker_started.swap(true, Ordering::SeqCst) {
             return;
@@ -184,6 +209,7 @@ async fn process_job(
     let execution_result =
         crate::services::zk_proof::execute_batch_request(&job.batch_request).await;
     let mut execution_error = execution_result.as_ref().err().cloned();
+    let mut should_close_room = false;
 
     crate::services::zk_proof::store_precomputed_batch_result(batch_id.clone(), execution_result)
         .await;
@@ -193,11 +219,19 @@ async fn process_job(
         if let Some(game) = games.get_mut(&room_id) {
             game.apply_proof_result_for_batch(&app_state, &job.batch_key, job.batch_request)
                 .await;
+            should_close_room = game.result != GameResult::InProgress;
         } else {
             execution_error = Some(format!(
                 "Game not found while applying proof result: room_id={}",
                 room_id
             ));
+        }
+    }
+
+    if should_close_room {
+        let mut rooms = app_state.rooms.lock().await;
+        if let Some(room) = rooms.get_mut(&room_id) {
+            room.status = RoomStatus::Closed;
         }
     }
 

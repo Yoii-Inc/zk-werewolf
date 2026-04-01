@@ -12,6 +12,7 @@ interface FullScenario {
   werewolfCount: number;
   divinationStrategy: DivinationStrategy;
   votingStrategy: VotingStrategy;
+  simulateNightAttackBeforeDivination?: boolean;
 }
 
 const fullScenarios: FullScenario[] = [
@@ -42,6 +43,14 @@ const fullScenarios: FullScenario[] = [
     werewolfCount: 2,
     divinationStrategy: "last-player",
     votingStrategy: "split-vote",
+  },
+  {
+    id: "n5-w2-attack-divination",
+    numPlayers: 5,
+    werewolfCount: 2,
+    divinationStrategy: "last-player",
+    votingStrategy: "focus-player-2",
+    simulateNightAttackBeforeDivination: true,
   },
 ];
 
@@ -94,13 +103,14 @@ async function runFullScenarioFlow(scenario: FullScenario): Promise<void> {
     expect(delivery.receiverPlayerId).toBe(delivery.targetPlayerId);
   });
 
-  if (scenario.werewolfCount >= 2) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  const privateInfos = players
+    .map(player => getPrivateGameInfo(roomId, player.id))
+    .filter((info): info is NonNullable<typeof info> => Boolean(info));
+  const werewolves = privateInfos.filter(info => info.playerRole === "Werewolf");
+  const seerPlayerId = privateInfos.find(info => info.playerRole === "Seer")?.playerId;
 
-    const privateInfos = players
-      .map(player => getPrivateGameInfo(roomId, player.id))
-      .filter((info): info is NonNullable<typeof info> => Boolean(info));
-    const werewolves = privateInfos.filter(info => info.playerRole === "Werewolf");
+  if (scenario.werewolfCount >= 2) {
     const werewolfIdSet = new Set(werewolves.map(info => info.playerId));
 
     expect(werewolves.length).toBe(scenario.werewolfCount);
@@ -124,7 +134,34 @@ async function runFullScenarioFlow(scenario: FullScenario): Promise<void> {
   gameState = await global.apiClient.getGameState(roomId);
   await GameSetupHelper.submitKeyPublicizeRequests(roomId, players, gameState);
 
+  let nightAttackTargetId: string | null = null;
+  if (scenario.simulateNightAttackBeforeDivination) {
+    gameState = await GameSetupHelper.ensureGamePhase(roomId, "Night");
+    expect(seerPlayerId).toBeDefined();
+
+    const werewolfIdSet = new Set(werewolves.map(info => info.playerId));
+    const attackerPlayerId = werewolves[0]?.playerId ?? players[0].id;
+    const attacker = players.find(player => player.id === attackerPlayerId) ?? players[0];
+    const targetPlayer =
+      gameState.players.find(
+        player => !player.is_dead && player.id !== seerPlayerId && !werewolfIdSet.has(player.id),
+      ) ??
+      gameState.players.find(player => !player.is_dead && player.id !== attacker.id) ??
+      gameState.players[0];
+
+    nightAttackTargetId = targetPlayer.id;
+    await GameSetupHelper.submitNightAttack(roomId, attacker, nightAttackTargetId);
+
+    const stateAfterAttack = await global.apiClient.getGameState(roomId);
+    const attackedPlayerAfterAttack = stateAfterAttack.players.find(player => player.id === nightAttackTargetId);
+    expect(attackedPlayerAfterAttack?.is_dead).toBe(false);
+  }
+
   gameState = await GameSetupHelper.ensureGamePhase(roomId, "DivinationProcessing");
+  if (nightAttackTargetId) {
+    const attackedPlayer = gameState.players.find(player => player.id === nightAttackTargetId);
+    expect(attackedPlayer?.is_dead).toBe(false);
+  }
   if (!gameState.crypto_parameters?.fortune_teller_public_key) {
     const cryptoParams = await CryptoHelper.loadParams();
     gameState.crypto_parameters = {
@@ -133,9 +170,17 @@ async function runFullScenarioFlow(scenario: FullScenario): Promise<void> {
     } as any;
   }
 
-  const divinationTargets = buildDivinationTargets(gameState, scenario.divinationStrategy);
-  const isDummyFlags = players.map((_, i) => i !== 0);
+  const divinationTargets = nightAttackTargetId
+    ? gameState.players.map(() => nightAttackTargetId as string)
+    : buildDivinationTargets(gameState, scenario.divinationStrategy);
+  const isDummyFlags = players.map(player => (seerPlayerId ? player.id !== seerPlayerId : player.id !== players[0].id));
   await GameSetupHelper.submitDivinationRequests(roomId, players, gameState, divinationTargets, isDummyFlags);
+
+  if (nightAttackTargetId) {
+    gameState = await GameSetupHelper.ensureGamePhase(roomId, "Discussion");
+    const attackedPlayer = gameState.players.find(player => player.id === nightAttackTargetId);
+    expect(attackedPlayer?.is_dead).toBe(true);
+  }
 
   gameState = await GameSetupHelper.ensureGamePhase(roomId, "Voting");
   const votingTargets = buildVotingTargets(gameState, scenario.votingStrategy);

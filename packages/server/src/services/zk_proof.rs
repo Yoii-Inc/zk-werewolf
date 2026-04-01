@@ -19,7 +19,7 @@ use crate::{
     state::AppState,
 };
 
-const MAX_RETRY_ATTEMPTS: u32 = 180;
+const MAX_RETRY_ATTEMPTS: u32 = 600;
 const RETRY_DELAY_SECS: u64 = 1;
 type BatchExecutionResult = Result<(CircuitEncryptedInputIdentifier, ProofOutput), String>;
 
@@ -108,7 +108,9 @@ pub async fn check_proof_status(proof_id: &str) -> Result<(bool, Option<ProofOut
                     failed_details.push(format!(
                         "{}:{}",
                         node_url,
-                        status.message.unwrap_or_else(|| "no error message".to_string())
+                        status
+                            .message
+                            .unwrap_or_else(|| "no error message".to_string())
                     ));
                 }
                 _ => continue,
@@ -203,16 +205,18 @@ pub async fn check_status_with_retry(
 }
 
 pub async fn execute_batch_request(batch_request: &BatchRequest) -> BatchExecutionResult {
-    // Keep canonical order from Game::add_request_to_batch.
-    // Re-sorting here can break index-based outputs (e.g. role shares / werewolf mate mask).
-    let ordered_requests = batch_request.requests.clone();
+    let mut sorted_requests = batch_request.requests.clone();
+    // Sort by player index (numeric user_id). Non-numeric values are pushed to the end
+    // and preserve relative order because sort_by_key is stable.
+    sorted_requests
+        .sort_by_key(|request| request.get_user_id().parse::<usize>().unwrap_or(usize::MAX));
 
-    let identifier = try_convert_to_identifier(ordered_requests.clone())?;
+    let identifier = try_convert_to_identifier(sorted_requests.clone())?;
 
     let output_type = match &identifier {
         CircuitEncryptedInputIdentifier::RoleAssignment(_) => {
             let mut player_pubkeys = Vec::new();
-            for request in &ordered_requests {
+            for request in &sorted_requests {
                 if let Some(pubkey) = request.get_public_key() {
                     player_pubkeys.push(zk_mpc_node::UserPublicKey {
                         user_id: request.get_user_id().to_string(),
@@ -350,6 +354,7 @@ pub async fn batch_proof_handling(
             .map_err(|error| match error {
                 BatchEnqueueError::Conflict(message) => ProofHandlingError::Conflict(message),
             })?;
+        game.pause_phase_timer();
         let job = if enqueue_result.should_process {
             Some(ProofJob {
                 room_id: room_id.to_string(),

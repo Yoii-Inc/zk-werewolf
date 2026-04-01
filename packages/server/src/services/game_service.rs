@@ -9,7 +9,7 @@ use crate::{
 };
 use ark_bn254::Fr;
 use ark_crypto_primitives::{encryption::AsymmetricEncryptionScheme, CommitmentScheme};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use mpc_algebra_wasm::{GroupingParameter, Role as GroupingRole};
 use rand::seq::SliceRandom;
 use std::collections::BTreeMap;
@@ -98,6 +98,7 @@ pub async fn end_game(state: AppState, room_id: String) -> Result<String, String
     let game_snapshot = {
         let mut rooms = state.rooms.lock().await;
         let mut games = state.games.lock().await;
+        let now = Utc::now();
 
         let room = rooms
             .get_mut(&room_id)
@@ -108,6 +109,7 @@ pub async fn end_game(state: AppState, room_id: String) -> Result<String, String
 
         room.status = RoomStatus::Closed;
         game.change_phase(GamePhase::Finished);
+        game.ended_at = Some(now);
         game.clone()
     };
 
@@ -153,7 +155,7 @@ pub async fn advance_game_phase(state: AppState, room_id: &str) -> Result<String
         let mut games = state.games.lock().await;
         let game = games.get_mut(room_id).ok_or("Game not found".to_string())?;
 
-        if current_phase == GamePhase::Night {
+        if current_phase == GamePhase::DivinationProcessing {
             game.resolve_night_actions();
         } else if current_phase == GamePhase::Voting {
             game.resolve_voting();
@@ -192,6 +194,22 @@ fn phase_duration_seconds(time_config: &TimeConfig, phase: &GamePhase) -> Option
     }
 }
 
+fn is_phase_due(game: &Game, time_config: &TimeConfig, now: DateTime<Utc>) -> bool {
+    if game.phase == GamePhase::Waiting || game.phase == GamePhase::Finished {
+        return false;
+    }
+
+    if game.has_pending_or_processing_batches() {
+        return false;
+    }
+
+    let Some(duration_secs) = phase_duration_seconds(time_config, &game.phase) else {
+        return false;
+    };
+
+    game.effective_phase_elapsed_seconds_at(now) >= duration_secs as i64
+}
+
 pub async fn auto_advance_due_phases(state: AppState) {
     let now = Utc::now();
     let due_room_ids = {
@@ -207,21 +225,7 @@ pub async fn auto_advance_due_phases(state: AppState) {
                     return None;
                 }
 
-                if game.phase == GamePhase::Waiting || game.phase == GamePhase::Finished {
-                    return None;
-                }
-
-                if game.has_pending_or_processing_batches() {
-                    return None;
-                }
-
-                let duration_secs =
-                    phase_duration_seconds(&room.room_config.time_config, &game.phase)?;
-                let elapsed_secs = now
-                    .signed_duration_since(game.phase_started_at)
-                    .num_seconds();
-
-                if elapsed_secs >= duration_secs as i64 {
+                if is_phase_due(game, &room.room_config.time_config, now) {
                     Some(room_id.clone())
                 } else {
                     None
@@ -534,4 +538,94 @@ pub fn initialize_crypto_parameters(game: &mut Game) {
     });
 
     tracing::info!("Initialized crypto parameters for game {}", game.room_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{game::BatchRequest, player::Player, room::RoleConfig};
+    use chrono::Duration;
+
+    fn make_players() -> Vec<Player> {
+        vec![
+            Player {
+                id: "p1".to_string(),
+                name: "p1".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+            Player {
+                id: "p2".to_string(),
+                name: "p2".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+            Player {
+                id: "p3".to_string(),
+                name: "p3".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+            Player {
+                id: "p4".to_string(),
+                name: "p4".to_string(),
+                is_dead: false,
+                is_ready: true,
+            },
+        ]
+    }
+
+    fn make_game() -> Game {
+        let role_config = RoleConfig {
+            seer: 1,
+            werewolf: 1,
+            villager: 2,
+        };
+        Game::new(
+            "room-auto-advance-test".to_string(),
+            make_players(),
+            4,
+            grouping_parameter_from_role_config(&role_config),
+        )
+    }
+
+    #[test]
+    fn phase_is_not_due_immediately_after_long_paused_proof_time() {
+        let mut game = make_game();
+        let now = Utc::now();
+        let time_config = TimeConfig {
+            day_phase: 300,
+            night_phase: 120,
+            voting_phase: 90,
+        };
+
+        game.phase = GamePhase::Night;
+        game.phase_started_at = now - Duration::seconds(260);
+        game.phase_timer_paused_total_seconds = 250;
+        game.phase_timer_paused_at = None;
+        game.batch_request = BatchRequest::new(0);
+        game.active_batches.clear();
+
+        assert!(!is_phase_due(&game, &time_config, now));
+    }
+
+    #[test]
+    fn phase_is_not_due_while_batches_are_pending() {
+        let mut game = make_game();
+        let now = Utc::now();
+        let time_config = TimeConfig {
+            day_phase: 300,
+            night_phase: 120,
+            voting_phase: 90,
+        };
+
+        game.phase = GamePhase::Night;
+        game.phase_started_at = now - Duration::seconds(500);
+        game.phase_timer_paused_total_seconds = 0;
+        game.phase_timer_paused_at = None;
+        game.batch_request = BatchRequest::new(1);
+        game.batch_request.status = crate::models::game::BatchStatus::Processing;
+
+        assert!(!is_phase_due(&game, &time_config, now));
+    }
 }

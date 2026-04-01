@@ -139,6 +139,19 @@ contract WerewolfProofVerifier is Ownable {
             return false;
         }
 
-        return playerCount >= 4 && playerCount <= 9 && werewolfCount == 0;
+        if (proofType == ProofType.Divination) {
+            return playerCount >= 3 && playerCount <= 9 && werewolfCount == 0;
+        }
+        if (proofType == ProofType.AnonymousVoting) {
+            return playerCount >= 3 && playerCount <= 9 && werewolfCount == 0;
+        }
+        if (proofType == ProofType.WinningJudgement) {
+            return playerCount >= 2 && playerCount <= 9 && werewolfCount == 0;
+        }
+        if (proofType == ProofType.KeyPublicize) {
+            return playerCount >= 4 && playerCount <= 9 && werewolfCount == 0;
+        }
+
+        return false;
     }
 }

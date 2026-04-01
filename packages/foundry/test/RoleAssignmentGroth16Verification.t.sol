@@ -2,15 +2,15 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Test.sol";
-import "../contracts/verifiers/RoleAssignmentGroth16Verifier.sol";
+import "../contracts/verifiers/generated/RoleAssignmentN5W1Groth16Verifier.sol";
 
 contract RoleAssignmentGroth16VerificationTest is Test {
     uint256 internal constant FIXED_PUBLIC_INPUTS = 100; // (num_players + num_groups)^2 for 5 players: (5 + 5)^2
 
-    RoleAssignmentGroth16Verifier internal verifier;
+    RoleAssignmentN5W1Groth16Verifier internal verifier;
 
     function setUp() public {
-        verifier = new RoleAssignmentGroth16Verifier();
+        verifier = new RoleAssignmentN5W1Groth16Verifier();
     }
 
     function testRoleAssignmentGroth16ProofCanBeVerifiedOnContract() public {
@@ -20,7 +20,7 @@ contract RoleAssignmentGroth16VerificationTest is Test {
         }
 
         (
-            RoleAssignmentGroth16Verifier.Proof memory proof,
+            RoleAssignmentN5W1Groth16Verifier.Proof memory proof,
             uint256[FIXED_PUBLIC_INPUTS] memory publicInputs,
             bool offchainVerified
         ) = _generateFixture();
@@ -35,7 +35,7 @@ contract RoleAssignmentGroth16VerificationTest is Test {
     function _generateFixture()
         internal
         returns (
-            RoleAssignmentGroth16Verifier.Proof memory proof,
+            RoleAssignmentN5W1Groth16Verifier.Proof memory proof,
             uint256[FIXED_PUBLIC_INPUTS] memory publicInputs,
             bool offchainVerified
         )
@@ -56,7 +56,7 @@ contract RoleAssignmentGroth16VerificationTest is Test {
 
         string memory json = string(vm.ffi(ffiCmd));
 
-        proof.a = Pairing.G1Point(
+        proof.a = RoleAssignmentN5W1Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".ax"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".ay"), (bytes32)))
         );
@@ -64,9 +64,11 @@ contract RoleAssignmentGroth16VerificationTest is Test {
         bytes32[] memory bx = abi.decode(vm.parseJson(json, ".bx"), (bytes32[]));
         bytes32[] memory by = abi.decode(vm.parseJson(json, ".by"), (bytes32[]));
         require(bx.length == 2 && by.length == 2, "invalid groth16 g2 proof shape");
-        proof.b = Pairing.G2Point([uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]);
+        proof.b = RoleAssignmentN5W1Groth16VerifierPairing.G2Point(
+            [uint256(bx[0]), uint256(bx[1])], [uint256(by[0]), uint256(by[1])]
+        );
 
-        proof.c = Pairing.G1Point(
+        proof.c = RoleAssignmentN5W1Groth16VerifierPairing.G1Point(
             uint256(abi.decode(vm.parseJson(json, ".cx"), (bytes32))),
             uint256(abi.decode(vm.parseJson(json, ".cy"), (bytes32)))
         );

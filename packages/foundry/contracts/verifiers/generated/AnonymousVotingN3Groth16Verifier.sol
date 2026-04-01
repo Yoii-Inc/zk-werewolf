@@ -8,7 +8,7 @@
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 pragma solidity ^0.8.0;
-library DivinationPairing {
+library AnonymousVotingN3Groth16VerifierPairing {
     struct G1Point {
         uint X;
         uint Y;
@@ -145,58 +145,51 @@ library DivinationPairing {
 
 }
 
-contract DivinationGroth16Verifier {
-    using DivinationPairing for *;
+contract AnonymousVotingN3Groth16Verifier {
+    using AnonymousVotingN3Groth16VerifierPairing for *;
     struct VerifyingKey {
-        DivinationPairing.G1Point alpha;
-        DivinationPairing.G2Point beta;
-        DivinationPairing.G2Point gamma;
-        DivinationPairing.G2Point delta;
-        DivinationPairing.G1Point[] gamma_abc;
+        AnonymousVotingN3Groth16VerifierPairing.G1Point alpha;
+        AnonymousVotingN3Groth16VerifierPairing.G2Point beta;
+        AnonymousVotingN3Groth16VerifierPairing.G2Point gamma;
+        AnonymousVotingN3Groth16VerifierPairing.G2Point delta;
+        AnonymousVotingN3Groth16VerifierPairing.G1Point[] gamma_abc;
     }
     struct Proof {
-        DivinationPairing.G1Point a;
-        DivinationPairing.G2Point b;
-        DivinationPairing.G1Point c;
+        AnonymousVotingN3Groth16VerifierPairing.G1Point a;
+        AnonymousVotingN3Groth16VerifierPairing.G2Point b;
+        AnonymousVotingN3Groth16VerifierPairing.G1Point c;
     }
     function verifyingKey() pure internal returns (VerifyingKey memory vk) {
-        vk.alpha = DivinationPairing.G1Point(uint256(0x2B3429ACC626A45C4F8D6B3BA0C605344D19B83E156B8C266B1961B0281275B9), uint256(0x29C903B06EA27695D2B2C888DB415B7796FFD30F9905415D44DF17DDCDD3C824));
-        vk.beta = DivinationPairing.G2Point([uint256(0x0194838C14A6559E87284AAA62C57649C79DD0458B6CEC9BC401288DFEFA5E66), uint256(0x2ED63DEC2817D10EFF03A1E956437871B37712E29EC9D711C6F626D77D3FB55C)], [uint256(0x2FF5DD136168492656C58B4CA18221E8D41B7C3BAEAB9A1B896DA97F74A79FDF), uint256(0x1FCA0A3962E05AE4D68A1055968256FCD7C5A6B0A4DDFA16DECCCE73F390C5BF)]);
-        vk.gamma = DivinationPairing.G2Point([uint256(0x1F93804BC982FD5F06449C1D602C7AE18ECDA84BB1000CCCFB0625BD0E234AA0), uint256(0x04A39DCDD9E367E06557B7AC47E0196EAEF71E2FF6810E92953D8B64627BB9F8)], [uint256(0x06DACC387E53A2AA9D611D0384B07E511A8D247112ADC403A601768674E85AED), uint256(0x08FCB990CC263F6BBFAD31D6BFF0EF59FCE5F68C193FD43C61508A1944B009F5)]);
-        vk.delta = DivinationPairing.G2Point([uint256(0x19EB0A1D349CB4AFE295D57DE248597250D03E21E6B6BD5E80AF228460D31D2B), uint256(0x26B2B49F46D3E500DA7F8B32EC6813C5C3764E214A9E0E294B892C4E1D13F316)], [uint256(0x22572B5DB266CDE39308CC843E5E8F10D3ABECFBC87B00D3CCC4D8931FC39FE7), uint256(0x2EF10CD81A6EAEE00675F87893531E71353EAFDA62616DB5A24B8FCDA45FA409)]);
-        vk.gamma_abc = new DivinationPairing.G1Point[](9);
-        vk.gamma_abc[0] = DivinationPairing.G1Point(uint256(0x1FBD00B41105DBA91ED7C4E4DA62624A09E0AF525A31AFAAB4E215A1790C7F9F), uint256(0x10A44005AA81D6A7015A5317EED4FAA1D7B9F81F8F9A958AFC3292ECA788D4FC));
-        vk.gamma_abc[1] = DivinationPairing.G1Point(uint256(0x1753E392D08DFD3BBE03C412ED791F208D7E548BF35F5694B1A45827C8EA9FC8), uint256(0x2247FDA40ADD6549757BF5FDE9C5E0B8CC784E2E4DD0EA176720AB8C40CFE23D));
-        vk.gamma_abc[2] = DivinationPairing.G1Point(uint256(0x05F1B8CAD9808E1762CAA57347B5878607B11B142842389669EE83E2124CA7C8), uint256(0x28C80374DFD5CA9468F43805A1453E5B128DC4DB04FF61A0F23927A9D5A3CA06));
-        vk.gamma_abc[3] = DivinationPairing.G1Point(uint256(0x1225ED34AFA8800733EFC0E9A4562AD76DF6654816637B226188FD39D48E1F7C), uint256(0x16359295BC6BBB3CA6431388A4A2DBB9D017441374A872AF4C363CDB9A2557C3));
-        vk.gamma_abc[4] = DivinationPairing.G1Point(uint256(0x210612E6A813C14BF18F8FB1A1FE51876F40F2DD5F89B2B4DC4ADFCB960625AC), uint256(0x06D5CBBBC2887FF8C23EEC03B474742B50ADC4D88F4A4DB16AE8613D5C3EB5E4));
-        vk.gamma_abc[5] = DivinationPairing.G1Point(uint256(0x277A146A6F58F5BC64DD3125ACFF0DF7AADFC3811AB8F0FFA7E0EC1C4B627492), uint256(0x2A10BB95BE7A6F3700DA03422F572F0D70A027AF95BC94D0B536446C960B7215));
-        vk.gamma_abc[6] = DivinationPairing.G1Point(uint256(0x1730326799C4269F1126645CCD3F3ED51C33F2734970D5561BF492B0AA66A176), uint256(0x23B70940A1E4D153AD956FCE76BD7790C1F9F59B9097C1125A04EC816B79EB85));
-        vk.gamma_abc[7] = DivinationPairing.G1Point(uint256(0x0320838E868B0524794C45340028C54608FED8A552A851CCEC1C01BC4D171B67), uint256(0x0A9AB331AA1C1195B39441BD6BCD9F5A9D86E14C8A523B7D2E5170A6F0ADD01E));
-        vk.gamma_abc[8] = DivinationPairing.G1Point(uint256(0x2361785EAA4C0C0A50CFC30C3832AAD385904D097F6DDB2A0142D5FDD925E3EF), uint256(0x2E9EFF0CC1F106EDC7CA9C6108F4366503DE85E553BF063648BF13EC1075EAD4));
+        vk.alpha = AnonymousVotingN3Groth16VerifierPairing.G1Point(uint256(0x04076665B8EA10D1F1088C2A5BC3FDE6FA595C862B70CA7FB1A0D40E335A7E6D), uint256(0x1ADD777C0A2833FC260F2D2EFA5B83A1C573BAE542A2FC70814D1F1247D34233));
+        vk.beta = AnonymousVotingN3Groth16VerifierPairing.G2Point([uint256(0x1762EA18FF102A72B33FA1B145F5779FE9CEB1DF0B4B4901F58B7D0ABBF05438), uint256(0x2A2A6503854C930B239693B403489ED1304008FA7D4367E370F25F633A9630ED)], [uint256(0x2A03B2A2637568B73EE71B3631CA82E5022933F13EE221338968BACF5D7FE0EA), uint256(0x147B50868BE5EFB739888F132C1FEB0C8F033781CFE15057F91213BDE0F32DF7)]);
+        vk.gamma = AnonymousVotingN3Groth16VerifierPairing.G2Point([uint256(0x221B1FC591601528E30EB7F2DA312117378422D513021EF893A36152E62EFB3E), uint256(0x29AA2B10FBD31334CDB0CA4DFBCEF670447AAEF714F5D691DC1C49CD44129568)], [uint256(0x1B86474753F31AE70E979C81F48B51AD43E43E42CFCF2A85C9CC85E79FCC8310), uint256(0x12CEDF3D4637D61208117B8C0AF66A5DDD29699536660253266F9E63EF26B2B9)]);
+        vk.delta = AnonymousVotingN3Groth16VerifierPairing.G2Point([uint256(0x071671EB3A1C2C455DE52368634685ADD354398FEF807FF78586467100ECD020), uint256(0x1F12AA8B550F4B2BCAB999A2613480BF015410A18C93090AADFC520DB8685EB8)], [uint256(0x09C85676193171BB585953B1A7A2C94573AEE4988C734E461C791B72FACB8A3E), uint256(0x0ADD326CC141D0D9C752D6A8590D3F9123B67F32B8D7DA5DB189002E38DE266C)]);
+        vk.gamma_abc = new AnonymousVotingN3Groth16VerifierPairing.G1Point[](2);
+        vk.gamma_abc[0] = AnonymousVotingN3Groth16VerifierPairing.G1Point(uint256(0x1B1F071CAFE25D0DD5154FD6BF7BC2CD836694F2BEA47F5A26CC88E0CC5051C0), uint256(0x26BD06FCE505998FDAD7A3AF212616B8657EA0118E78F4CA99F09DFBB92CF5B6));
+        vk.gamma_abc[1] = AnonymousVotingN3Groth16VerifierPairing.G1Point(uint256(0x1E1F6A26EA9E8EE7C46707B4BE10DEBAF3B7344FB422CF43BF861266318F4BC3), uint256(0x0E52C8BA64EDC4950452E9715D037F1616805F74C52DEA8A0ED4136F872F6B21));
     }
     function verify(uint[] memory input, Proof memory proof) internal view returns (uint) {
         uint256 snark_scalar_field = uint256(0x30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001);
         VerifyingKey memory vk = verifyingKey();
         require(input.length + 1 == vk.gamma_abc.length);
         // Compute the linear combination vk_x
-        DivinationPairing.G1Point memory vk_x = DivinationPairing.G1Point(0, 0);
+        AnonymousVotingN3Groth16VerifierPairing.G1Point memory vk_x = AnonymousVotingN3Groth16VerifierPairing.G1Point(0, 0);
         for (uint i = 0; i < input.length; i++) {
             require(input[i] < snark_scalar_field);
-            vk_x = DivinationPairing.addition(vk_x, DivinationPairing.scalar_mul(vk.gamma_abc[i + 1], input[i]));
+            vk_x = AnonymousVotingN3Groth16VerifierPairing.addition(vk_x, AnonymousVotingN3Groth16VerifierPairing.scalar_mul(vk.gamma_abc[i + 1], input[i]));
         }
-        vk_x = DivinationPairing.addition(vk_x, vk.gamma_abc[0]);
-        if(!DivinationPairing.pairingProd4(
+        vk_x = AnonymousVotingN3Groth16VerifierPairing.addition(vk_x, vk.gamma_abc[0]);
+        if(!AnonymousVotingN3Groth16VerifierPairing.pairingProd4(
              proof.a, proof.b,
-             DivinationPairing.negate(vk_x), vk.gamma,
-             DivinationPairing.negate(proof.c), vk.delta,
-             DivinationPairing.negate(vk.alpha), vk.beta)) return 1;
+             AnonymousVotingN3Groth16VerifierPairing.negate(vk_x), vk.gamma,
+             AnonymousVotingN3Groth16VerifierPairing.negate(proof.c), vk.delta,
+             AnonymousVotingN3Groth16VerifierPairing.negate(vk.alpha), vk.beta)) return 1;
         return 0;
     }
     function verifyTx(
-            Proof memory proof, uint[8] memory input
+            Proof memory proof, uint[1] memory input
         ) public view returns (bool r) {
-        uint[] memory inputValues = new uint[](8);
+        uint[] memory inputValues = new uint[](1);
         
         for(uint i = 0; i < input.length; i++){
             inputValues[i] = input[i];
