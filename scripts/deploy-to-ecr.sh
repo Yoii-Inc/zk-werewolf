@@ -90,8 +90,9 @@ BACKEND_REPO=$(get_terraform_output "backend_repository_url")
 FRONTEND_REPO=$(get_terraform_output "frontend_repository_url")
 MPC_NODE_REPO=$(get_terraform_output "mpc_node_repository_url")
 
-# Get ALB DNS name for frontend build args
-ALB_DNS=$(get_terraform_output "alb_dns_name")
+# Get application URLs for frontend build args
+API_URL=$(get_terraform_output "api_url")
+WS_URL=$(get_terraform_output "ws_url")
 MPC_NODE0_PUBLIC_KEY=$(get_terraform_output "mpc_node_0_public_key")
 MPC_NODE1_PUBLIC_KEY=$(get_terraform_output "mpc_node_1_public_key")
 MPC_NODE2_PUBLIC_KEY=$(get_terraform_output "mpc_node_2_public_key")
@@ -219,8 +220,8 @@ build_frontend_image() {
     fi
 
     build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
-        "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
-        "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api" \
+        "NEXT_PUBLIC_API_URL=${API_URL}" \
+        "NEXT_PUBLIC_WS_URL=${WS_URL}" \
         "NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY=${MPC_NODE0_PUBLIC_KEY}" \
         "NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY=${MPC_NODE1_PUBLIC_KEY}" \
         "NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY=${MPC_NODE2_PUBLIC_KEY}"
