@@ -117,6 +117,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     const isLobbyState = roomInfo.status === "Open" || roomInfo.status === "Ready";
     if (isLobbyState && !hasClearedLobbyLogsRef.current) {
       clearRoomScopedLogs(roomInfo.room_id, user?.id);
+      resetMessages();
       hasClearedLobbyLogsRef.current = true;
     }
 
