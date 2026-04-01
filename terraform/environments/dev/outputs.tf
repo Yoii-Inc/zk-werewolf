@@ -127,18 +127,18 @@ output "frontend_task_definition_arn" {
 
 # Application URLs
 output "application_url" {
-  description = "Application URL (ALB endpoint)"
-  value       = "http://${module.alb.alb_dns_name}"
+  description = "Application URL"
+  value       = "https://app.${local.domain}"
 }
 
 output "api_url" {
   description = "API URL"
-  value       = "http://${module.alb.alb_dns_name}/api"
+  value       = "https://app.${local.domain}/api"
 }
 
 output "ws_url" {
   description = "WebSocket URL"
-  value       = "ws://${module.alb.alb_dns_name}/ws"
+  value       = "wss://app.${local.domain}/api"
 }
 
 # Frontend build-time public env

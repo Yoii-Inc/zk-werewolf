@@ -36,7 +36,35 @@ provider "aws" {
 }
 
 locals {
-  name = "zk-werewolf-dev"
+  name   = "zk-werewolf-dev"
+  domain = "trustless-werewolf.yoii.jp"
+}
+
+# =============================================================================
+# DNS (remote state from dns-yoii-jp)
+# =============================================================================
+
+data "terraform_remote_state" "dns" {
+  backend = "remote"
+
+  config = {
+    organization = "Yoii"
+    workspaces = {
+      name = "yoii-jp"
+    }
+  }
+}
+
+resource "aws_route53_record" "app" {
+  zone_id = data.terraform_remote_state.dns.outputs.trustless_werewolf_hosted_zone.zone_id
+  name    = "app.${local.domain}"
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
 }
 
 # Validate that secrets file exists
@@ -139,7 +167,7 @@ module "alb" {
   subnet_ids        = module.vpc.public_subnets
   security_group_id = module.security_groups.alb_security_group_id
 
-  certificate_arn            = "" # Add ACM certificate ARN for HTTPS
+  certificate_arn            = data.terraform_remote_state.dns.outputs.trustless_werewolf_acm_arn
   enable_deletion_protection = false
 }
 
@@ -293,11 +321,11 @@ module "frontend_service" {
     },
     {
       name  = "NEXT_PUBLIC_API_URL"
-      value = "http://${module.alb.alb_dns_name}/api"
+      value = "https://app.${local.domain}/api"
     },
     {
       name  = "NEXT_PUBLIC_WS_URL"
-      value = "ws://${module.alb.alb_dns_name}/api"
+      value = "wss://app.${local.domain}/api"
     }
   ]
 
