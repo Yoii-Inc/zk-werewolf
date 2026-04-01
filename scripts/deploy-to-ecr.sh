@@ -92,6 +92,7 @@ MPC_NODE_REPO=$(get_terraform_output "mpc_node_repository_url")
 
 # Get ALB DNS name for frontend build args
 ALB_DNS=$(get_terraform_output "alb_dns_name")
+NEXT_PUBLIC_ALCHEMY_API_KEY=$(get_terraform_output "next_public_alchemy_api_key")
 MPC_NODE0_PUBLIC_KEY=$(get_terraform_output "mpc_node_0_public_key")
 MPC_NODE1_PUBLIC_KEY=$(get_terraform_output "mpc_node_1_public_key")
 MPC_NODE2_PUBLIC_KEY=$(get_terraform_output "mpc_node_2_public_key")
@@ -214,6 +215,10 @@ verify_groth16_artifacts() {
 }
 
 build_frontend_image() {
+    if [ -z "${NEXT_PUBLIC_ALCHEMY_API_KEY}" ]; then
+        log_error "Frontend requires NEXT_PUBLIC_ALCHEMY_API_KEY. Set next_public_alchemy_api_key output in terraform/environments/${ENVIRONMENT}/outputs.tf."
+    fi
+
     if [ -z "${MPC_NODE0_PUBLIC_KEY}" ] || [ -z "${MPC_NODE1_PUBLIC_KEY}" ] || [ -z "${MPC_NODE2_PUBLIC_KEY}" ]; then
         log_error "Frontend requires MPC node public keys. Ensure terraform outputs mpc_node_{0,1,2}_public_key are available (sourced from secrets.enc.yaml)."
     fi
@@ -221,6 +226,7 @@ build_frontend_image() {
     build_and_push "frontend" "packages/nextjs/Dockerfile" "${FRONTEND_REPO}" "latest" \
         "NEXT_PUBLIC_API_URL=http://${ALB_DNS}/api" \
         "NEXT_PUBLIC_WS_URL=ws://${ALB_DNS}/api" \
+        "NEXT_PUBLIC_ALCHEMY_API_KEY=${NEXT_PUBLIC_ALCHEMY_API_KEY}" \
         "NEXT_PUBLIC_MPC_NODE0_PUBLIC_KEY=${MPC_NODE0_PUBLIC_KEY}" \
         "NEXT_PUBLIC_MPC_NODE1_PUBLIC_KEY=${MPC_NODE1_PUBLIC_KEY}" \
         "NEXT_PUBLIC_MPC_NODE2_PUBLIC_KEY=${MPC_NODE2_PUBLIC_KEY}"
