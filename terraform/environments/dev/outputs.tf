@@ -138,7 +138,7 @@ output "api_url" {
 
 output "ws_url" {
   description = "WebSocket URL"
-  value       = "wss://app.${local.domain}/ws"
+  value       = "wss://app.${local.domain}/api"
 }
 
 # Frontend build-time public keys (from SOPS secrets)
