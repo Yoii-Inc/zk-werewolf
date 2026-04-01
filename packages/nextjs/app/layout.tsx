@@ -12,8 +12,8 @@ const ScaffoldEthAppWithProviders = dynamic(
 );
 
 export const metadata = getMetadata({
-  title: "ZK Werewolf",
-  description: "Zero-knowledge social deduction game on Ethereum",
+  title: "Trustless Werewolf",
+  description: "Trustless social deduction game on Ethereum",
 });
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {

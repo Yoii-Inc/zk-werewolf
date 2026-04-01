@@ -86,7 +86,7 @@ const HelpPage = () => {
     <div className="mx-auto w-full max-w-6xl px-4 py-8 md:px-6 md:py-10">
       <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-indigo-50 p-6 md:p-8 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-wide text-indigo-700">Game Guide</p>
-        <h1 className="mt-2 text-3xl md:text-4xl font-bold text-slate-900">How To Play ZK Werewolf</h1>
+        <h1 className="mt-2 text-3xl md:text-4xl font-bold text-slate-900">How To Play Trustless Werewolf</h1>
         <p className="mt-3 text-slate-700 leading-relaxed">
           This page explains roles, phase flow, and common checks so new players can join a room and play smoothly.
         </p>
