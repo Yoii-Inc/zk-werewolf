@@ -158,6 +158,59 @@ const parsePlayerOrderIds = (raw: unknown): string[] | undefined => {
   return ids.length > 0 ? ids : undefined;
 };
 
+interface NormalizedDivinationPoint {
+  x: [string, string, string, string];
+  y: [string, string, string, string];
+}
+
+const NOT_WEREWOLF_POINT: NormalizedDivinationPoint = {
+  x: ["0", "0", "0", "0"],
+  y: ["12436184717236109307", "3962172157175319849", "7381016538464732718", "1011752739694698287"],
+};
+
+const WEREWOLF_POINT: NormalizedDivinationPoint = {
+  x: ["15389767686415328915", "4532183014000888185", "6625844415766270035", "470379343721047487"],
+  y: ["10215293119099184011", "9361858917463510870", "15793394060027790616", "2556078677302762916"],
+};
+
+const normalizeDivinationLimb = (value: unknown): string | null => {
+  if (typeof value === "string") return value;
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value).toString();
+  return null;
+};
+
+const normalizeDivinationField = (value: unknown): [string, string, string, string] | null => {
+  if (!Array.isArray(value) || value.length === 0 || !Array.isArray(value[0]) || value[0].length < 4) {
+    return null;
+  }
+  const normalized = value[0].slice(0, 4).map(normalizeDivinationLimb);
+  if (normalized.some(limb => limb === null)) {
+    return null;
+  }
+  return normalized as [string, string, string, string];
+};
+
+const normalizeDivinationPoint = (value: unknown): NormalizedDivinationPoint | null => {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as { x?: unknown; y?: unknown };
+  const x = normalizeDivinationField(candidate.x);
+  const y = normalizeDivinationField(candidate.y);
+  if (!x || !y) return null;
+  return { x, y };
+};
+
+const isSameDivinationPoint = (lhs: NormalizedDivinationPoint, rhs: NormalizedDivinationPoint): boolean =>
+  lhs.x.every((value, index) => value === rhs.x[index]) && lhs.y.every((value, index) => value === rhs.y[index]);
+
+export const resolveDivinationWerewolfFlag = (decryptedResult: unknown): boolean | null => {
+  const normalized = normalizeDivinationPoint(decryptedResult);
+  if (!normalized) return null;
+  if (isSameDivinationPoint(normalized, NOT_WEREWOLF_POINT)) return false;
+  if (isSameDivinationPoint(normalized, WEREWOLF_POINT)) return true;
+  return null;
+};
+
 export const useComputationResults = (
   roomId: string,
   playerId: string,
@@ -372,38 +425,8 @@ export const useComputationResults = (
                 console.log("Decryption result:", decryptedResult);
 
                 // DivinationCircuitでは 0=default(), 1=prime_subgroup_generator() を平文として使う。
-                // 現在の曲線は ed_on_bn254（旧BLS12-377値から置換）。
-                const notWerewolf = {
-                  x: [["0", "0", "0", "0"], null],
-                  y: [
-                    ["12436184717236109307", "3962172157175319849", "7381016538464732718", "1011752739694698287"],
-                    null,
-                  ],
-                  _params: null,
-                };
-
-                const werewolf = {
-                  x: [
-                    ["15389767686415328915", "4532183014000888185", "6625844415766270035", "470379343721047487"],
-                    null,
-                  ],
-                  y: [
-                    ["10215293119099184011", "9361858917463510870", "15793394060027790616", "2556078677302762916"],
-                    null,
-                  ],
-                  _params: null,
-                };
-
-                const decryptedStr = JSON.stringify(decryptedResult);
-                const notWerewolfStr = JSON.stringify(notWerewolf);
-                const werewolfStr = JSON.stringify(werewolf);
-
-                let isWerewolf: boolean;
-                if (decryptedStr === notWerewolfStr) {
-                  isWerewolf = false;
-                } else if (decryptedStr === werewolfStr) {
-                  isWerewolf = true;
-                } else {
+                const isWerewolf = resolveDivinationWerewolfFlag(decryptedResult);
+                if (isWerewolf === null) {
                   console.warn("Divination result does not match expected values", decryptedResult);
                   addMessage({
                     id: Date.now().toString(),

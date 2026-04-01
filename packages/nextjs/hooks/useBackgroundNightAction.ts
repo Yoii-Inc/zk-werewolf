@@ -18,24 +18,77 @@ const latestDivinationTargetIdKey = (roomId: string): string => `divination_targ
 
 const latestDivinationTargetNameKey = (roomId: string): string => `divination_target_name_${roomId}`;
 
+const hasFortuneTellerPublicKey = (info: GameInfo | null | undefined): boolean => {
+  const key = info?.crypto_parameters?.fortune_teller_public_key as { x?: unknown[]; y?: unknown[] } | undefined;
+  if (!key) return false;
+  return Array.isArray(key.x) && key.x.length > 0 && Array.isArray(key.y) && key.y.length > 0;
+};
+
+const fetchLatestGameState = async (roomId: string): Promise<GameInfo | null> => {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/game/${roomId}/state`,
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as GameInfo;
+  } catch (error) {
+    console.warn("Failed to fetch latest game state while waiting for divination public key:", error);
+    return null;
+  }
+};
+
+const waitForDivinationPublicKey = async (
+  roomId: string,
+  initialGameInfo: GameInfo,
+  timeoutMs = 12000,
+  pollIntervalMs = 300,
+): Promise<GameInfo> => {
+  if (hasFortuneTellerPublicKey(initialGameInfo)) {
+    return initialGameInfo;
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let latest = initialGameInfo;
+
+  while (Date.now() < deadline) {
+    const fetched = await fetchLatestGameState(roomId);
+    if (fetched) {
+      latest = fetched;
+      if (hasFortuneTellerPublicKey(fetched)) {
+        console.log("Divination public key is ready, proceeding with synchronized divination");
+        return fetched;
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new Error("Fortune teller public key is not ready yet. Please retry synchronized divination shortly.");
+};
+
 export const useBackgroundNightAction = () => {
   const handleBackgroundNightAction = useCallback(
     async (roomId: string, myId: string, players: Player[], username: string, gameInfo: GameInfo) => {
       try {
-        const dayCount = gameInfo.day_count ?? 0;
+        const gameInfoWithDivinationKey = await waitForDivinationPublicKey(roomId, gameInfo);
+        const currentPlayers =
+          Array.isArray(gameInfoWithDivinationKey.players) && gameInfoWithDivinationKey.players.length > 0
+            ? gameInfoWithDivinationKey.players
+            : players;
+        const dayCount = gameInfoWithDivinationKey.day_count ?? 0;
         const privateGameInfo = getPrivateGameInfo(roomId, myId);
         const isSeer = privateGameInfo?.playerRole === "Seer";
 
         const pendingTargetId = localStorage.getItem(pendingDivinationTargetKey(roomId, dayCount));
 
         // ダミーターゲットとして最初の生存プレイヤーを選択
-        const dummyTargetId = players.find(p => !p.is_dead && p.id !== myId)?.id || players[0].id;
+        const dummyTargetId = currentPlayers.find(p => !p.is_dead && p.id !== myId)?.id || currentPlayers[0].id;
         const hasSeerSelection = isSeer && typeof pendingTargetId === "string" && pendingTargetId.length > 0;
         const selectedTargetId = hasSeerSelection ? (pendingTargetId as string) : dummyTargetId;
         const isDummy = !hasSeerSelection;
 
         if (hasSeerSelection) {
-          const targetPlayerName = players.find(p => String(p.id) === String(selectedTargetId))?.name || "Unknown";
+          const targetPlayerName =
+            currentPlayers.find(p => String(p.id) === String(selectedTargetId))?.name || "Unknown";
 
           localStorage.setItem(divinationTargetIdByDayKey(roomId, dayCount), selectedTargetId);
           localStorage.setItem(divinationTargetNameByDayKey(roomId, dayCount), targetPlayerName);
@@ -57,7 +110,7 @@ export const useBackgroundNightAction = () => {
         const divinationData = await GameInput.generateDivinationInput(
           roomId,
           username,
-          gameInfo,
+          gameInfoWithDivinationKey,
           selectedTargetId,
           isDummy,
         );
@@ -72,7 +125,7 @@ export const useBackgroundNightAction = () => {
         // 暗号化
         const encryptedDivination = await MPCEncryption.encryptDivination(divinationData);
 
-        const alivePlayerCount = players.filter(player => !player.is_dead).length;
+        const alivePlayerCount = currentPlayers.filter(player => !player.is_dead).length;
 
         console.log(
           `Sending synchronized divination request to server (alive players: ${alivePlayerCount}, is_dummy: ${isDummy})`,
