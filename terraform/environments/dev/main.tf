@@ -37,7 +37,7 @@ provider "aws" {
 
 locals {
   name   = "zk-werewolf-dev"
-  domain = "zk-werewolf.yoii.jp"
+  domain = "trustless-werewolf.yoii.jp"
 }
 
 # =============================================================================
@@ -56,7 +56,7 @@ data "terraform_remote_state" "dns" {
 }
 
 resource "aws_route53_record" "app" {
-  zone_id = data.terraform_remote_state.dns.outputs.zk_werewolf_hosted_zone.zone_id
+  zone_id = data.terraform_remote_state.dns.outputs.trustless_werewolf_hosted_zone.zone_id
   name    = "app.${local.domain}"
   type    = "A"
 
@@ -167,7 +167,7 @@ module "alb" {
   subnet_ids        = module.vpc.public_subnets
   security_group_id = module.security_groups.alb_security_group_id
 
-  certificate_arn            = data.terraform_remote_state.dns.outputs.zk_werewolf_acm_arn
+  certificate_arn            = data.terraform_remote_state.dns.outputs.trustless_werewolf_acm_arn
   enable_deletion_protection = false
 }
 
