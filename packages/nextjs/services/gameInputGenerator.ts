@@ -683,7 +683,15 @@ export async function generateDivinationInput(
 ): Promise<DivinationInput> {
   const cryptoParams = await loadCryptoParams(gameInfo);
   const randomness = await getRandomness(roomId, username);
-  const myIndex = getMyPlayerIndex(gameInfo, username);
+  const alivePlayers = gameInfo.players.filter(player => !player.is_dead);
+  const myIndex = alivePlayers.findIndex(player => player.name === username);
+  if (myIndex < 0) {
+    throw new Error("Current player is not alive or not found in game state for divination");
+  }
+
+  if (!isDummy && !alivePlayers.some(player => player.id === targetId)) {
+    throw new Error("Divination target must be an alive player");
+  }
 
   // PrivateGameInfoから自分の役職を取得
   const playerId = getMyPlayerId(gameInfo, username);
@@ -694,15 +702,13 @@ export async function generateDivinationInput(
     isDummy === false
       ? {
           id: myIndex,
-          isTarget: gameInfo.players.map((player: any) =>
-            player.id === targetId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO,
-          ),
+          isTarget: alivePlayers.map((player: any) => (player.id === targetId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO)),
           isWerewolf: isWerewolfValue,
           randomness: randomness,
         }
       : {
           id: myIndex,
-          isTarget: gameInfo.players.map(() => FINITE_FIELD_ZERO),
+          isTarget: alivePlayers.map(() => FINITE_FIELD_ZERO),
           isWerewolf: isWerewolfValue,
           randomness: randomness,
         };
@@ -711,7 +717,7 @@ export async function generateDivinationInput(
     pedersenParam: cryptoParams.pedersenParam,
     elgamalParam: cryptoParams.elgamalParam || {},
     pubKey: cryptoParams.elgamalPublicKey || {},
-    playerNum: gameInfo.players.length,
+    playerNum: alivePlayers.length,
   };
 
   return {
@@ -733,7 +739,15 @@ export async function generateVotingInput(
 ): Promise<AnonymousVotingInput> {
   const cryptoParams = await loadCryptoParams(gameInfo);
   const randomness = await getRandomness(roomId, username);
-  const myIndex = getMyPlayerIndex(gameInfo, username);
+  const alivePlayers = gameInfo.players.filter(player => !player.is_dead);
+  const myIndex = alivePlayers.findIndex(player => player.name === username);
+  if (myIndex < 0) {
+    throw new Error("Current player is not alive or not found in game state for voting");
+  }
+
+  if (!alivePlayers.some(player => player.id === votedForId)) {
+    throw new Error("Voting target must be an alive player");
+  }
 
   // MPC公開鍵の確認
   const nodeKeys = getNodeKeys();
@@ -743,16 +757,14 @@ export async function generateVotingInput(
 
   const privateInput: AnonymousVotingPrivateInput = {
     id: myIndex,
-    isTargetId: gameInfo.players.map((player: any) =>
-      player.id === votedForId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO,
-    ),
+    isTargetId: alivePlayers.map((player: any) => (player.id === votedForId ? FINITE_FIELD_ONE : FINITE_FIELD_ZERO)),
     playerRandomness: randomness,
   };
 
   const publicInput: AnonymousVotingPublicInput = {
     pedersenParam: cryptoParams.pedersenParam,
-    playerCommitment: Array(gameInfo.players.length).fill(cryptoParams.pedersenCommitment as PedersenCommitment),
-    playerNum: gameInfo.players.length,
+    playerCommitment: Array(alivePlayers.length).fill(cryptoParams.pedersenCommitment as PedersenCommitment),
+    playerNum: alivePlayers.length,
   };
 
   return {

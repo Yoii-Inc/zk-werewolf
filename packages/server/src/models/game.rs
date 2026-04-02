@@ -1043,14 +1043,22 @@ impl Game {
                         // Note: これはFr型の値がプレイヤーの配列のインデックスとして
                         // 適切な範囲内であることを前提としています
                         let target_index = {
+                            let alive_player_indices = self
+                                .players
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, player)| !player.is_dead)
+                                .map(|(index, _)| index)
+                                .collect::<Vec<_>>();
+
                             // Fr型からBigUintに変換し、usizeに変換
                             let bytes = target_id.into_repr().to_bytes_le();
-                            let index = bytes[0] as usize; // 最初のバイトをインデックスとして使用
-                            if index >= self.players.len() {
-                                println!("Invalid player index: {}", index);
+                            let alive_index = bytes[0] as usize; // 最初のバイトをインデックスとして使用
+                            if alive_index >= alive_player_indices.len() {
+                                println!("Invalid alive player index: {}", alive_index);
                                 return;
                             }
-                            index
+                            alive_player_indices[alive_index]
                         };
 
                         println!("Target index for voting: {}", target_index);

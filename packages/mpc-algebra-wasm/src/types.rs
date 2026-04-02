@@ -191,9 +191,8 @@ impl CircuitEncryptedInputIdentifier {
                 })
             }
             CircuitEncryptedInputIdentifier::AnonymousVoting(items) => {
-                let first = items.first()?;
                 Some(CircuitProfile::AnonymousVoting {
-                    player_count: first.public_input.player_num,
+                    player_count: items.len(),
                 })
             }
             CircuitEncryptedInputIdentifier::WinningJudge(items) => {

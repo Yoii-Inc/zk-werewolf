@@ -299,7 +299,7 @@ pub async fn batch_proof_handling(
 
         validate_phase_for_request(&game.phase, request)?;
 
-        let user_id = match &request {
+        let _user_id = match &request {
             ClientRequestType::Divination(info) => info.user_id.clone(),
             ClientRequestType::RoleAssignment(info) => info.user_id.clone(),
             ClientRequestType::AnonymousVoting(info) => info.user_id.clone(),
@@ -345,8 +345,9 @@ pub async fn batch_proof_handling(
             }
         }
 
-        game.chat_log
-            .add_system_message(format!("{} has sent a proof request.", user_id));
+        // 一時的に proof request のシステムメッセージ送信を停止
+        // game.chat_log
+        //     .add_system_message(format!("{} has sent a proof request.", _user_id));
 
         // バッチリクエストに追加
         let enqueue_result = game
