@@ -15,6 +15,8 @@ type HeaderMenuLink = {
   icon?: React.ReactNode;
 };
 
+const isDebugMode = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
+
 export const menuLinks: HeaderMenuLink[] = [
   {
     label: "Home",
@@ -36,11 +38,15 @@ export const menuLinks: HeaderMenuLink[] = [
     href: "/help",
   },
 
-  {
-    label: "Debug Contracts",
-    href: "/debug",
-    icon: <BugAntIcon className="h-4 w-4" />,
-  },
+  ...(isDebugMode
+    ? [
+        {
+          label: "Debug Contracts",
+          href: "/debug",
+          icon: <BugAntIcon className="h-4 w-4" />,
+        },
+      ]
+    : []),
 ];
 
 export const HeaderMenuLinks = () => {

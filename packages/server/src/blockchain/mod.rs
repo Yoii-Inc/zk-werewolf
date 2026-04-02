@@ -2,6 +2,8 @@ use crate::models::game::GameResult;
 use crate::utils::config::Config;
 use std::sync::Arc;
 use tokio::process::Command;
+use tokio::sync::Mutex;
+use tokio::time::{sleep, Duration};
 
 pub mod state_hash;
 
@@ -14,7 +16,8 @@ pub enum ProofType {
     KeyPublicize,
 }
 
-const ROLE_ASSIGNMENT_VERIFY_PROOF_GAS_LIMIT: u64 = 5_000_000;
+const ROLE_ASSIGNMENT_VERIFY_PROOF_GAS_LIMIT: u64 = 12_000_000;
+const CAST_SEND_MAX_RETRIES: usize = 3;
 
 impl ProofType {
     fn as_u8(self) -> u8 {
@@ -99,6 +102,7 @@ enum Backend {
 #[derive(Clone, Debug)]
 pub struct BlockchainClient {
     backend: Arc<Backend>,
+    tx_send_lock: Arc<Mutex<()>>,
 }
 
 impl BlockchainClient {
@@ -106,6 +110,7 @@ impl BlockchainClient {
         if !config.blockchain_enabled {
             return Self {
                 backend: Arc::new(Backend::Disabled),
+                tx_send_lock: Arc::new(Mutex::new(())),
             };
         }
 
@@ -121,6 +126,7 @@ impl BlockchainClient {
             );
             return Self {
                 backend: Arc::new(Backend::Disabled),
+                tx_send_lock: Arc::new(Mutex::new(())),
             };
         }
 
@@ -134,6 +140,7 @@ impl BlockchainClient {
                 );
                 Self {
                     backend: Arc::new(Backend::Real(backend)),
+                    tx_send_lock: Arc::new(Mutex::new(())),
                 }
             }
             Err(e) => {
@@ -155,6 +162,7 @@ impl BlockchainClient {
 
                 Self {
                     backend: Arc::new(Backend::Simulated(backend)),
+                    tx_send_lock: Arc::new(Mutex::new(())),
                 }
             }
         }
@@ -192,7 +200,7 @@ impl BlockchainClient {
                 );
                 args.push(state_hash::bytes32_to_hex(&game_id));
                 args.push(players_arg);
-                let tx = send_and_extract_tx_hash(&args).await?;
+                let tx = self.send_and_extract_tx_hash(backend, &args).await?;
                 tracing::info!(
                     "[real-chain] create_game game_id={} players={} tx={} game_contract={}",
                     state_hash::bytes32_to_hex(&game_id),
@@ -232,7 +240,7 @@ impl BlockchainClient {
                 );
                 args.push(state_hash::bytes32_to_hex(&game_id));
                 args.push(state_hash::bytes32_to_hex(&commitment));
-                let tx = send_and_extract_tx_hash(&args).await?;
+                let tx = self.send_and_extract_tx_hash(backend, &args).await?;
                 tracing::info!(
                     "[real-chain] submit_commitment game_id={} player={} commitment={} tx={}",
                     state_hash::bytes32_to_hex(&game_id),
@@ -270,7 +278,7 @@ impl BlockchainClient {
                 );
                 args.push(state_hash::bytes32_to_hex(&game_id));
                 args.push(state_hash::bytes32_to_hex(&state_hash));
-                let tx = send_and_extract_tx_hash(&args).await?;
+                let tx = self.send_and_extract_tx_hash(backend, &args).await?;
                 tracing::info!(
                     "[real-chain] update_game_state game_id={} state_hash={} tx={}",
                     state_hash::bytes32_to_hex(&game_id),
@@ -308,7 +316,7 @@ impl BlockchainClient {
                 );
                 args.push(state_hash::bytes32_to_hex(&game_id));
                 args.push(game_result_to_u8(&result).to_string());
-                let tx = send_and_extract_tx_hash(&args).await?;
+                let tx = self.send_and_extract_tx_hash(backend, &args).await?;
                 tracing::info!(
                     "[real-chain] finalize_game game_id={} result={:?} tx={}",
                     state_hash::bytes32_to_hex(&game_id),
@@ -406,7 +414,7 @@ impl BlockchainClient {
                     send_args.push("--gas-limit".to_string());
                     send_args.push(gas_limit.to_string());
                 }
-                let tx = send_and_extract_tx_hash(&send_args).await?;
+                let tx = self.send_and_extract_tx_hash(backend, &send_args).await?;
 
                 tracing::info!(
                     "[real-chain] verify_proof proof_id={} game_id={} proof_type={:?} player_count={} werewolf_count={} verified=true tx={}",
@@ -450,7 +458,7 @@ impl BlockchainClient {
                 );
                 args.push(state_hash::bytes32_to_hex(&game_id));
                 args.push(winners_arg);
-                let tx = send_and_extract_tx_hash(&args).await?;
+                let tx = self.send_and_extract_tx_hash(backend, &args).await?;
                 tracing::info!(
                     "[real-chain] distribute_rewards game_id={} winners={} tx={} rewards_contract={}",
                     state_hash::bytes32_to_hex(&game_id),
@@ -461,6 +469,46 @@ impl BlockchainClient {
                 Ok(Some(tx))
             }
         }
+    }
+
+    async fn send_and_extract_tx_hash(
+        &self,
+        backend: &RealBackend,
+        base_args: &[String],
+    ) -> Result<String, String> {
+        let _send_guard = self.tx_send_lock.lock().await;
+        let mut last_error = String::new();
+
+        for attempt in 1..=CAST_SEND_MAX_RETRIES {
+            let nonce = fetch_pending_nonce(backend).await?;
+            let mut args = base_args.to_vec();
+            args.push("--nonce".to_string());
+            args.push(nonce.to_string());
+
+            match run_cast(&args).await {
+                Ok(output) => return parse_tx_hash(&output),
+                Err(err) => {
+                    let should_retry = attempt < CAST_SEND_MAX_RETRIES
+                        && is_retryable_nonce_error(&err.to_ascii_lowercase());
+                    if !should_retry {
+                        return Err(err);
+                    }
+                    tracing::warn!(
+                        "cast send failed with retryable nonce error (attempt {}/{}): {}",
+                        attempt,
+                        CAST_SEND_MAX_RETRIES,
+                        err
+                    );
+                    last_error = err;
+                    sleep(Duration::from_millis(250)).await;
+                }
+            }
+        }
+
+        Err(format!(
+            "cast send failed after {} attempts: {}",
+            CAST_SEND_MAX_RETRIES, last_error
+        ))
     }
 }
 
@@ -530,9 +578,17 @@ fn command_available(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-async fn send_and_extract_tx_hash(args: &[String]) -> Result<String, String> {
-    let output = run_cast(args).await?;
-    parse_tx_hash(&output)
+async fn fetch_pending_nonce(backend: &RealBackend) -> Result<u64, String> {
+    let args = vec![
+        "nonce".to_string(),
+        backend.from_address.clone(),
+        "--block".to_string(),
+        "pending".to_string(),
+        "--rpc-url".to_string(),
+        backend.rpc_url.clone(),
+    ];
+    let output = run_cast(&args).await?;
+    parse_cast_u64(&output)
 }
 
 async fn run_cast(args: &[String]) -> Result<String, String> {
@@ -571,6 +627,23 @@ fn parse_cast_bool(output: &str) -> Result<bool, String> {
         return Ok(true);
     }
     Err(format!("unable to parse cast call bool output: {}", output))
+}
+
+fn parse_cast_u64(output: &str) -> Result<u64, String> {
+    let value = output.trim();
+    if let Some(hex) = value.strip_prefix("0x") {
+        return u64::from_str_radix(hex, 16)
+            .map_err(|e| format!("failed to parse hex integer from cast output '{}': {}", value, e));
+    }
+    value
+        .parse::<u64>()
+        .map_err(|e| format!("failed to parse integer from cast output '{}': {}", value, e))
+}
+
+fn is_retryable_nonce_error(lower_err: &str) -> bool {
+    lower_err.contains("replacement transaction underpriced")
+        || lower_err.contains("nonce too low")
+        || lower_err.contains("already known")
 }
 
 fn parse_tx_hash(output: &str) -> Result<String, String> {

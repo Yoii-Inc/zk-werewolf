@@ -10,7 +10,10 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::models::chat::{ChatMessage, ChatMessageType};
+use crate::models::{
+    chat::{ChatMessage, ChatMessageType},
+    game::{GamePhase, GameResult},
+};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -69,6 +72,10 @@ fn should_send_event_to_player(
     }
 }
 
+fn is_chat_allowed_in_active_game_phase(phase: &GamePhase) -> bool {
+    matches!(phase, GamePhase::Discussion | GamePhase::Voting)
+}
+
 impl WebSocketMessage {
     fn to_chat_message(&self) -> ChatMessage {
         let message_type = match self.message_type.as_str() {
@@ -123,6 +130,7 @@ pub async fn handle_socket(
     let default_player_id = Uuid::new_v4().to_string();
     let room_id_for_send = room_id.clone();
     let room_id_for_receive = room_id.clone();
+    let connected_player_id_for_receive = connected_player_id.clone();
 
     let replay_events = state
         .replay_room_events_since(&room_id, last_event_id)
@@ -158,6 +166,57 @@ pub async fn handle_socket(
                                 ws_message.player_id = default_player_id.clone();
                             }
                             ws_message.room_id = room_id_for_receive.clone();
+
+                            let (chat_allowed, sender_is_dead) = {
+                                let games = state_for_receive.games.lock().await;
+                                if let Some(game) = games.get(&room_id_for_receive) {
+                                    let is_lobby_phase = game.phase == GamePhase::Waiting;
+                                    let is_game_resolved = game.result != GameResult::InProgress;
+                                    let is_active_chat_phase =
+                                        is_chat_allowed_in_active_game_phase(&game.phase);
+                                    let chat_allowed =
+                                        is_lobby_phase || is_game_resolved || is_active_chat_phase;
+
+                                    let sender_is_dead =
+                                        if chat_allowed && !is_lobby_phase && !is_game_resolved {
+                                            let by_connected_id = connected_player_id_for_receive
+                                                .as_deref()
+                                                .and_then(|pid| {
+                                                    game.players
+                                                        .iter()
+                                                        .find(|player| player.id == pid)
+                                                        .map(|player| player.is_dead)
+                                                });
+                                            let by_player_name = game
+                                                .players
+                                                .iter()
+                                                .find(|player| player.name == ws_message.player_name)
+                                                .map(|player| player.is_dead);
+
+                                            by_connected_id.or(by_player_name).unwrap_or(false)
+                                        } else {
+                                            false
+                                        };
+                                    (chat_allowed, sender_is_dead)
+                                } else {
+                                    // ゲーム開始前でGameが未作成の場合はロビーチャットとして許可
+                                    (true, false)
+                                }
+                            };
+                            if !chat_allowed {
+                                info!(
+                                    "Chat message rejected in room {}: current phase/state does not allow chat",
+                                    room_id_for_receive
+                                );
+                                continue;
+                            }
+                            if sender_is_dead {
+                                info!(
+                                    "Chat message rejected in room {}: sender is dead",
+                                    room_id_for_receive
+                                );
+                                continue;
+                            }
 
                             // チャットメッセージに変換して保存
                             let chat_message = ws_message.to_chat_message();

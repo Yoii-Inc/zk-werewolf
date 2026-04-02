@@ -135,7 +135,14 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   }, [gameInfo?.result]);
 
   const handleSendMessage = () => {
-    if (websocketStatus !== "connected") {
+    const isLobbyChatNow = roomInfo?.status === "Open" || roomInfo?.status === "Ready";
+    const isGameResolvedNow = gameInfo?.result !== undefined && gameInfo.result !== "InProgress";
+    const isInGameChatWindowNow = gameInfo?.phase === "Discussion" || gameInfo?.phase === "Voting";
+    const isChatAllowedNow = isLobbyChatNow || isGameResolvedNow || isInGameChatWindowNow;
+    const isDeadNow =
+      gameInfo?.players.find(player => player.id === user?.id || player.name === user?.username)?.is_dead === true;
+    const shouldBlockByDeathNow = !isLobbyChatNow && !isGameResolvedNow && isDeadNow;
+    if (websocketStatus !== "connected" || !isChatAllowedNow || shouldBlockByDeathNow) {
       return;
     }
 
@@ -293,6 +300,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
 
   const playersForView = (gameInfo ? gameInfo.players : roomInfo?.players) ?? [];
   const currentPlayer = playersForView.find(player => player.id === user?.id || player.name === user?.username);
+  const isCurrentPlayerDead = currentPlayer?.is_dead === true;
   const werewolfTeammateNames =
     privateGameInfo?.playerRole === "Werewolf"
       ? (privateGameInfo.werewolfTeammateIds ?? [])
@@ -383,6 +391,18 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const isPhaseTimerPaused = Boolean(gameInfo?.phase_timer_paused_at);
   const isTimeWarning = roomInfo?.status === "InProgress" && !isPhaseTimerPaused && remainingTime <= 30;
   const isWebSocketConnected = websocketStatus === "connected";
+  const isGameResolved = gameInfo?.result !== undefined && gameInfo.result !== "InProgress";
+  const isInGameChatWindow = gameInfo?.phase === "Discussion" || gameInfo?.phase === "Voting";
+  const isChatAllowedByState = isLobbyState || isGameResolved || isInGameChatWindow;
+  const shouldBlockByDeath = !isLobbyState && !isGameResolved && isCurrentPlayerDead;
+  const isChatInputEnabled = isWebSocketConnected && isChatAllowedByState && !shouldBlockByDeath;
+  const chatPlaceholder = shouldBlockByDeath
+    ? "あなたは死亡しているためチャットできません。"
+    : !isWebSocketConnected
+      ? "Reconnecting chat..."
+      : isChatAllowedByState
+        ? "Enter message..."
+        : "Chat is available before game start, during Discussion/Voting, and after game end.";
   const websocketStatusLabel =
     websocketStatus === "connected"
       ? "Connected"
@@ -403,6 +423,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           : websocketStatus === "error"
             ? "bg-rose-50 text-rose-700 border-rose-200"
             : "bg-slate-100 text-slate-700 border-slate-200";
+
+  useEffect(() => {
+    if (!isCurrentPlayerDead) return;
+    setShowNightAction(false);
+    setShowVoteModal(false);
+  }, [isCurrentPlayerDead]);
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -533,7 +559,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                   privateGameInfo?.playerRole !== null && (
                     <button
                       onClick={() => setShowNightAction(true)}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                      disabled={isCurrentPlayerDead}
+                      className={`px-4 py-2 rounded-lg transition-colors shadow-sm ${
+                        isCurrentPlayerDead
+                          ? "bg-gray-400 text-white cursor-not-allowed"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      }`}
                     >
                       Execute Night Action
                     </button>
@@ -541,7 +572,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                 {gameInfo?.phase === "Voting" && (
                   <button
                     onClick={() => setShowVoteModal(true)}
-                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
+                    disabled={isCurrentPlayerDead}
+                    className={`px-4 py-2 rounded-lg transition-colors shadow-sm ${
+                      isCurrentPlayerDead
+                        ? "bg-gray-400 text-white cursor-not-allowed"
+                        : "bg-amber-600 text-white hover:bg-amber-700"
+                    }`}
                   >
                     Vote
                   </button>
@@ -775,19 +811,19 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                     type="text"
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
-                    disabled={!isWebSocketConnected}
+                    disabled={!isChatInputEnabled}
                     onKeyDown={e => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleSendMessage();
                       }
                     }}
-                    placeholder={isWebSocketConnected ? "Enter message..." : "Reconnecting chat..."}
+                    placeholder={chatPlaceholder}
                     className="flex-1 border border-indigo-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
                   />
                   <button
                     onClick={handleSendMessage}
-                    disabled={!isWebSocketConnected}
+                    disabled={!isChatInputEnabled}
                     className="bg-indigo-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <Send size={20} />
@@ -834,7 +870,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           </div>
         )}
       </div>
-      {showNightAction && gameInfo?.phase === "Night" && (
+      {showNightAction && gameInfo?.phase === "Night" && !isCurrentPlayerDead && (
         <NightActionModal
           players={gameInfo.players}
           role={privateGameInfo?.playerRole ?? "Villager"}
@@ -849,7 +885,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           werewolfTeammateIds={privateGameInfo?.werewolfTeammateIds}
         />
       )}
-      {showVoteModal && gameInfo?.phase === "Voting" && (
+      {showVoteModal && gameInfo?.phase === "Voting" && !isCurrentPlayerDead && (
         <VoteModal
           myId={gameInfo.players.find(player => player.name === user?.username)?.id ?? ""}
           roomId={gameInfo.room_id}
