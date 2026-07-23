@@ -169,6 +169,10 @@ module "alb" {
 
   certificate_arn            = data.terraform_remote_state.dns.outputs.trustless_werewolf_acm_arn
   enable_deletion_protection = false
+
+  enable_access_logs         = true
+  access_logs_retention_days = 30
+  access_logs_force_destroy  = true # Allow force delete in dev environment
 }
 
 # Backend ECS Service

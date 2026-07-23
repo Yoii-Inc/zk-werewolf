@@ -103,6 +103,11 @@ output "alb_arn" {
   value       = module.alb.alb_arn
 }
 
+output "alb_access_logs_bucket_name" {
+  description = "S3 bucket name storing ALB access logs"
+  value       = module.alb.access_logs_bucket_name
+}
+
 # Backend Service Outputs
 output "backend_service_name" {
   description = "Backend ECS service name"
