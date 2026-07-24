@@ -2,17 +2,19 @@ use axum::{
     extract::Query,
     http::{self, HeaderValue, Method},
     routing::get,
-    Json,
+    Json, Router,
 };
 use dotenvy::dotenv;
-use env_logger::Builder;
-use log::LevelFilter;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use tracing::Span;
+use tracing_subscriber::EnvFilter;
 
 mod app;
 mod blockchain;
@@ -59,26 +61,25 @@ async fn greet(Query(params): Query<Info>) -> Json<Greet> {
     })
 }
 
-// ログ設定
-fn init_logger() {
-    let mut builder = Builder::new();
-    builder
-        .filter_level(LevelFilter::Debug) // より詳細なログレベルに変更
-        .filter_module("tower_http", LevelFilter::Debug)
-        .filter_module("axum", LevelFilter::Debug)
-        .format_timestamp(Some(env_logger::TimestampPrecision::Millis))
-        .format_target(true)
-        .init();
-}
-
 #[tokio::main]
 async fn main() {
+    // グローバルなtracing subscriberを初期化 (何よりも先に行う必要がある)。
+    // RUST_LOG (ECSタスク定義でinfoに設定済み) を尊重し、未設定時はinfoにフォールバックする。
+    // JSON出力にすることで CloudWatch Logs Insights でフィールドを直接クエリできる。
+    tracing_subscriber::fmt()
+        .json()
+        .flatten_event(true) // status/latency_msなどのイベントフィールドをトップレベルに
+        .with_current_span(true) // method/path/user_agentなどのspanフィールドを`span`配下に残す
+        .with_span_list(false) // 冗長な`spans`配列は出さない
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
+
     // 環境変数をロード
     if let Err(e) = dotenv() {
         eprintln!("Warning: .envファイルの読み込みに失敗しました: {}", e);
     }
-
-    // init_logger(); // ロガーの初期化
 
     // 環境変数の存在確認
     let required_vars = [
@@ -116,20 +117,48 @@ async fn main() {
         .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
     // ルーティングの設定
-    let app = app::create_app()
+    let traced_app = app::create_app()
         .route("/greet", get(greet))
         .layer(cors) // CORSレイヤーを追加
         .layer(
             TraceLayer::new_for_http() // HTTPトレースログを有効化
                 .make_span_with(|request: &http::Request<_>| {
                     tracing::info_span!(
-                        "HTTP request",
+                        "http_request",
                         method = %request.method(),
-                        uri = %request.uri(),
-                        headers = ?request.headers()
+                        path = %request.uri().path(), // クエリ文字列は含めない (トークン漏洩防止)
+                        user_agent = request
+                            .headers()
+                            .get(http::header::USER_AGENT)
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("-"),
                     )
-                }),
+                })
+                .on_response(
+                    |response: &http::Response<_>, latency: Duration, _span: &Span| {
+                        tracing::info!(
+                            status = response.status().as_u16(),
+                            latency_ms = latency.as_millis() as u64,
+                            "request completed"
+                        );
+                    },
+                )
+                .on_failure(
+                    |failure: ServerErrorsFailureClass, latency: Duration, _span: &Span| {
+                        tracing::error!(
+                            error = %failure,
+                            latency_ms = latency.as_millis() as u64,
+                            "request failed"
+                        );
+                    },
+                ),
         );
+
+    // "/health" はALBが30秒間隔で叩くヘルスチェック用なので、TraceLayer/CORSの外側に
+    // 登録してアクセスログがヘルスチェックのノイズで埋もれないようにする。
+    let app = Router::new()
+        .route("/health", get(routes::health::health_check))
+        .merge(traced_app);
 
     // サーバーの起動
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));

@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use axum::{routing::get, Router};
+use axum::Router;
 
 pub mod game;
 pub mod health;
@@ -13,5 +13,6 @@ pub fn create_routes(state: AppState) -> Router {
         .nest("/api/game", game::routes(state.clone()))
         .nest("/api/users", user::routes(state.clone()))
         .nest("/api/nodes/keys", node::routes(state.clone()))
-        .route("/health", get(health::health_check))
+    // "/health" is registered in main.rs, outside the TraceLayer/CORS
+    // stack, so ALB's 30s health-check probes don't flood the access log.
 }
