@@ -9,6 +9,32 @@ use server::routes::room::CreateRoomRequest;
 
 use server::utils::test_setup::setup_test_env;
 
+async fn register_test_user(app: &axum::Router) -> String {
+    let unique = uuid::Uuid::new_v4();
+    let register_request = serde_json::json!({
+        "username": format!("test-user-{}", unique),
+        "email": format!("test-user-{}@example.com", unique),
+        "password": "test-password-123",
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/users/register")
+        .header("Content-Type", "application/json")
+        .body(Body::from(register_request.to_string()))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let auth_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    auth_response["user"]["id"]
+        .as_str()
+        .expect("registration response missing user.id")
+        .to_string()
+}
+
 #[tokio::test]
 async fn test_create_room() {
     setup_test_env();
@@ -67,8 +93,7 @@ async fn test_join_room() {
         .replace("\"Room created with ID: ", "")
         .replace("\"", "");
 
-    // TODO: テスト用のユーザを実装する
-    let test_user_id = "2f3d8e70-f5cf-4988-a6a1-dfae28b04852";
+    let test_user_id = register_test_user(&app).await;
 
     // ルーム参加のリクエストを送信
     let join_request = Request::builder()
