@@ -179,10 +179,12 @@ module "backend_service" {
   cluster_id      = module.ecs_cluster.cluster_id
   container_image = "${module.ecr.backend_repository_url}:latest"
   container_port  = 8080
-  cpu             = "512"
-  memory          = "1024"
-  desired_count   = 1
-  launch_type     = null # Use capacity provider strategy
+  # 7-day Container Insights avg/peak: CPU 0.05%/1.1%, memory 2.3%/2.5% of the
+  # previous 512/1024 allocation - right-sized down to Fargate's minimum tier.
+  cpu           = "256"
+  memory        = "512"
+  desired_count = 1
+  launch_type   = null # Use capacity provider strategy
 
   capacity_provider_strategy = [
     {
