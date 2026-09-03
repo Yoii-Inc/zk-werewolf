@@ -55,15 +55,21 @@ data "terraform_remote_state" "dns" {
   }
 }
 
-resource "aws_route53_record" "app" {
-  zone_id = data.terraform_remote_state.dns.outputs.trustless_werewolf_hosted_zone.zone_id
-  name    = "app.${local.domain}"
-  type    = "A"
+# app.trustless-werewolf.yoii.jp now lives in dns-yoii-jp and points at the
+# shared ALB of the dev EKS cluster in 908677496926 -- DEV-1878. The record
+# itself is untouched and still serving; only ownership moves.
+#
+# `removed` with destroy = false rather than deleting the resource outright.
+# Deleting it would make the next apply DESTROY the record, taking the hostname
+# down with it; this drops it from state and leaves the object alone. It has to
+# happen before this stack is destroyed, for the same reason.
+#
+# Keep this block until the workspace is gone.
+removed {
+  from = aws_route53_record.app
 
-  alias {
-    name                   = module.alb.alb_dns_name
-    zone_id                = module.alb.alb_zone_id
-    evaluate_target_health = true
+  lifecycle {
+    destroy = false
   }
 }
 
