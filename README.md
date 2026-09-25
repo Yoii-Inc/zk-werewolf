@@ -1,5 +1,10 @@
 # ZK Werewolf
 
+> **Infrastructure moved (2026-09).** zk-werewolf runs on the shared dev EKS cluster (DEV-1878) from
+> [`Yoii-Inc/yoii-gitops`](https://github.com/Yoii-Inc/yoii-gitops) (`kube/charts/zk-werewolf`), and the
+> `yoii-crypto-dev` account (719037119908) is closed. `terraform/`, `deploy.yml` and `pr-check.yml` have been
+> removed, so the Terraform, ECR and ECS instructions below that name that account are **historical**.
+
 ZK Werewolf is a privacy-preserving social deduction game that combines zero-knowledge proofs (ZK) and secure multi-party computation (MPC).
 
 Players can play Werewolf while keeping sensitive information (such as role details and private actions) hidden from other players and from central server logic.

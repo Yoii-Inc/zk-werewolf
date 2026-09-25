@@ -1,3 +1,0 @@
-# AWS Configuration
-AWS_DEFAULT_REGION = "ap-northeast-1"
-AWS_ACCOUNT_ID     = "123456789012" # Replace with your AWS account ID
