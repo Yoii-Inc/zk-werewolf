@@ -34,7 +34,7 @@
     "burner-connector": "0.0.11",
     "daisyui": "4.12.10",
     "lucide-react": "^0.263.1",
-    "next": "~14.2.11",
+    "next": "~15.5.24",
     "next-nprogress-bar": "~2.3.13",
     "next-themes": "~0.3.0",
     "qrcode.react": "~4.0.1",
